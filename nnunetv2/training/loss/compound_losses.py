@@ -28,13 +28,16 @@ class DC_and_CE_loss(nn.Module):
         self.ce = RobustCrossEntropyLoss(**ce_kwargs)
         self.dc = dice_class(apply_nonlin=softmax_helper_dim1, **soft_dice_kwargs)
 
-    def forward(self, net_output: torch.Tensor, target: torch.Tensor):
+    def forward(self, net_output: torch.Tensor, target: torch.Tensor, class_of_sample: torch.Tensor):
         """
         target must be b, c, x, y(, z) with c=1
         :param net_output:
         :param target:
         :return:
         """
+        #batch size, number of output channels, spatial dims
+        B, C, *spatial_dims = net_output.shape
+
         if self.ignore_label is not None:
             assert target.shape[1] == 1, 'ignore label is not implemented for one hot encoded target variables ' \
                                          '(DC_and_CE_loss)'
@@ -47,9 +50,25 @@ class DC_and_CE_loss(nn.Module):
             target_dice = target
             mask = None
 
-        dc_loss = self.dc(net_output, target_dice, loss_mask=mask) \
+        #zero out irrelevant class channels in prediction and target
+        #initialize empty tensors of the same shape as predicted logits and target
+        masked_output = torch.zeros_like(net_output)
+        masked_target = torch.zeros_like(net_output)
+
+
+        for b in range(B):
+            #identify class
+            class_idx = class_of_sample[b].item()
+            #copy only that class output
+            masked_output[b, class_idx] = net_output[b, class_idx]
+            #convert ground truth into one hot mask only for that class
+            masked_target[b, class_idx] = (target[b, 0] == class_idx).float()
+
+        #dice loss
+        dc_loss = self.dc(masked_output, masked_target, loss_mask=mask) \
             if self.weight_dice != 0 else 0
-        ce_loss = self.ce(net_output, target[:, 0]) \
+        #cross entropy loss
+        ce_loss = self.ce(masked_output, masked_target[:, 0, :, :, :].argmax(dim=1)) \
             if self.weight_ce != 0 and (self.ignore_label is None or num_fg > 0) else 0
 
         result = self.weight_ce * ce_loss + self.weight_dice * dc_loss

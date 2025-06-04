@@ -381,7 +381,39 @@ class nnUNetPredictor(object):
                     sleep(0.1)
                     proceed = not check_workers_alive_and_busy(export_pool, worker_list, r, allowed_num_queued=2)
 
-                prediction = self.predict_logits_from_preprocessed_data(data).cpu()
+
+
+                features, prediction = self.predict_logits_from_preprocessed_data(data).cpu()
+                # saving the raw logits as numpy arrays
+
+                if features:
+                    print(f"Did you make it or what? Shape {features.shape}")
+                else:
+                    print("Something went wrong with the feature extraction")
+
+                raw_logits = prediction
+                raw_logits_file = ofile + "_raw_logits.npy"
+                np.save(raw_logits_file, raw_logits)
+                print(f"Saved raw logits to {raw_logits_file}")
+
+                # Resample logits to original image shape
+                current_spacing = self.configuration_manager.spacing if \
+                    len(self.configuration_manager.spacing) == \
+                    len(properties['shape_after_cropping_and_before_resampling']) else \
+                    [properties['spacing'][0], *self.configuration_manager.spacing]
+
+                predicted_logits = self.configuration_manager.resampling_fn_probabilities(
+                    raw_logits,
+                    properties['shape_after_cropping_and_before_resampling'],
+                    current_spacing,
+                    properties['spacing']
+                )
+
+                # Save resampled logits AFTER resampling
+                resampled_logits_file = ofile + "_resampled_logits.npy"
+                np.save(resampled_logits_file, predicted_logits)
+                print(f"Saved resampled logits to {resampled_logits_file}")
+
 
                 if ofile is not None:
                     # this needs to go into background processes
@@ -427,7 +459,11 @@ class nnUNetPredictor(object):
         empty_cache(self.device)
         return ret
 
-    def predict_single_npy_array(self, input_image: np.ndarray, image_properties: dict,
+
+def extract_bottleneck_features(self, input_image):
+    pass
+
+def predict_single_npy_array(self, input_image: np.ndarray, image_properties: dict,
                                  segmentation_previous_stage: np.ndarray = None,
                                  output_file_truncated: str = None,
                                  save_or_return_probabilities: bool = False):
@@ -486,6 +522,7 @@ class nnUNetPredictor(object):
         n_threads = torch.get_num_threads()
         torch.set_num_threads(default_num_processes if default_num_processes < n_threads else n_threads)
         prediction = None
+        features = None
 
         for params in self.list_of_parameters:
 
@@ -498,17 +535,23 @@ class nnUNetPredictor(object):
             # why not leave prediction on device if perform_everything_on_device? Because this may cause the
             # second iteration to crash due to OOM. Grabbing that with try except cause way more bloated code than
             # this actually saves computation time
+            new_features, new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
             if prediction is None:
-                prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+                features = new_features
+                prediction = new_prediction
+                #prediction = self.predict_sliding_window_return_logits(data).to('cpu')
             else:
-                prediction += self.predict_sliding_window_return_logits(data).to('cpu')
+                prediction += new_prediction
+                features += new_features
+                #prediction += self.predict_sliding_window_return_logits(data).to('cpu')
 
         if len(self.list_of_parameters) > 1:
             prediction /= len(self.list_of_parameters)
 
         if self.verbose: print('Prediction done')
         torch.set_num_threads(n_threads)
-        return prediction
+        return features, prediction
+        #return prediction
 
     def _internal_get_sliding_window_slicers(self, image_size: Tuple[int, ...]):
         slicers = []
@@ -547,9 +590,10 @@ class nnUNetPredictor(object):
     @torch.inference_mode()
     def _internal_maybe_mirror_and_predict(self, x: torch.Tensor) -> torch.Tensor:
         mirror_axes = self.allowed_mirroring_axes if self.use_mirroring else None
-        prediction = self.network(x)
+        features, prediction = self.network(x)
+        #prediction = self.network(x)
 
-        if mirror_axes is not None:
+        if mirror_axes is not None:v
             # check for invalid numbers in mirror_axes
             # x should be 5d for 3d images and 4d for 2d. so the max value of mirror_axes cannot exceed len(x.shape) - 3
             assert max(mirror_axes) <= x.ndim - 3, 'mirror_axes does not match the dimension of the input!'
@@ -561,7 +605,8 @@ class nnUNetPredictor(object):
             for axes in axes_combinations:
                 prediction += torch.flip(self.network(torch.flip(x, axes)), axes)
             prediction /= (len(axes_combinations) + 1)
-        return prediction
+        return features, prediction
+        #return prediction
 
     @torch.inference_mode()
     def _internal_predict_sliding_window_return_logits(self,
@@ -571,7 +616,7 @@ class nnUNetPredictor(object):
                                                        ):
         predicted_logits = n_predictions = prediction = gaussian = workon = None
         results_device = self.device if do_on_device else torch.device('cpu')
-
+        all_patch_features = []
         def producer(d, slh, q):
             for s in slh:
                 q.put((torch.clone(d[s][None], memory_format=torch.contiguous_format).to(self.device), s))
@@ -613,8 +658,9 @@ class nnUNetPredictor(object):
                         queue.task_done()
                         break
                     workon, sl = item
-                    prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
-
+                    features, prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
+                    #prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
+                    all_patch_features.append(features)
                     if self.use_gaussian:
                         prediction *= gaussian
                     predicted_logits[sl] += prediction
@@ -635,7 +681,9 @@ class nnUNetPredictor(object):
             empty_cache(self.device)
             empty_cache(results_device)
             raise e
-        return predicted_logits
+
+        features_concat = torch.cat(all_patch_features, dim=0)
+        return features_concat, predicted_logits
 
     @torch.inference_mode()
     def predict_sliding_window_return_logits(self, input_image: torch.Tensor) \
@@ -643,6 +691,7 @@ class nnUNetPredictor(object):
         assert isinstance(input_image, torch.Tensor)
         self.network = self.network.to(self.device)
         self.network.eval()
+        print('Network initiated')
 
         empty_cache(self.device)
 
@@ -670,21 +719,26 @@ class nnUNetPredictor(object):
             if self.perform_everything_on_device and self.device != 'cpu':
                 # we need to try except here because we can run OOM in which case we need to fall back to CPU as a results device
                 try:
-                    predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
+                    features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
+                                                                                          self.perform_everything_on_device)
+                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
                                                                                            self.perform_everything_on_device)
                 except RuntimeError:
                     print(
                         'Prediction on device was unsuccessful, probably due to a lack of memory. Moving results arrays to CPU')
                     empty_cache(self.device)
-                    predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+                    features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
             else:
-                predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                       self.perform_everything_on_device)
-
+                features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
+                                                                                     self.perform_everything_on_device)
+                #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
             empty_cache(self.device)
             # revert padding
             predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
-        return predicted_logits
+
+
+        return features, predicted_logits
 
     def predict_from_files_sequential(self,
                            list_of_lists_or_source_folder: Union[str, List[List[str]]],

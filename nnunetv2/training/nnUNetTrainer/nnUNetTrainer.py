@@ -82,7 +82,7 @@ class nnUNetTrainer(object):
         # complexity is spirit demon that enter codebase through well-meaning but ultimately very clubbable non grug-brain developers and project managers who not fear complexity spirit demon or even know about sometime
         # one day code base understandable and grug can get work done, everything good!
         # next day impossible: complexity demon spirit has entered code and very dangerous situation!
-
+ 
         # OK OK I am guilty. But I tried.
         # https://www.osnews.com/images/comics/wtfm.jpg
         # https://i.pinimg.com/originals/26/b2/50/26b250a738ea4abc7a5af4d42ad93af0.jpg
@@ -976,7 +976,7 @@ class nnUNetTrainer(object):
 
         data = data.to(self.device, non_blocking=True)
         if isinstance(target, list):
-            target = [i.to(self.device, non_blocking=True) for i in target]
+            target = torch.stack([i.to(self.device, non_blocking=True) for i in target])
         else:
             target = target.to(self.device, non_blocking=True)
 
@@ -988,7 +988,24 @@ class nnUNetTrainer(object):
         with autocast(self.device.type, enabled=True) if self.device.type == 'cuda' else dummy_context():
             output = self.network(data)
             # del data
-            l = self.loss(output, target)
+            #l = self.loss(output, target)
+            #getting the batch size
+            B = target.shape[0]
+            assert target.shape[1] == 1, f"Expected target shape (B, 1, ...), got {target.shape}"
+
+            class_of_sample = torch.zeros(B, dtype=torch.long, device=target.device)
+
+            for b in range(B):
+                #extract label, ignoring 0s
+                unique_labels = torch.unique(target[b])
+                class_labels = unique_labels[unique_labels != 0]
+                if len(class_labels) == 1:
+                    class_of_sample[b] = class_labels.item()
+                else:
+                    raise ValueError(f"More than one tumor label in sample {b}: {class_labels.tolist()}")
+
+            # Call loss with additional supervision signal
+            l = self.loss(output, target, class_of_sample)
 
         if self.grad_scaler is not None:
             self.grad_scaler.scale(l).backward()
