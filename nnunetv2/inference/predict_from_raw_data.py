@@ -14,6 +14,7 @@ from acvl_utils.cropping_and_padding.padding import pad_nd_image
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.utilities.file_and_folder_operations import load_json, join, isfile, maybe_mkdir_p, isdir, subdirs, \
     save_json
+from sympy.solvers.diophantine.diophantine import reconstruct
 from torch import nn
 from torch._dynamo import OptimizedModule
 from torch.nn.parallel import DistributedDataParallel
@@ -34,7 +35,7 @@ from nnunetv2.utilities.json_export import recursive_fix_for_json_export
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
 from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder
-
+import matplotlib.pyplot as plt
 
 class nnUNetPredictor(object):
     def __init__(self,
@@ -43,10 +44,14 @@ class nnUNetPredictor(object):
                  use_mirroring: bool = True,
                  perform_everything_on_device: bool = True,
                  device: torch.device = torch.device('cuda'),
-                 verbose: bool = False,
+                 verbose: bool = True,
+                 return_features: bool = True,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
         self.verbose = verbose
+
+        self.return_features = return_features
+
         self.verbose_preprocessing = verbose_preprocessing
         self.allow_tqdm = allow_tqdm
 
@@ -346,6 +351,146 @@ class nnUNetPredictor(object):
                                                             num_processes)
         return self.predict_from_data_iterator(iterator, save_probabilities, num_processes_segmentation_export)
 
+
+    def reconstruct_full_feature_volume(self, patch_features, patch_locations, tumor_mask_shape):
+        """
+        Reconstruct full feature volume from per patch features and their locations.
+            Needed for extraction of ROI- feature map and potentially visualization
+        """
+        C = patch_features.shape[1]
+        D, H, W = tumor_mask_shape
+
+        full_feature_volume = np.zeros((C, D, H, W), dtype=np.float32)
+        count_map = np.zeros((D, H, W), dtype=np.float32)
+
+        for i, (z, y, x) in enumerate(patch_locations):
+            patch = patch_features[i]  # (C, d, h, w)
+            d, h, w = patch.shape[1:]  # should match tile_size
+
+            full_feature_volume[:, z:z + d, y:y + h, x:x + w] += patch
+            count_map[z:z + d, y:y + h, x:x + w] += 1
+
+        # Avoid division by zero
+        count_map[count_map == 0] = 1
+        full_feature_volume = full_feature_volume / count_map
+
+        assert full_feature_volume.shape[1:] == tumor_mask_shape, \
+            f"Shape mismatch: features {full_feature_volume.shape[1:]}, mask {tumor_mask_shape}"
+
+        return full_feature_volume
+
+    def reconstruct_and_crop_features(self,
+                                      full_feature_volume,
+                                      tumor_mask,
+                                      uniform_size:  [208,256,48],
+                                      context: [1,7,7]
+
+
+                                      ):
+
+
+
+        # Tumor bounding box
+        coords = np.where(tumor_mask == 1)
+        if coords[0].size == 0:
+            print('Warning: empty mask, no tumor region found')
+        else:
+            z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
+            z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
+
+            #Extend bbox by margin, clip min coordinates at 0 and max coordinates at largest valid index
+            z_min_m = max(z_min - context[0], 0)
+            y_min_m = max(y_min - context[1], 0)
+            x_min_m = max(x_min - context[2], 0)
+            z_max_m = min(z_max + context[0], tumor_mask.shape[0] - 1)
+            y_max_m = min(y_max + context[1], tumor_mask.shape[1] - 1)
+            x_max_m = min(x_max + context[2], tumor_mask.shape[2] - 1)
+
+            # Create slices for cropping
+            z_slice = slice(z_min_m, z_max_m + 1)
+            y_slice = slice(y_min_m, y_max_m + 1)
+            x_slice = slice(x_min_m, x_max_m + 1)
+
+            # Crop features
+            cropped_features = full_feature_volume[:, z_slice, y_slice, x_slice]
+            cropped_mask = tumor_mask[z_slice, y_slice, x_slice]
+
+            # Pad or crop to uniform_size
+            c, cz, cy, cx = cropped_features.shape
+            desired_z, desired_y, desired_x = uniform_size
+
+            # Padding amounts: pad before and after (center)
+            pad_z_before = max((desired_z - cz) // 2, 0)
+            pad_y_before = max((desired_y - cy) // 2, 0)
+            pad_x_before = max((desired_x - cx) // 2, 0)
+
+            pad_z_after = max(desired_z - cz - pad_z_before, 0)
+            pad_y_after = max(desired_y - cy - pad_y_before, 0)
+            pad_x_after = max(desired_x - cx - pad_x_before, 0)
+
+            # Pad if needed
+            if any(p > 0 for p in [pad_z_before, pad_z_after, pad_y_before, pad_y_after, pad_x_before, pad_x_after]):
+                padded = np.pad(
+                    cropped_features,
+                    ((0, 0), (pad_z_before, pad_z_after), (pad_y_before, pad_y_after), (pad_x_before, pad_x_after)),
+                    mode='constant', constant_values=0
+                )
+                padded_mask = np.pad(
+                cropped_mask,
+                ((pad_z_before, pad_z_after), (pad_y_before, pad_y_after), (pad_x_before, pad_x_after)),
+                mode='constant', constant_values=0
+            )
+            else:
+                padded = cropped_features
+                padded_mask = cropped_mask
+
+            # If cropped features are larger than uniform size, do center crop with warning
+            final_c, final_z, final_y, final_x = padded.shape
+            if final_z > desired_z or final_y > desired_y or final_x > desired_x:
+                print(
+                    f"Warning: ROI+margin size {final_z, final_y, final_x} larger than uniform size {desired_z, desired_y, desired_x}. Cropping.")
+
+                start_z = (final_z - desired_z) // 2
+                start_y = (final_y - desired_y) // 2
+                start_x = (final_x - desired_x) // 2
+
+                padded = padded[:,
+                         start_z:start_z + desired_z,
+                         start_y:start_y + desired_y,
+                         start_x:start_x + desired_x]
+
+                cropped_mask = cropped_mask[
+                               start_z:start_z + desired_z,
+                               start_y:start_y + desired_y,
+                               start_x:start_x + desired_x
+                               ]
+
+            # returns cropped and padded feature volume, and spatial info
+            return padded, (z_slice, y_slice, x_slice), cropped_mask
+
+    def visualize_features_with_mask(self, roi_features, cropped_mask, num_slices = 5, feature_channel = 0):
+        C, Z, Y, X = roi_features.shape
+        mid = Z // 2
+
+        # Get slice indices (centered around the middle)
+        slice_indices = np.linspace(0, Z - 1, num=num_slices, dtype=int)
+
+        fig, axs = plt.subplots(1, num_slices, figsize=(15, 5))
+
+        for i, z_idx in enumerate(slice_indices):
+            ax = axs[i]
+            feature_slice = roi_features[feature_channel, z_idx, :, :]
+            mask_slice = cropped_mask[z_idx, :, :]
+
+            ax.imshow(feature_slice, cmap='gray')
+            ax.imshow(mask_slice, cmap='Reds', alpha=0.4)
+            ax.set_title(f'Z-slice {z_idx}')
+            ax.axis('off')
+
+        plt.tight_layout()
+        print('Showing Cropped Feature Mask ')
+        plt.show()
+
     def predict_from_data_iterator(self,
                                    data_iterator,
                                    save_probabilities: bool = False,
@@ -382,14 +527,26 @@ class nnUNetPredictor(object):
                     proceed = not check_workers_alive_and_busy(export_pool, worker_list, r, allowed_num_queued=2)
 
 
+                if self.return_features:
+                    features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
+                    print(f'final prediction shape {prediction.shape}')
+                    prediction = prediction.cpu()
+                    #print(f'features are {type(features)}')
+                    #features = features.cpu()
 
-                features, prediction = self.predict_logits_from_preprocessed_data(data).cpu()
+                    print(f"Feature shape is {features.shape}")
+                    feature_file = ofile + "_features.npy"
+                    np.save(feature_file, features)
+                    print(f"Saved features to {feature_file}")
+
+                    print(f'Successfully retrieved patch locations of {len(patch_locations)} patches')
+
+
+                else:
+                    prediction = self.predict_logits_from_preprocessed_data(data).cpu()
                 # saving the raw logits as numpy arrays
 
-                if features:
-                    print(f"Did you make it or what? Shape {features.shape}")
-                else:
-                    print("Something went wrong with the feature extraction")
+
 
                 raw_logits = prediction
                 raw_logits_file = ofile + "_raw_logits.npy"
@@ -450,9 +607,21 @@ class nnUNetPredictor(object):
                     print(f'\nDone with image of shape {data.shape}:')
             ret = [i.get()[0] for i in r]
 
+
+
+
         if isinstance(data_iterator, MultiThreadedAugmenter):
             data_iterator._finish()
 
+        mask_shape = ret[0].shape
+        uniform_size = [208, 256, 48]
+        context = [1, 7, 7]
+        full_feature_volume = self.reconstruct_full_feature_volume(features, patch_locations, mask_shape)
+        roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(full_feature_volume=full_feature_volume,
+    tumor_mask=ret[0],uniform_size=uniform_size, context=context)
+
+        self.visualize_features_with_mask(roi_features, cropped_mask)
+        print('DONE')
         # clear lru cache
         compute_gaussian.cache_clear()
         # clear device cache
@@ -460,10 +629,8 @@ class nnUNetPredictor(object):
         return ret
 
 
-def extract_bottleneck_features(self, input_image):
-    pass
 
-def predict_single_npy_array(self, input_image: np.ndarray, image_properties: dict,
+    def predict_single_npy_array(self, input_image: np.ndarray, image_properties: dict,
                                  segmentation_previous_stage: np.ndarray = None,
                                  output_file_truncated: str = None,
                                  save_or_return_probabilities: bool = False):
@@ -510,7 +677,7 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
             else:
                 return ret
 
-    @torch.inference_mode()
+
     def predict_logits_from_preprocessed_data(self, data: torch.Tensor) -> torch.Tensor:
         """
         IMPORTANT! IF YOU ARE RUNNING THE CASCADE, THE SEGMENTATION FROM THE PREVIOUS STAGE MUST ALREADY BE STACKED ON
@@ -535,14 +702,26 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
             # why not leave prediction on device if perform_everything_on_device? Because this may cause the
             # second iteration to crash due to OOM. Grabbing that with try except cause way more bloated code than
             # this actually saves computation time
-            new_features, new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+            if self.return_features:
+                new_features, new_prediction, new_patch_positions  = self.predict_sliding_window_return_logits(data)
+                new_prediction = new_prediction.to('cpu')
+                new_features = new_features.to('cpu')
+            else:
+                new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+
             if prediction is None:
-                features = new_features
                 prediction = new_prediction
+                if self.return_features:
+                    features = new_features
+                    patch_positions = new_patch_positions
                 #prediction = self.predict_sliding_window_return_logits(data).to('cpu')
             else:
                 prediction += new_prediction
-                features += new_features
+                if self.return_features:
+
+                    features += new_features
+                    patch_positions += new_patch_positions
+
                 #prediction += self.predict_sliding_window_return_logits(data).to('cpu')
 
         if len(self.list_of_parameters) > 1:
@@ -550,8 +729,10 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
 
         if self.verbose: print('Prediction done')
         torch.set_num_threads(n_threads)
-        return features, prediction
-        #return prediction
+        if self.return_features:
+            return features, prediction, patch_positions
+        else:
+            return prediction
 
     def _internal_get_sliding_window_slicers(self, image_size: Tuple[int, ...]):
         slicers = []
@@ -590,10 +771,15 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
     @torch.inference_mode()
     def _internal_maybe_mirror_and_predict(self, x: torch.Tensor) -> torch.Tensor:
         mirror_axes = self.allowed_mirroring_axes if self.use_mirroring else None
-        features, prediction = self.network(x)
-        #prediction = self.network(x)
+        network_output = self.network(x)
+        if isinstance(network_output, tuple):
+            features, prediction = network_output
+           # print(f"Original features shape: {features.shape}")
+        else:
+            features = None
+            prediction = network_output
 
-        if mirror_axes is not None:v
+        if mirror_axes is not None:
             # check for invalid numbers in mirror_axes
             # x should be 5d for 3d images and 4d for 2d. so the max value of mirror_axes cannot exceed len(x.shape) - 3
             assert max(mirror_axes) <= x.ndim - 3, 'mirror_axes does not match the dimension of the input!'
@@ -603,10 +789,38 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
                 c for i in range(len(mirror_axes)) for c in itertools.combinations(mirror_axes, i + 1)
             ]
             for axes in axes_combinations:
-                prediction += torch.flip(self.network(torch.flip(x, axes)), axes)
+                mirrored_input = torch.flip(x, axes)
+                mirrored_output = self.network(mirrored_input)
+
+                if isinstance(mirrored_output, tuple):
+                    mirrored_features, mirrored_prediction = mirrored_output
+
+
+
+                else:
+                    mirrored_prediction = mirrored_output
+                    mirrored_features = None
+
+                prediction += torch.flip(mirrored_prediction, axes)
+                #print(f'mirrored prediction shape {mirrored_prediction.shape}')
+                #mirror features to match predictions
+                # if self.return_features and features is not None and mirrored_features is not None:
+                #
+                #     features += torch.flip(mirrored_features, axes)
+                #     print(f"Flipped mirrored features shape: {torch.flip(mirrored_features, axes).shape}")
+               #prediction += torch.flip(self.network(torch.flip(x, axes)), axes)
+
+            #Averaging over original and all augmentations for prediciton and features
             prediction /= (len(axes_combinations) + 1)
-        return features, prediction
-        #return prediction
+
+            # if self.return_features and features is not None:
+            #     features /= (len(axes_combinations) + 1)
+            #     print(f'averaged features shape {features.shape}')
+
+        if self.return_features:
+            return features, prediction
+        else:
+            return prediction
 
     @torch.inference_mode()
     def _internal_predict_sliding_window_return_logits(self,
@@ -617,9 +831,17 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
         predicted_logits = n_predictions = prediction = gaussian = workon = None
         results_device = self.device if do_on_device else torch.device('cpu')
         all_patch_features = []
+        patch_positions = []
+
+        def get_slice_starts(sl):
+            return tuple(s.start if isinstance(s, slice) else s for s in sl)
+
+        print(f"Number of slicers: {len(slicers)}")
         def producer(d, slh, q):
             for s in slh:
                 q.put((torch.clone(d[s][None], memory_format=torch.contiguous_format).to(self.device), s))
+
+
             q.put('end')
 
         try:
@@ -651,6 +873,8 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
             if not self.allow_tqdm and self.verbose:
                 print(f'running prediction: {len(slicers)} steps')
 
+            print(f'running prediction: {len(slicers)} steps')
+
             with tqdm(desc=None, total=len(slicers), disable=not self.allow_tqdm) as pbar:
                 while True:
                     item = queue.get()
@@ -658,11 +882,32 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
                         queue.task_done()
                         break
                     workon, sl = item
-                    features, prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
+                    if self.return_features:
+
+                        features, prediction = self._internal_maybe_mirror_and_predict(workon)
+                        #double check what is now being returned for features and prediction
+                        features = features.to(results_device)
+                        prediction = prediction[0].to(results_device)
+                        #can only append if patches are same size!
+                        print(f'Feature shape before concatenating: {features.shape}')
+                        print(f'Prediction shape: {prediction.shape}')
+
+                        all_patch_features.append(features)
+                        starts = get_slice_starts(sl)
+                        print(f'Whole slicer output {starts}')
+                        z_start, y_start, x_start = starts[-3:]
+                        patch_positions.append((z_start, y_start, x_start))
+                        print(f'slice location: {z_start}, {y_start}, {x_start}')
+
+
+                    else:
+                        prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
                     #prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
-                    all_patch_features.append(features)
+
+
                     if self.use_gaussian:
                         prediction *= gaussian
+
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
                     queue.task_done()
@@ -682,8 +927,15 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
             empty_cache(results_device)
             raise e
 
-        features_concat = torch.cat(all_patch_features, dim=0)
-        return features_concat, predicted_logits
+        if self.return_features:
+            print(f'Amount of patches collected: {len(all_patch_features)}')
+            features_concat = torch.cat(all_patch_features, dim=0)
+            print(f'features after concatenation {features_concat.shape}')
+            print(f"[Before resampling] predicted_logits.shape: {predicted_logits.shape}")
+
+            return features_concat, predicted_logits, patch_positions
+        else:
+            return predicted_logits
 
     @torch.inference_mode()
     def predict_sliding_window_return_logits(self, input_image: torch.Tensor) \
@@ -719,26 +971,30 @@ def predict_single_npy_array(self, input_image: np.ndarray, image_properties: di
             if self.perform_everything_on_device and self.device != 'cpu':
                 # we need to try except here because we can run OOM in which case we need to fall back to CPU as a results device
                 try:
-                    features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
+                    features, predicted_logits, patch_positions  = self._internal_predict_sliding_window_return_logits(data, slicers,
                                                                                           self.perform_everything_on_device)
-                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                           self.perform_everything_on_device)
+                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, self.perform_everything_on_device)
                 except RuntimeError:
                     print(
                         'Prediction on device was unsuccessful, probably due to a lack of memory. Moving results arrays to CPU')
                     empty_cache(self.device)
-                    features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+                    features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers, False)
                     #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
             else:
-                features, predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,
+                features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers,
                                                                                      self.perform_everything_on_device)
                 #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
             empty_cache(self.device)
             # revert padding
             predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
 
+        if self.return_features:
+            print(f'predict_sliding_window_return_logits feature shape {features.shape}')
+            print(f'predict_sliding_window_return_logits logits shape {predicted_logits.shape}')
 
-        return features, predicted_logits
+            return features, predicted_logits, patch_positions
+        else:
+            return predicted_logits
 
     def predict_from_files_sequential(self,
                            list_of_lists_or_source_folder: Union[str, List[List[str]]],
