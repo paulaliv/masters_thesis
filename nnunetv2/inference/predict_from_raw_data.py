@@ -36,6 +36,8 @@ from nnunetv2.utilities.label_handling.label_handling import determine_num_input
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
 from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder
 import matplotlib.pyplot as plt
+from skimage.transform import resize
+
 
 class nnUNetPredictor(object):
     def __init__(self,
@@ -365,13 +367,22 @@ class nnUNetPredictor(object):
 
         for i, (z, y, x) in enumerate(patch_locations):
             patch = patch_features[i]  # (C, d, h, w)
+            # Ensure it's a NumPy array
+            if isinstance(patch, torch.Tensor):
+                patch = patch.cpu().numpy()
+
+            # Ensure it's float32 (for addition)
+            patch = patch.astype(np.float32)
+
             d, h, w = patch.shape[1:]  # should match tile_size
 
             full_feature_volume[:, z:z + d, y:y + h, x:x + w] += patch
+            #counts overlapping patches per voxel
             count_map[z:z + d, y:y + h, x:x + w] += 1
 
         # Avoid division by zero
         count_map[count_map == 0] = 1
+        #averaging at each voxel -> corrects for overlapping regions
         full_feature_volume = full_feature_volume / count_map
 
         assert full_feature_volume.shape[1:] == tumor_mask_shape, \
@@ -387,7 +398,6 @@ class nnUNetPredictor(object):
 
 
                                       ):
-
 
 
         # Tumor bounding box
@@ -468,28 +478,6 @@ class nnUNetPredictor(object):
             # returns cropped and padded feature volume, and spatial info
             return padded, (z_slice, y_slice, x_slice), cropped_mask
 
-    def visualize_features_with_mask(self, roi_features, cropped_mask, num_slices = 5, feature_channel = 0):
-        C, Z, Y, X = roi_features.shape
-        mid = Z // 2
-
-        # Get slice indices (centered around the middle)
-        slice_indices = np.linspace(0, Z - 1, num=num_slices, dtype=int)
-
-        fig, axs = plt.subplots(1, num_slices, figsize=(15, 5))
-
-        for i, z_idx in enumerate(slice_indices):
-            ax = axs[i]
-            feature_slice = roi_features[feature_channel, z_idx, :, :]
-            mask_slice = cropped_mask[z_idx, :, :]
-
-            ax.imshow(feature_slice, cmap='gray')
-            ax.imshow(mask_slice, cmap='Reds', alpha=0.4)
-            ax.set_title(f'Z-slice {z_idx}')
-            ax.axis('off')
-
-        plt.tight_layout()
-        print('Showing Cropped Feature Mask ')
-        plt.show()
 
     def predict_from_data_iterator(self,
                                    data_iterator,
@@ -531,22 +519,32 @@ class nnUNetPredictor(object):
                     features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
                     print(f'final prediction shape {prediction.shape}')
                     prediction = prediction.cpu()
-                    #print(f'features are {type(features)}')
-                    #features = features.cpu()
+                    features = features.cpu()
 
                     print(f"Feature shape is {features.shape}")
-                    feature_file = ofile + "_features.npy"
-                    np.save(feature_file, features)
+
+                    uniform_size = [208, 256, 48]
+                    context = [1, 7, 7]
+                    tumor_mask = prediction.argmax(0).numpy()
+                    mask_shape = tumor_mask.shape
+                    full_feature_volume = self.reconstruct_full_feature_volume(features, patch_locations, mask_shape)
+                    roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(
+                        full_feature_volume=full_feature_volume,
+                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    feature_file = ofile + "_roi_features.npy"
+                    np.save(feature_file, roi_features)
                     print(f"Saved features to {feature_file}")
 
-                    print(f'Successfully retrieved patch locations of {len(patch_locations)} patches')
+                    cropped_mask_file = ofile + "_cropped_mask.npy"
+                    np.save(cropped_mask_file, cropped_mask)
+                    print(f'Saved cropped mask to {cropped_mask_file}')
+
+                    #self.visualize_features_with_mask(roi_features, cropped_mask)
 
 
                 else:
                     prediction = self.predict_logits_from_preprocessed_data(data).cpu()
                 # saving the raw logits as numpy arrays
-
-
 
                 raw_logits = prediction
                 raw_logits_file = ofile + "_raw_logits.npy"
@@ -609,19 +607,10 @@ class nnUNetPredictor(object):
 
 
 
-
         if isinstance(data_iterator, MultiThreadedAugmenter):
             data_iterator._finish()
 
-        mask_shape = ret[0].shape
-        uniform_size = [208, 256, 48]
-        context = [1, 7, 7]
-        full_feature_volume = self.reconstruct_full_feature_volume(features, patch_locations, mask_shape)
-        roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(full_feature_volume=full_feature_volume,
-    tumor_mask=ret[0],uniform_size=uniform_size, context=context)
 
-        self.visualize_features_with_mask(roi_features, cropped_mask)
-        print('DONE')
         # clear lru cache
         compute_gaussian.cache_clear()
         # clear device cache
