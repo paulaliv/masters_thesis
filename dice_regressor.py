@@ -27,7 +27,6 @@ fold_paths = {
     'fold_1': '/home/bmep/plalfken/my-scratch/nnUNet/fold_1',
     'fold_2': '/home/bmep/plalfken/my-scratch/nnUNet/fold_2',
     'fold_3': '/home/bmep/plalfken/my-scratch/nnUNet/fold_3',
-
     'fold_4': '/home/bmep/plalfken/my-scratch/nnUNet/fold_4',
 }
 
