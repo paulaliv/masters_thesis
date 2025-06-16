@@ -50,8 +50,8 @@ def main(input_folder, output_folder, model_dir):
 
 
 if __name__ == '__main__':
-    input_folder = os.environ.get('nnUNet_raw', sys.argv[1])
-    output_folder = os.environ.get('nnUNet_results', sys.argv[2])
+    input_folder = sys.argv[1]
+    output_folder = sys.argv[2]
     model_dir = sys.argv[3]
 
     main(input_folder, output_folder, model_dir)
