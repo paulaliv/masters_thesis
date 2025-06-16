@@ -531,13 +531,17 @@ class nnUNetPredictor(object):
                     roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(
                         full_feature_volume=full_feature_volume,
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
-                    feature_file = ofile + "_roi_features.npy"
-                    np.save(feature_file, roi_features)
+                    feature_file = ofile + "features.npy"
+                    np.save(feature_file, features)
                     print(f"Saved features to {feature_file}")
 
-                    cropped_mask_file = ofile + "_cropped_mask.npy"
-                    np.save(cropped_mask_file, cropped_mask)
-                    print(f'Saved cropped mask to {cropped_mask_file}')
+                    feature_file_roi = ofile + "features_roi.npy"
+                    np.save(feature_file_roi, roi_features)
+                    print(f"Saved features to {feature_file_roi}")
+
+                    patch_locations = ofile + "patch_locations.npy"
+                    np.save(patch_locations, patch_locations)
+                    print(f'Saved patch locations to {patch_locations}')
 
                     #self.visualize_features_with_mask(roi_features, cropped_mask)
 
@@ -546,10 +550,10 @@ class nnUNetPredictor(object):
                     prediction = self.predict_logits_from_preprocessed_data(data).cpu()
                 # saving the raw logits as numpy arrays
 
-                raw_logits = prediction
-                raw_logits_file = ofile + "_raw_logits.npy"
-                np.save(raw_logits_file, raw_logits)
-                print(f"Saved raw logits to {raw_logits_file}")
+                    raw_logits = prediction
+                    raw_logits_file = ofile + "_raw_logits.npy"
+                    np.save(raw_logits_file, raw_logits)
+                    print(f"Saved raw logits to {raw_logits_file}")
 
                 # # Resample logits to original image shape
                 # current_spacing = self.configuration_manager.spacing if \

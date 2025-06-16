@@ -22,27 +22,26 @@ import torch.optim as optim
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 
-gt_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
-logits_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
-image_dir =  r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr'
-preprocessed_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue'
-tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-tabular_data = pd.read_csv(tabular_data_dir)
-pred_fold_paths = {
-    'fold_0': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_0/validation',
-    'fold_1': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_1/validation',
-    'fold_2': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_2/validation',
-    'fold_3': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_3/validation',
-    'fold_4': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/validation',
-}
+# gt_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
+# logits_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
+# image_dir =  r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr'
+# preprocessed_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue'
+# tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
+# tabular_data = pd.read_csv(tabular_data_dir)
+# pred_fold_paths = {
+#     'fold_0': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_0/validation',
+#     'fold_1': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_1/validation',
+#     'fold_2': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_2/validation',
+#     'fold_3': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_3/validation',
+#     'fold_4': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/validation',
+# }
 fold_paths = {
-    'fold_0': '/home/bmep/plalfken/my-scratch/nnUNet/fold_0',
-    'fold_1': '/home/bmep/plalfken/my-scratch/nnUNet/fold_1',
-    'fold_2': '/home/bmep/plalfken/my-scratch/nnUNet/fold_2',
-    'fold_3': '/home/bmep/plalfken/my-scratch/nnUNet/fold_3',
-    'fold_4': '/home/bmep/plalfken/my-scratch/nnUNet/fold_4',
+    'fold_0': '/gpfs/home6/palfken/masters_thesis/fold_0',
+    'fold_1': '/gpfs/home6/palfken/masters_thesis/fold_1',
+    'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
+    'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
+    'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
 }
-
 
 
 class ConvBlock(nn.Module):
@@ -256,7 +255,7 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
     patience = 10
     patience_counter = 0
 
-    for epoch in range(100):  # max epochs
+    for epoch in range(20):  # max epochs
         model.train()
         train_losses = []
         for image, logits, label, subtype in train_loader:
@@ -339,10 +338,10 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 #
 #     return dice
 
-def main():
+def main(preprocessed_dir, logits_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
-    for fold in range(5):
-        train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
+    #for fold in range(5):
+    train_one_fold(0,encoder, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
