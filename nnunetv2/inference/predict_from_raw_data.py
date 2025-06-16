@@ -879,18 +879,21 @@ class nnUNetPredictor(object):
 
                         features, prediction = self._internal_maybe_mirror_and_predict(workon)
                         #double check what is now being returned for features and prediction
-                        features = features.to(results_device)
-                        prediction = prediction[0].to(results_device)
-                        #can only append if patches are same size!
-                        print(f'Feature shape before concatenating: {features.shape}')
-                        print(f'Prediction shape: {prediction.shape}')
+                        if features:
+                            features = features.to(results_device)
+                            prediction = prediction[0].to(results_device)
+                            #can only append if patches are same size!
+                            print(f'Feature shape before concatenating: {features.shape}')
+                            print(f'Prediction shape: {prediction.shape}')
 
-                        all_patch_features.append(features)
-                        starts = get_slice_starts(sl)
-                        print(f'Whole slicer output {starts}')
-                        z_start, y_start, x_start = starts[-3:]
-                        patch_positions.append((z_start, y_start, x_start))
-                        print(f'slice location: {z_start}, {y_start}, {x_start}')
+                            all_patch_features.append(features)
+                            starts = get_slice_starts(sl)
+                            print(f'Whole slicer output {starts}')
+                            z_start, y_start, x_start = starts[-3:]
+                            patch_positions.append((z_start, y_start, x_start))
+                            print(f'slice location: {z_start}, {y_start}, {x_start}')
+                        else:
+                            print('Internal_maybe_mirror_and_predict not working')
 
 
                     else:
@@ -964,8 +967,7 @@ class nnUNetPredictor(object):
                 if self.perform_everything_on_device and self.device != 'cpu':
                     # we need to try except here because we can run OOM in which case we need to fall back to CPU as a results device
                     try:
-                        features, predicted_logits, patch_positions  = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                              self.perform_everything_on_device)
+                        features, predicted_logits, patch_positions  = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
                         #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, self.perform_everything_on_device)
                     except RuntimeError:
                         print(
@@ -974,8 +976,7 @@ class nnUNetPredictor(object):
                         features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers, False)
                         #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
                 else:
-                    features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                         self.perform_everything_on_device)
+                    features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers, self.perform_everything_on_device)
                     #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
                 empty_cache(self.device)
                 # revert padding
