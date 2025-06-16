@@ -26,8 +26,6 @@ def main(input_folder, output_folder, model_dir):
     print('Initializing trained model ...')
     print(f'input folder: {input_folder}')
     print(f'output folder: {output_folder}')
-    for files in os.listdir(input_folder):
-        print(files)
 
     predictor.initialize_from_trained_model_folder(model_dir,
         use_folds=folds,   # or whatever fold(s) you want

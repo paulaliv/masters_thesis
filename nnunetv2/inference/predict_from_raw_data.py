@@ -956,26 +956,29 @@ class nnUNetPredictor(object):
                                                        None)
 
             slicers = self._internal_get_sliding_window_slicers(data.shape[1:])
-
-            if self.perform_everything_on_device and self.device != 'cpu':
-                # we need to try except here because we can run OOM in which case we need to fall back to CPU as a results device
-                try:
-                    features, predicted_logits, patch_positions  = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                          self.perform_everything_on_device)
-                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, self.perform_everything_on_device)
-                except RuntimeError:
-                    print(
-                        'Prediction on device was unsuccessful, probably due to a lack of memory. Moving results arrays to CPU')
-                    empty_cache(self.device)
-                    features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers, False)
-                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+            if self.return_features:
+                if self.perform_everything_on_device and self.device != 'cpu':
+                    # we need to try except here because we can run OOM in which case we need to fall back to CPU as a results device
+                    try:
+                        features, predicted_logits, patch_positions  = self._internal_predict_sliding_window_return_logits(data, slicers,
+                                                                                              self.perform_everything_on_device)
+                        #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, self.perform_everything_on_device)
+                    except RuntimeError:
+                        print(
+                            'Prediction on device was unsuccessful, probably due to a lack of memory. Moving results arrays to CPU')
+                        empty_cache(self.device)
+                        features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+                        #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers, False)
+                else:
+                    features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers,
+                                                                                         self.perform_everything_on_device)
+                    #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
+                empty_cache(self.device)
+                # revert padding
+                predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
             else:
-                features, predicted_logits, patch_positions = self._internal_predict_sliding_window_return_logits(data, slicers,
-                                                                                     self.perform_everything_on_device)
-                #predicted_logits = self._internal_predict_sliding_window_return_logits(data, slicers,self.perform_everything_on_device)
-            empty_cache(self.device)
-            # revert padding
-            predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
+                predicted_logits= self._internal_predict_sliding_window_return_logits(data,slicers,self.perform_everything_on_device)
+                predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
 
         if self.return_features:
             print(f'predict_sliding_window_return_logits feature shape {features.shape}')
