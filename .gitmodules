@@ -1,0 +1,3 @@
+[submodule "external/dynamic-network-architectures"]
+	path = external/dynamic-network-architectures
+	url = https://github.com/MIC-DKFZ/dynamic-network-architectures.git
