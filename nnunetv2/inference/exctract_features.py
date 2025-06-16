@@ -28,8 +28,8 @@ from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
 
 def main():
-    input_folder = "/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTs"
-    output_folder = "/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/features"
+    input_folder = "/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr"
+    output_folder = "/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits_Tr"
     model_dir = "/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres"
     folds = (0,)
     # Create predictor
@@ -53,8 +53,8 @@ def main():
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=True,
         overwrite=True,
-        num_processes_preprocessing=6,
-        num_processes_segmentation_export=6
+        num_processes_preprocessing=4,
+        num_processes_segmentation_export=4
     )
 
 

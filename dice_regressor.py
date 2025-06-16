@@ -5,7 +5,6 @@ from dynamic_network_architectures.building_blocks.residual_encoders import Resi
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
-from nnunetv2.preprocessing
 import pandas as pd
 import numpy as np
 import os
@@ -13,7 +12,7 @@ import torch.nn as nn
 import torch
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch.nn.functional as F
-
+import time
 
 
 from torch.utils.data import Dataset
@@ -91,9 +90,18 @@ class QA_Model(nn.Module):
 
     def forward(self, image, logits):
         image_features = self.encoder(image)
+        print(f'Encoder Output Shape {image_features.shape}')
+
         if isinstance(image_features, (list, tuple)):
             #remove skip connections
             image_features = image_features[-1]
+        assert image_features.ndim == 5 and logits.ndim == 5, \
+            f"Expected 5D tensors, got shapes {image_features.shape} and {logits.shape}"
+
+        assert image_features.shape[0] == logits.shape[0] and \
+               image_features.shape[2:] == logits.shape[2:], \
+            f"Batch and spatial dimensions must match. Got encoder_out: {image_features.shape}, logits: {logits.shape}"
+
         x = torch.cat([image_features, logits], dim=1)  # concat over channels
         shared_features = self.shared_processor(x)
         return self.head(shared_features)
@@ -144,6 +152,7 @@ class QADataset(Dataset):
         self.logits_dir = logits_dir
         self.fold_dir = fold_paths[fold]
 
+
         # Load Dice scores & case IDs from a CSV or JSON
         # Example CSV: case_id,dice
 
@@ -153,7 +162,7 @@ class QADataset(Dataset):
         self.case_ids = self.metadata['case_id'].tolist()
         self.dice_scores = self.metadata['dice'].tolist()
         self.subtypes = self.metadata['subtype'].tolist()
-
+        self.ds = nnUNetDatasetBlosc2(self.preprocessed_dir)
 
         self.transform = transform
 
@@ -165,19 +174,23 @@ class QADataset(Dataset):
         dice_score = self.dice_scores[idx]
         subtype = self.subtypes[idx]
 
+        print(f'Extracting image, logits and label for case {case_id}')
+
 
         # Load preprocessed image (.npz)
         #Check if its not case_id_0000
-        b2nd_path = os.path.join(self.preprocessed_dir, f"{case_id}.b2nd")
-        data, seg, seg_prev, properties = nnUNetDatasetBlosc2.load_case(b2nd_path)
-        print("Data shape:", data.shape)
-        image = data[0]
+        data, seg, seg_prev, properties = self.ds.load_case(case_id)
+        #print("Data shape:", data.shape)
+
+        image = data
+        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         # Load predicted mask (.nii.gz)
         logits_path = os.path.join(self.logits_dir, f"{case_id}_resampled_logits.npy")
         logits = np.load(logits_path)  # shape (H, W, D)
+        print(f'Logits shape: {logits.shape}')
         logits = np.expand_dims(logits, axis=0)  # to shape: (1, H, W, D)
-
+        print(f'Logits shape after expansion: {logits.shape}') #(B, num_classes, D, H, W)
 
         # nnU-Net raw images usually have multiple channels; choose accordingly:
         # Here, just take channel 0 for simplicity:
@@ -194,7 +207,7 @@ class QADataset(Dataset):
 
         image_tensor = torch.from_numpy(image).float()
         logits_tensor = torch.from_numpy(logits).float()
-        label_tensor = torch.tensor(dice_score).long()
+        label_tensor = torch.tensor(label).long()
 
         if self.transform:
             image_tensor = self.transform(image_tensor)
@@ -326,3 +339,10 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 #
 #     return dice
 
+def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    start = time.time()
+    for fold in range(5):
+        train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
+    end = time.time()
+    print(f"Total training time: {(end - start) / 60:.2f} minutes")
