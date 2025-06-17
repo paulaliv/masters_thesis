@@ -851,12 +851,12 @@ class nnUNetPredictor(object):
             # preallocate arrays
             if self.verbose:
                 print(f'preallocating results arrays on device {results_device}')
-            # predicted_logits = torch.zeros((self.label_manager.num_segmentation_heads, *data.shape[1:]),
-            #                                dtype=torch.half,
-            #                                device=results_device)
-            predicted_logits = torch.zeros((data.shape[0], self.label_manager.num_segmentation_heads, *data.shape[2:]),
+            predicted_logits = torch.zeros((data.shape[0],self.label_manager.num_segmentation_heads, *data.shape[1:]),
                                            dtype=torch.half,
                                            device=results_device)
+            # predicted_logits = torch.zeros((data.shape[0], self.label_manager.num_segmentation_heads, *data.shape[2:]),
+            #                                dtype=torch.half,
+            #                                device=results_device)
             print(f'predicted logits shape {predicted_logits.shape}')
 
             n_predictions = torch.zeros(data.shape[1:], dtype=torch.half, device=results_device)
@@ -886,7 +886,7 @@ class nnUNetPredictor(object):
                         #double check what is now being returned for features and prediction
                         if features is not None:
                             features = features.to(results_device)
-                            prediction = prediction.to(results_device)
+                            prediction = prediction[0].to(results_device)
                             #can only append if patches are same size!
                             print(f'Feature shape before concatenating: {features.shape}')
                             print(f'Prediction shape: {prediction.shape}')
