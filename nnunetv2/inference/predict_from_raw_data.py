@@ -851,9 +851,14 @@ class nnUNetPredictor(object):
             # preallocate arrays
             if self.verbose:
                 print(f'preallocating results arrays on device {results_device}')
-            predicted_logits = torch.zeros((self.label_manager.num_segmentation_heads, *data.shape[1:]),
+            # predicted_logits = torch.zeros((self.label_manager.num_segmentation_heads, *data.shape[1:]),
+            #                                dtype=torch.half,
+            #                                device=results_device)
+            predicted_logits = torch.zeros((data.shape[0], self.label_manager.num_segmentation_heads, *data.shape[2:]),
                                            dtype=torch.half,
                                            device=results_device)
+            print(f'predicted logits shape {predicted_logits.shape}')
+
             n_predictions = torch.zeros(data.shape[1:], dtype=torch.half, device=results_device)
 
             if self.use_gaussian:
@@ -904,11 +909,11 @@ class nnUNetPredictor(object):
                     if self.use_gaussian:
                         gaussian = gaussian.to(prediction.device)
                         prediction *= gaussian
-                    print(f'shape before unsqueeze: {prediction.shape}')
-                    if prediction.ndim == 4:
-                        prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
+                    print(f'shape of prediction : {prediction.shape}')
+                    # if prediction.ndim == 4:
+                    #     prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
 
-                    print('problematic shape location now has shape {prediction.shape}')
+                    print(f'problematic logits shape location now has shape {predicted_logits[sl].shape}')
 
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
