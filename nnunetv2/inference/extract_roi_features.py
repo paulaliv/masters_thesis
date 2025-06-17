@@ -18,7 +18,7 @@ sys.path.append('/gpfs/home6/palfken/masters_thesis/external/dynamic-network-arc
 
 
 def main(input_folder, output_folder, model_dir):
-    folds = (0,1,2,3,4)
+    folds = (0,1)
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),return_features = True
@@ -43,8 +43,8 @@ def main(input_folder, output_folder, model_dir):
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=True,
         overwrite=True,
-        num_processes_preprocessing=8,
-        num_processes_segmentation_export=8
+        num_processes_preprocessing=4,
+        num_processes_segmentation_export=4
     )
 
 

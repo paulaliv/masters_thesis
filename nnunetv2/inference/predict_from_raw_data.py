@@ -703,8 +703,12 @@ class nnUNetPredictor(object):
                 new_features, new_prediction, new_patch_positions  = self.predict_sliding_window_return_logits(data)
                 new_prediction = new_prediction.to('cpu')
                 new_features = new_features.to('cpu')
+                torch.cuda.empty_cache()
 
-                full_feature_volume = self.reconstruct_full_feature_volume(new_features, new_patch_positions, new_prediction.shape())
+                mask_shape = new_prediction.shape[1:]
+                print(f'mask shape: {mask_shape}')
+
+                full_feature_volume = self.reconstruct_full_feature_volume(new_features, new_patch_positions, mask_shape)
                 all_full_feature_volumes.append(full_feature_volume)
 
 
@@ -781,7 +785,7 @@ class nnUNetPredictor(object):
         network_output = self.network(x)
         if isinstance(network_output, tuple):
             features, prediction = network_output
-            print(f"Original features shape: {features.shape}")
+            #print(f"Original features shape: {features.shape}")
         else:
             features = None
             prediction = network_output
@@ -865,7 +869,7 @@ class nnUNetPredictor(object):
             predicted_logits = torch.zeros((self.label_manager.num_segmentation_heads, *data.shape[1:]),
                                            dtype=torch.half,
                                            device=results_device)
-            print(f'predicted logits shape {predicted_logits.shape}')
+
 
             n_predictions = torch.zeros(data.shape[1:], dtype=torch.half, device=results_device)
 
@@ -897,15 +901,15 @@ class nnUNetPredictor(object):
                             features = features.to(results_device)
                             prediction = prediction[0].to(results_device)
                             #can only append if patches are same size!
-                            print(f'Feature shape before concatenating: {features.shape}')
-                            print(f'Prediction shape: {prediction.shape}')
+                            # print(f'Feature shape before concatenating: {features.shape}')
+                            # print(f'Prediction shape: {prediction.shape}')
 
                             all_patch_features.append(features)
                             starts = get_slice_starts(sl)
-                            print(f'Whole slicer output {starts}')
+                            #print(f'Whole slicer output {starts}')
                             z_start, y_start, x_start = starts[-3:]
                             patch_positions.append((z_start, y_start, x_start))
-                            print(f'slice location: {z_start}, {y_start}, {x_start}')
+                            #print(f'slice location: {z_start}, {y_start}, {x_start}')
                         else:
                             print('Internal_maybe_mirror_and_predict not working')
 
@@ -918,11 +922,11 @@ class nnUNetPredictor(object):
                     if self.use_gaussian:
                         gaussian = gaussian.to(prediction.device)
                         prediction *= gaussian
-                    print(f'shape of prediction : {prediction.shape}')
+
                     # if prediction.ndim == 4:
                     #     prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
 
-                    print(f'problematic logits shape location now has shape {predicted_logits[sl].shape}')
+
 
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
@@ -944,10 +948,8 @@ class nnUNetPredictor(object):
             raise e
 
         if self.return_features:
-            print(f'Amount of patches collected: {len(all_patch_features)}')
+
             features_concat = torch.cat(all_patch_features, dim=0)
-            print(f'features after concatenation {features_concat.shape}')
-            print(f"[Before resampling] predicted_logits.shape: {predicted_logits.shape}")
 
             return features_concat, predicted_logits, patch_positions
         else:
@@ -1006,9 +1008,6 @@ class nnUNetPredictor(object):
                 predicted_logits = predicted_logits[(slice(None), *slicer_revert_padding[1:])]
 
         if self.return_features:
-            print(f'predict_sliding_window_return_logits feature shape {features.shape}')
-            print(f'predict_sliding_window_return_logits logits shape {predicted_logits.shape}')
-
             return features, predicted_logits, patch_positions
         else:
             return predicted_logits
