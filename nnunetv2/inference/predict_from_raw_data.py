@@ -905,6 +905,9 @@ class nnUNetPredictor(object):
                         gaussian = gaussian.to(prediction.device)
                         prediction *= gaussian
 
+                    if prediction.ndim == 4:
+                        prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
+
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
                     queue.task_done()
