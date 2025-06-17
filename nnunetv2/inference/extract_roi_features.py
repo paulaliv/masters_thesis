@@ -40,8 +40,8 @@ def main(input_folder, output_folder, model_dir):
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=True,
         overwrite=True,
-        num_processes_preprocessing=4,
-        num_processes_segmentation_export=4
+        num_processes_preprocessing=8,
+        num_processes_segmentation_export=8
     )
 
 

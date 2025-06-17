@@ -879,9 +879,9 @@ class nnUNetPredictor(object):
 
                         features, prediction = self._internal_maybe_mirror_and_predict(workon)
                         #double check what is now being returned for features and prediction
-                        if features:
+                        if features is not None:
                             features = features.to(results_device)
-                            prediction = prediction[0].to(results_device)
+                            prediction = prediction.to(results_device)
                             #can only append if patches are same size!
                             print(f'Feature shape before concatenating: {features.shape}')
                             print(f'Prediction shape: {prediction.shape}')
@@ -902,6 +902,7 @@ class nnUNetPredictor(object):
 
 
                     if self.use_gaussian:
+                        gaussian = gaussian.to(prediction.device)
                         prediction *= gaussian
 
                     predicted_logits[sl] += prediction
