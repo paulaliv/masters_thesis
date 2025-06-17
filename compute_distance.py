@@ -18,7 +18,7 @@ def load_patient_data(patient_id):
     if not patient.empty:
         subtype_label = patient['Final_Classification'].values[0]
 
-    return np.load(file_path), subtype_label  # Expecting e.g. shape (C, D, H, W) or similar
+        return np.load(file_path), subtype_label  # Expecting e.g. shape (C, D, H, W) or similar
 
 
 def flatten(feature_map):
@@ -69,16 +69,86 @@ def compute_mahalanobis_distance(x, mean, inv_cov):
     delta = x - mean
     return np.sqrt(np.dot(np.dot(delta, inv_cov), delta.T))
 
-# Step 1: Compute mean and covariance of training features
-mean_vec = np.mean(train_features, axis=0)  # shape (D,)
-cov_matrix = np.cov(train_features, rowvar=False)  # shape (D, D)
 
-# Step 2: Invert covariance matrix
-inv_cov_matrix = np.linalg.inv(cov_matrix)
 
-# Step 3: Compute Mahalanobis distance for each test feature vector
-def mahalanobis_dist(x, mean, inv_cov):
-    delta = x - mean
-    return np.sqrt(np.dot(np.dot(delta, inv_cov), delta.T))
+def compute_distances(features, mean, inv_cov):
+    """
+    Compute Mahalanobis distances for all rows in features.
+    """
+    return np.array([compute_mahalanobis_distance(x, mean, inv_cov) for x in features])
 
-distances = np.array([mahalanobis_dist(x, mean_vec, inv_cov_matrix) for x in test_features])
+
+# def main():
+#     # Prepare data: load features & labels
+#     patient_ids = tabular_data['nnunet_id'].tolist()
+#     labels = tabular_data['Final_Classification'].tolist()
+#
+#     all_features = []
+#     for pid in patient_ids:
+#         feats = load_features(pid)
+#         flat_feats = flatten_feature_map(feats)
+#         all_features.append(flat_feats)
+#
+#     # Concatenate all for global stats (all training data)
+#     global_features = np.concatenate(all_features, axis=0)
+#     mean_global, cov_global, inv_cov_global = compute_mean_cov_inv(global_features)
+#
+#     # Compute distances to global distribution
+#     print("Distances to global distribution:")
+#     for pid, feats in zip(patient_ids, all_features):
+#         dists = compute_distances(feats, mean_global, inv_cov_global)
+#         print(f"{pid}: mean distance {np.mean(dists):.3f}, std {np.std(dists):.3f}")
+#
+#     # Group by class and compute per-class stats
+#     grouped = group_features_by_class(all_features, labels)
+#     class_stats = {}
+#     for cls, feats in grouped.items():
+#         mean_cls, cov_cls, inv_cov_cls = compute_mean_cov_inv(feats)
+#         class_stats[cls] = (mean_cls, inv_cov_cls)
+#
+#     # Example: For each patient, compute distance to each class distribution
+#     print("\nDistances per class:")
+#     for pid, feats in zip(patient_ids, all_features):
+#         print(f"Patient {pid}:")
+#         for cls, (mean_cls, inv_cov_cls) in class_stats.items():
+#             dists = compute_distances(feats, mean_cls, inv_cov_cls)
+#             print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
+def main():
+    # Prepare data: load features & labels
+    patient_ids = tabular_data['nnunet_id'].tolist()
+    labels = tabular_data['Final_Classification'].tolist()
+
+    all_features = []
+    for file in os.listdir(feature_dir):
+        patient_id = file.replace('features.npy', '')
+        features, labels = load_patient_data(patient_id)
+        flat_features = flatten(features)
+        all_features.append(flat_features)
+
+    # Concatenate all for global stats (all training data)
+    global_features = np.concatenate(all_features, axis=0)
+    mean_global, cov_global, inv_cov_global = compute_stats(global_features)
+
+    # Compute distances to global distribution
+    print("Distances to global distribution:")
+    for pid, feats in zip(patient_ids, all_features):
+        dists = compute_distances(feats, mean_global, inv_cov_global)
+        print(f"{pid}: mean distance {np.mean(dists):.3f}, std {np.std(dists):.3f}")
+
+    # Group by class and compute per-class stats
+    grouped = group_features_by_class(all_features, labels)
+    class_stats = {}
+    for cls, feats in grouped.items():
+        mean_cls, cov_cls, inv_cov_cls = compute_mean_cov_inv(feats)
+        class_stats[cls] = (mean_cls, inv_cov_cls)
+
+    # Example: For each patient, compute distance to each class distribution
+    print("\nDistances per class:")
+    for pid, feats in zip(patient_ids, all_features):
+        print(f"Patient {pid}:")
+        for cls, (mean_cls, inv_cov_cls) in class_stats.items():
+            dists = compute_distances(feats, mean_cls, inv_cov_cls)
+            print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
+
+if __name__ == "__main__":
+    main()
