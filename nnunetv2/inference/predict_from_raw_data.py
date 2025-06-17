@@ -37,6 +37,9 @@ from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, Config
 from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder
 import matplotlib.pyplot as plt
 from skimage.transform import resize
+import sys
+sys.path.append('/gpfs/home6/palfken/masters_thesis/external/dynamic-network-architectures/dynamic_network_architectures')
+
 
 
 class nnUNetPredictor(object):
