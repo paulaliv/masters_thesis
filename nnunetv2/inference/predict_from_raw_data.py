@@ -904,9 +904,11 @@ class nnUNetPredictor(object):
                     if self.use_gaussian:
                         gaussian = gaussian.to(prediction.device)
                         prediction *= gaussian
-
+                    print(f'shape before unsqueeze: {prediction.shape}')
                     if prediction.ndim == 4:
                         prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
+
+                    print('problematic shape location now has shape {prediction.shape}')
 
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
