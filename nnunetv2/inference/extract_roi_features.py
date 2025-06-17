@@ -12,6 +12,9 @@ import nnunetv2
 import sys
 
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+import sys
+sys.path.append('/gpfs/home6/palfken/masters_thesis/external/dynamic-network-architectures/dynamic_network_architectures')
+
 
 
 def main(input_folder, output_folder, model_dir):
