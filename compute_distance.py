@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from scipy.spatial import distance
 from sympy.solvers.diophantine.diophantine import prime_as_sum_of_two_squares
@@ -136,10 +138,10 @@ def main():
         print(f"{pid}: mean distance {np.mean(dists):.3f}, std {np.std(dists):.3f}")
 
     # Group by class and compute per-class stats
-    grouped = group_features_by_class(all_features, labels)
+    grouped = group_by_class(all_features, labels)
     class_stats = {}
     for cls, feats in grouped.items():
-        mean_cls, cov_cls, inv_cov_cls = compute_mean_cov_inv(feats)
+        mean_cls, cov_cls, inv_cov_cls = compute_stats(feats)
         class_stats[cls] = (mean_cls, inv_cov_cls)
 
     # Example: For each patient, compute distance to each class distribution

@@ -407,6 +407,7 @@ class nnUNetPredictor(object):
         coords = np.where(tumor_mask == 1)
         if coords[0].size == 0:
             print('Warning: empty mask, no tumor region found')
+            return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None, None
         else:
             z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
             z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
@@ -479,7 +480,7 @@ class nnUNetPredictor(object):
                                ]
 
             # returns cropped and padded feature volume, and spatial info
-            return padded, (z_slice, y_slice, x_slice), cropped_mask
+            return pad return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None, Noneded, (z_slice, y_slice, x_slice), cropped_mask
 
 
     def predict_from_data_iterator(self,
@@ -488,7 +489,7 @@ class nnUNetPredictor(object):
                                    num_processes_segmentation_export: int = default_num_processes):
         """
         each element returned by data_iterator must be a dict with 'data', 'ofile' and 'data_properties' keys!
-        If 'ofile' is None, the result will be returned instead of written to a file
+        If 'ofile' is None, the res return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None, Noneult will be returned instead of written to a file
         """
         with multiprocessing.get_context("spawn").Pool(num_processes_segmentation_export) as export_pool:
             worker_list = [i for i in export_pool._pool]
@@ -530,9 +531,8 @@ class nnUNetPredictor(object):
                     context = [1, 7, 7]
                     tumor_mask = prediction.argmax(0).numpy()
                     mask_shape = tumor_mask.shape
-                    full_feature_volume = self.reconstruct_full_feature_volume(features, patch_locations, mask_shape)
                     roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(
-                        full_feature_volume=full_feature_volume,
+                        full_feature_volume=features,
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
                     feature_file = ofile + "features.npy"
                     np.save(feature_file, features)
@@ -542,9 +542,9 @@ class nnUNetPredictor(object):
                     np.save(feature_file_roi, roi_features)
                     print(f"Saved features to {feature_file_roi}")
 
-                    patch_locations = ofile + "patch_locations.npy"
-                    np.save(patch_locations, patch_locations)
-                    print(f'Saved patch locations to {patch_locations}')
+                    # patch_locations = ofile + "patch_locations.npy"
+                    # np.save(patch_locations, patch_locations)
+                    # print(f'Saved patch locations to {patch_locations}')
 
                     #self.visualize_features_with_mask(roi_features, cropped_mask)
 
@@ -671,7 +671,46 @@ class nnUNetPredictor(object):
             if save_or_return_probabilities:
                 return ret[0], ret[1]
             else:
-                return ret
+                return retfor params in self.list_of_parameters:
+
+            # messing with state dict names...
+            if not isinstance(self.network, OptimizedModule):
+                self.network.load_state_dict(params)
+            else:
+                self.network._orig_mod.load_state_dict(params)
+
+            # why not leave prediction on device if perform_everything_on_device? Because this may cause the
+            # second iteration to crash due to OOM. Grabbing that with try except cause way more bloated code than
+            # this actually saves computation time
+            if self.return_features:
+                new_features, new_prediction, new_patch_positions  = self.predict_sliding_window_return_logits(data)
+                new_prediction = new_prediction.to('cpu')
+                new_features = new_features.to('cpu')
+
+                full_feature_volume = self.reconstruct_full_feature_volume(new_features, new_patch_positions, new_prediction.shape())
+                all_full_feature_volumes.append(full_feature_volume)
+
+
+            else:
+                new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+
+            if prediction is None:
+                prediction = new_prediction
+                if self.return_features:
+                    if patch_positions is None:
+                        patch_positions = new_patch_positions
+                #prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+            else:
+                prediction += new_prediction
+
+                #prediction += self.predict_sliding_window_return_logits(data).to('cpu')
+
+        if len(self.list_of_parameters) > 1:
+            prediction /= len(self.list_of_parameters)
+
+            if self.return_features:
+            # Average full reconstructed feature volumes
+                ensemble_features = sum(all_full_feature_volumes) / len(all_full_feature_volumes)
 
 
     def predict_logits_from_preprocessed_data(self, data: torch.Tensor) -> torch.Tensor:
@@ -686,7 +725,8 @@ class nnUNetPredictor(object):
         torch.set_num_threads(default_num_processes if default_num_processes < n_threads else n_threads)
         prediction = None
         features = None
-
+        patch_positions = None
+        all_full_feature_volumes = []
         for params in self.list_of_parameters:
 
             # messing with state dict names...
@@ -702,31 +742,41 @@ class nnUNetPredictor(object):
                 new_features, new_prediction, new_patch_positions  = self.predict_sliding_window_return_logits(data)
                 new_prediction = new_prediction.to('cpu')
                 new_features = new_features.to('cpu')
+
+                full_feature_volume = self.reconstruct_full_feature_volume(new_features, new_patch_positions, new_prediction.shape())
+                all_full_feature_volumes.append(full_feature_volume)
+
+
             else:
                 new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
 
             if prediction is None:
                 prediction = new_prediction
                 if self.return_features:
-                    features = new_features
-                    patch_positions = new_patch_positions
+                    if patch_positions is None:
+                        patch_positions = new_patch_positions
                 #prediction = self.predict_sliding_window_return_logits(data).to('cpu')
             else:
                 prediction += new_prediction
-                if self.return_features:
-
-                    features += new_features
-                    patch_positions += new_patch_positions
 
                 #prediction += self.predict_sliding_window_return_logits(data).to('cpu')
 
         if len(self.list_of_parameters) > 1:
             prediction /= len(self.list_of_parameters)
 
+            if self.return_features:
+            # Average full reconstructed feature volumes
+                ensemble_features = sum(all_full_feature_volumes) / len(all_full_feature_volumes)
+
+        else:
+            if self.return_features:
+                ensemble_features = all_full_feature_volumes[0]
+
+
         if self.verbose: print('Prediction done')
         torch.set_num_threads(n_threads)
         if self.return_features:
-            return features, prediction, patch_positions
+            return ensemble_features, prediction, patch_positions
         else:
             return prediction
 
