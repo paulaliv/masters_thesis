@@ -767,7 +767,7 @@ class nnUNetPredictor(object):
         network_output = self.network(x)
         if isinstance(network_output, tuple):
             features, prediction = network_output
-           # print(f"Original features shape: {features.shape}")
+            print(f"Original features shape: {features.shape}")
         else:
             features = None
             prediction = network_output
@@ -787,7 +787,6 @@ class nnUNetPredictor(object):
 
                 if isinstance(mirrored_output, tuple):
                     mirrored_features, mirrored_prediction = mirrored_output
-
 
 
                 else:
@@ -833,8 +832,6 @@ class nnUNetPredictor(object):
         def producer(d, slh, q):
             for s in slh:
                 q.put((torch.clone(d[s][None], memory_format=torch.contiguous_format).to(self.device), s))
-
-
             q.put('end')
 
         try:
@@ -851,12 +848,9 @@ class nnUNetPredictor(object):
             # preallocate arrays
             if self.verbose:
                 print(f'preallocating results arrays on device {results_device}')
-            predicted_logits = torch.zeros((data.shape[0],self.label_manager.num_segmentation_heads, *data.shape[1:]),
+            predicted_logits = torch.zeros((self.label_manager.num_segmentation_heads, *data.shape[1:]),
                                            dtype=torch.half,
                                            device=results_device)
-            # predicted_logits = torch.zeros((data.shape[0], self.label_manager.num_segmentation_heads, *data.shape[2:]),
-            #                                dtype=torch.half,
-            #                                device=results_device)
             print(f'predicted logits shape {predicted_logits.shape}')
 
             n_predictions = torch.zeros(data.shape[1:], dtype=torch.half, device=results_device)
@@ -883,6 +877,7 @@ class nnUNetPredictor(object):
                     if self.return_features:
 
                         features, prediction = self._internal_maybe_mirror_and_predict(workon)
+
                         #double check what is now being returned for features and prediction
                         if features is not None:
                             features = features.to(results_device)
