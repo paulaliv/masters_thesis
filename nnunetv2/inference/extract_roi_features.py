@@ -25,7 +25,7 @@ def main(input_folder, output_folder, model_dir,progress_dir):
     ,)
 
     #progress_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/FeaturesTr"
-
+    print(progress_dir)
 
     processed_files = []
     processed_stems = set()
