@@ -36,9 +36,18 @@ def main(input_folder, output_folder, model_dir,progress_dir):
                 stem = f.replace("_features_roi.npz", "")
                 processed_stems.add(stem)
 
-    # Filter input files: only keep those not yet processed
-    input_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder)
-                   if f.endswith(".nii.gz") and f.replace(".nii.gz", "") not in processed_stems]
+    input_files = []
+    # Check input files, and delete if already processed
+    for f in os.listdir(input_folder):
+        if f.endswith(".nii.gz"):
+            stem = f.replace(".nii.gz", "")
+            full_path = os.path.join(input_folder, f)
+            if stem in processed_stems:
+                print(f"Deleting already processed file from input: {f}")
+                os.remove(full_path)
+            else:
+                input_files.append(full_path)
+
 
     if not input_files:
         print("No unprocessed files found.")
@@ -61,7 +70,7 @@ def main(input_folder, output_folder, model_dir,progress_dir):
     #bottleneck_features = {}
 
     predictor.predict_from_files(
-        list_of_lists_or_source_folder=input_files,  # your folder with raw images
+        list_of_lists_or_source_folder=input_folder,  # your folder with raw images
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=False,
         overwrite=True,
