@@ -471,7 +471,8 @@ class nnUNetPredictor(object):
         coords = np.where(tumor_mask == 1)
         if coords[0].size == 0:
             print('Warning: empty mask, no tumor region found')
-            return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None, None
+            return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None
+
         else:
             z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
             z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
@@ -614,7 +615,6 @@ class nnUNetPredictor(object):
                     
                     context = [1, 7, 7]
                     tumor_mask = prediction.argmax(0).numpy()
-                    mask_shape = tumor_mask.shape
                     roi_features, cropped_mask = self.reconstruct_and_crop_features(
                         full_feature_volume=features,
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
@@ -624,18 +624,22 @@ class nnUNetPredictor(object):
                     # np.save(feature_file, features)
                     # print(f"Saved features to {feature_file}")
 
-                    feature_file_roi = ofile + "_features_roi.npz"
-                    np.savez_compressed(feature_file_roi, roi_features)
-                    print(f"Saved features to {feature_file_roi}")
+                    if cropped_mask is not None:
 
-                    cropped_mask_file = ofile + "_cropped_mask.npz"
-                    np.savez_compressed(cropped_mask_file, cropped_mask)
-                    print(f"Saved features to {cropped_mask_file}")
-                    # patch_locations = ofile + "patch_locations.npy"
-                    # np.save(patch_locations, patch_locations)
-                    # print(f'Saved patch locations to {patch_locations}')
+                        feature_file_roi = ofile + "_features_roi.npz"
+                        np.savez_compressed(feature_file_roi, roi_features)
+                        print(f"Saved features to {feature_file_roi}")
 
-                    #self.visualize_features_with_mask(roi_features, cropped_mask)
+                        cropped_mask_file = ofile + "_cropped_mask.npz"
+                        np.savez_compressed(cropped_mask_file, cropped_mask)
+                        print(f"Saved features to {cropped_mask_file}")
+                        # patch_locations = ofile + "patch_locations.npy"
+                        # np.save(patch_locations, patch_locations)
+                        # print(f'Saved patch locations to {patch_locations}')
+                    else:
+                        print('Model returned an empty mask for this one')
+
+
 
 
                 else:
@@ -796,7 +800,7 @@ class nnUNetPredictor(object):
 
 
                 mask_shape = new_prediction.shape[1:]
-                print(f'mask shape: {mask_shape}')
+                #print(f'mask shape: {mask_shape}')
 
                 full_feature_volume = self.reconstruct_full_feature_volume_sparse(new_features, new_patch_positions, mask_shape)
                 all_full_feature_volumes.append(full_feature_volume)
@@ -937,7 +941,7 @@ class nnUNetPredictor(object):
         def get_slice_starts(sl):
             return tuple(s.start if isinstance(s, slice) else s for s in sl)
 
-        print(f"Number of slicers: {len(slicers)}")
+        #print(f"Number of slicers: {len(slicers)}")
         def producer(d, slh, q):
             for s in slh:
                 q.put((torch.clone(d[s][None], memory_format=torch.contiguous_format).to(self.device), s))
