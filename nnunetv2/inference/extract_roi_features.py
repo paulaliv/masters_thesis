@@ -35,12 +35,13 @@ def main(input_folder, output_folder, model_dir,progress_dir):
             if f.endswith("_features_roi.npz"):
                 stem = f.replace("_features_roi.npz", "")
                 processed_stems.add(stem)
+    print(processed_stems)
 
     input_files = []
     # Check input files, and delete if already processed
     for f in os.listdir(input_folder):
         if f.endswith(".nii.gz"):
-            stem = f.replace(".nii.gz", "")
+            stem = f.replace("_0000.nii.gz", "")
             full_path = os.path.join(input_folder, f)
             if stem in processed_stems:
                 print(f"Deleting already processed file from input: {f}")
