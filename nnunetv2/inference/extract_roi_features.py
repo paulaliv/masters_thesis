@@ -24,6 +24,28 @@ def main(input_folder, output_folder, model_dir):
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),return_features = True
     ,)
 
+    progress_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/FeaturesTr"
+
+
+    processed_files = []
+    processed_stems = set()
+
+    if os.path.exists(progress_dir):
+        for f in os.listdir(progress_dir):
+            if f.endswith("_features_roi.npz"):
+                stem = f.replace("_features_roi.npz", "")
+                processed_stems.add(stem)
+
+    # Filter input files: only keep those not yet processed
+    input_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder)
+                   if f.endswith(".nii.gz") and f.replace(".nii.gz", "") not in processed_stems]
+
+    if not input_files:
+        print("No unprocessed files found.")
+        return
+
+
+
 
     # Initialize from your trained model folder
     print('Initializing trained model ...')
@@ -39,7 +61,7 @@ def main(input_folder, output_folder, model_dir):
     #bottleneck_features = {}
 
     predictor.predict_from_files(
-        list_of_lists_or_source_folder=input_folder,  # your folder with raw images
+        list_of_lists_or_source_folder=input_files,  # your folder with raw images
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=False,
         overwrite=True,

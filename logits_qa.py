@@ -14,53 +14,76 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+from scipy.stats import pearsonr, spearmanr
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 import torch.optim as optim
 
 
-preds_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
-image_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTs'
+preds_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/LogitsTr_resampled'
+image_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
 tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
 tabular_data = pd.read_csv(tabular_data_dir)
 table_dir = r'/home/bmep/plalfken/my-scratch/Downloads/logit_features.csv'
 df = pd.read_csv(table_dir)
 #print(tabular_data.head())
 subtype = tabular_data[['nnunet_id','Final_Classification']]
+#
+#
+def compute_confidence_score(logits, pred_mask, class_of_interest=1):
+    """
+    Compute mean max softmax probability over predicted tumor region.
 
-class TemperatureScaler(torch.nn.Module):
-    def __init__(self):
-        super(TemperatureScaler, self).__init__()
-        self.temperature = torch.nn.Parameter(torch.ones(1))
+    Args:
+        logits: torch.Tensor or np.ndarray of shape (C, Z, Y, X)
+        pred_mask: np.ndarray or torch.Tensor binary mask of predicted tumor (1 inside tumor, else 0)
+        class_of_interest: int, class index for tumor (usually 1)
 
-    def forward(self, logits):
-        return logits/ self.temperature
+    Returns:
+        mean_confidence: float - average confidence inside predicted tumor region
+    """
+    if isinstance(logits, np.ndarray):
+        logits = torch.from_numpy(logits)
 
-def learn_temperature(logits, labels):
-    logits = logits.detach()  # ensure logits don't require grad
-    labels = labels.detach()
-    # Instantiate scaler
-    scaler = TemperatureScaler()
+    probs = F.softmax(logits, dim=0)  # softmax over classes
+    tumor_probs = probs[class_of_interest]  # probs for tumor class
 
-    # Optimizer to learn temperature
-    optimizer = optim.LBFGS([scaler.temperature], lr=0.01, max_iter=100)
+    pred_mask = pred_mask.astype(bool) if isinstance(pred_mask, np.ndarray) else pred_mask.bool()
+    if pred_mask.sum() == 0:
+        # No predicted tumor voxels, return confidence 0 or nan
+        return float('nan')
 
-    # Cross-entropy loss
-    loss_fn = nn.CrossEntropyLoss()
+    mean_confidence = tumor_probs[pred_mask].mean().item()
+    return mean_confidence
 
-    def closure():
-        optimizer.zero_grad()
-        scaled_logits = scaler(logits)
-        loss = loss_fn(scaled_logits, labels)
-        loss.backward()
-        return loss
+def correlate_confidence_dice(confidences, dices):
+    """
+    Compute Pearson and Spearman correlation between confidence scores and dice scores.
 
-    # Optimize temperature
-    optimizer.step(closure)
+    Args:
+        confidences: list or np.ndarray of floats
+        dices: list or np.ndarray of floats
 
-    print(f"Learned temperature: {scaler.temperature.item():.4f}")
-    return scaler.temperature.item()
+    Returns:
+        dict with pearson and spearman correlation coefficients and p-values
+    """
+    # Remove nan values (if any)
+    valid_idx = ~np.isnan(confidences)
+    confidences = np.array(confidences)[valid_idx]
+    dices = np.array(dices)[valid_idx]
+
+    pearson_corr, pearson_p = pearsonr(confidences, dices)
+    spearman_corr, spearman_p = spearmanr(confidences, dices)
+
+    return {
+        'pearson_corr': pearson_corr,
+        'pearson_pval': pearson_p,
+        'spearman_corr': spearman_corr,
+        'spearman_pval': spearman_p
+    }
+
+
 
 def compute_msp(logits, axis = 0):
     """
@@ -73,15 +96,6 @@ def compute_msp(logits, axis = 0):
     return probs.max(axis =axis), probs
 
 
-# def compute_entropy(probs, axis = 0):
-#     """Compute voxel-wise entropy from softmax probabilities."""
-#     eps = 1e-8
-#     probs = np.clip(probs, eps, 1.0)
-#     # avoid zeros
-#     entropy = -np.sum(probs * np.log(probs), axis=axis)
-#
-#
-#     return entropy
 
 def compute_dice(pred, gt):
     pred = np.asarray(pred == 1, dtype =np.uint8)
@@ -132,7 +146,7 @@ def compute_logit_gap(logits):
 
 def collect_features():
     df = pd.DataFrame(columns=["case_id", "subtype", "dice_score","min_msp","mean_msp",
-        "logit_gap_mean", "logit_gap_std"])
+        "conf","logit_gap_mean", "logit_gap_std"])
 
     for file in os.listdir(preds_dir):
         if file.endswith('.nii.gz'):
@@ -141,12 +155,19 @@ def collect_features():
             print(f'Processing {stem}')
             # === retrieve patient data ===
             mask_dir = os.path.join(preds_dir, file)
+         mask_reordered = np.transpose(mask, (2, 0, 1))
             gt_dir = os.path.join(image_dir, stem + '.nii.gz')
-            logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy')
+            logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy.npz')
             #print(f'Ground truth directory {gt_dir}')
             #print(f'Mask directory: {mask_dir}')
             #print(f'Logits directory: {logits_dir}')
-            logits = np.load(logits_dir)
+            logits1 = np.load(logits_dir)
+
+            logits = logits1[logits1.files[0]]
+            print(logits.dtype)
+
+            print('Logits shape:', logits.shape)
+
             mask = nib.load(mask_dir).get_fdata()
             gt = nib.load(gt_dir).get_fdata()
             mask = mask.astype(np.uint8)
@@ -167,31 +188,25 @@ def collect_features():
             mean_msp = np.mean(msp_map)
 
 
+
+
             # === Logit gap ===
             logit_gap_std, logit_gap_mean  = compute_logit_gap(logits)
+
+            confidences = []
+
+            conf = compute_confidence_score(logits, mask)
             #print(f'Logit gap std: {logit_gap_std}')
 
             df.loc[len(df)] = [
                 stem, subtype_label, dice, min_msp,
-                mean_msp, logit_gap_mean, logit_gap_std
+                mean_msp, conf, logit_gap_mean, logit_gap_std
             ]
 
 
     print(f"Processed {len(df)} cases")
     return df
 
-def run_regression_with_min_msp(X_train,X_test,y_train,y_test):
-
-    model_min_msp = LinearRegression()
-    model_min_msp.fit(X_train, y_train)
-
-    # Predict
-    y_pred_min_msp = model_min_msp.predict(X_test)
-
-    # Metrics
-    print('Model 1 - min_msp only')
-    print('MSE:', mean_squared_error(y_test, y_pred_min_msp))
-    print('R2:', r2_score(y_test, y_pred_min_msp))
 
 
 def create_corr_map():
@@ -229,50 +244,8 @@ def create_corr_map():
 #print(df.isna().sum())
 
 
-logits_list = []
-labels_list = []
-counter = 0
-batch_size = 3
-for file in os.listdir(preds_dir):
-    if file.endswith('.nii.gz'):
-
-        stem = file.replace('.nii.gz', '')
-        print(f'Processing {stem}')
-        # === retrieve patient data ===
-        mask_dir = os.path.join(preds_dir, file)
-        gt_dir = os.path.join(image_dir, stem + '.nii.gz')
-
-        logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy')
-
-        logits = np.load(logits_dir)
-
-        logits = logits.reshape(logits.shape[0], -1)  # Flatten spatial dimensions → [C, N]
-        #logits_mean = np.mean(logits, axis=1)  # Mean over spatial dims → [C]
-        logits_list.append(logits.T)  # [N_voxels, C]
-
-        #mask = nib.load(mask_dir).get_fdata()
-        gt = nib.load(gt_dir).get_fdata()
-        labels = gt.flatten().astype(int)  # [N_voxels]
-
-        labels_list.append(labels)
-        counter += 1
-        if counter % batch_size == 0 or file == sorted(os.listdir(preds_dir))[-1]:
-            batch_logits = np.concatenate(logits_list, axis=0)
-            batch_labels = np.concatenate(labels_list, axis=0)
-
-            logits_torch = torch.tensor(batch_logits, dtype=torch.float32)
-            labels_torch = torch.tensor(batch_labels, dtype=torch.long)
-
-            print(f'Running temperature scaling on batch of {counter} cases...')
-            learn_temperature(logits_torch, labels_torch)
-
-            logits_list.clear()
-            labels_list.clear()
-
-
-
-
-
+data = collect_features()
+print(data.head(10))
 
 '''
 dice_score                    1.000000
