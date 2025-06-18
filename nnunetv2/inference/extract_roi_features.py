@@ -41,10 +41,10 @@ def main(input_folder, output_folder, model_dir):
     predictor.predict_from_files(
         list_of_lists_or_source_folder=input_folder,  # your folder with raw images
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
-        save_probabilities=True,
+        save_probabilities=False,
         overwrite=True,
-        num_processes_preprocessing=4,
-        num_processes_segmentation_export=4
+        num_processes_preprocessing=2,
+        num_processes_segmentation_export=2
     )
 
 

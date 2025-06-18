@@ -408,6 +408,12 @@ class nnUNetPredictor(object):
         print(f'original tumor mask shape is {tumor_mask.shape}')
         print(f'original feature map size is {full_feature_volume.shape}')
         print(f'uniform size is {uniform_size}')
+
+        # right after you compute tumor_mask
+        unique = np.unique(tumor_mask)
+        print("Unique labels in tumor_mask:", unique)
+        print("Tumor voxels =", (tumor_mask != 0).sum())
+
         coords = np.where(tumor_mask == 1)
         if coords[0].size == 0:
             print('Warning: empty mask, no tumor region found')
@@ -436,6 +442,11 @@ class nnUNetPredictor(object):
             print(f'shape of feature map after cropping {cropped_features.shape}')
             print(f'shape of mask after cropping {cropped_mask.shape}')
 
+            # after cropping
+            assert cropped_mask.sum() > 0, "Tumor lost during cropping!"
+            unique = np.unique(cropped_mask)
+            print("Unique labels in tumor_mask:", unique)
+            print("Tumor voxels =", (cropped_mask != 0).sum())
 
             # Pad or crop to uniform_size
             c, cz, cy, cx = cropped_features.shape
@@ -488,13 +499,17 @@ class nnUNetPredictor(object):
                                ]
             assert padded.shape[1:] == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {padded.shape}"
             assert padded_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {padded_mask.shape}"
-
+            # if np.sum(padded_mask) == 0:
+            #     print("Warning: padded mask is empty — tumor might have been cropped out")
             if np.sum(padded_mask) == 0:
-                print("Warning: padded mask is empty — tumor might have been cropped out")
+                raise RuntimeError(
+                    "Aborting: Padded tumor mask is empty — tumor may have been cropped out or not predicted.")
 
             tumor_region_features = padded[:, padded_mask == 1]
-            if np.all(tumor_region_features == 0):
-                print("Warning: features in tumor region are all zero")
+            if tumor_region_features.size == 0 or np.all(tumor_region_features == 0):
+                print("Warning: features in tumor region are all zero or empty")
+
+
 
             # returns cropped and padded feature volume, and spatial info
             return padded, (z_slice, y_slice, x_slice), padded_mask
