@@ -561,11 +561,11 @@ class nnUNetPredictor(object):
                     # print(f"Saved features to {feature_file}")
 
                     feature_file_roi = ofile + "_features_roi.npz"
-                    np.savez(feature_file_roi, roi_features)
+                    np.savez_compressed(feature_file_roi, roi_features)
                     print(f"Saved features to {feature_file_roi}")
 
                     cropped_mask_file = ofile + "_cropped_mask.npz"
-                    np.savez(cropped_mask_file, cropped_mask)
+                    np.savez_compressed(cropped_mask_file, cropped_mask)
                     print(f"Saved features to {cropped_mask_file}")
                     # patch_locations = ofile + "patch_locations.npy"
                     # np.save(patch_locations, patch_locations)
@@ -579,27 +579,27 @@ class nnUNetPredictor(object):
                 # saving the raw logits as numpy arrays
 
                     raw_logits = prediction
-                    raw_logits_file = ofile + "_raw_logits.npy"
-                    np.save(raw_logits_file, raw_logits)
-                    print(f"Saved raw logits to {raw_logits_file}")
+                    # raw_logits_file = ofile + "_raw_logits.npy"
+                    # np.save(raw_logits_file, raw_logits)
+                    # print(f"Saved raw logits to {raw_logits_file}")
 
-                # # Resample logits to original image shape
-                # current_spacing = self.configuration_manager.spacing if \
-                #     len(self.configuration_manager.spacing) == \
-                #     len(properties['shape_after_cropping_and_before_resampling']) else \
-                #     [properties['spacing'][0], *self.configuration_manager.spacing]
-                #
-                # predicted_logits = self.configuration_manager.resampling_fn_probabilities(
-                #     raw_logits,
-                #     properties['shape_after_cropping_and_before_resampling'],
-                #     current_spacing,
-                #     properties['spacing']
-                # )
-                #
-                # # Save resampled logits AFTER resampling
-                # resampled_logits_file = ofile + "_resampled_logits.npy"
-                # np.save(resampled_logits_file, predicted_logits)
-                # print(f"Saved resampled logits to {resampled_logits_file}")
+                    # Resample logits to original image shape
+                    current_spacing = self.configuration_manager.spacing if \
+                        len(self.configuration_manager.spacing) == \
+                        len(properties['shape_after_cropping_and_before_resampling']) else \
+                        [properties['spacing'][0], *self.configuration_manager.spacing]
+
+                    predicted_logits = self.configuration_manager.resampling_fn_probabilities(
+                        raw_logits,
+                        properties['shape_after_cropping_and_before_resampling'],
+                        current_spacing,
+                        properties['spacing']
+                    )
+
+                    # Save resampled logits AFTER resampling
+                    resampled_logits_file = ofile + "_resampled_logits.npy"
+                    np.save(resampled_logits_file, predicted_logits)
+                    print(f"Saved resampled logits to {resampled_logits_file}")
 
 
                 if ofile is not None:
