@@ -598,7 +598,7 @@ class nnUNetPredictor(object):
 
                     # Save resampled logits AFTER resampling
                     resampled_logits_file = ofile + "_resampled_logits.npy"
-                    np.save(resampled_logits_file, predicted_logits)
+                    np.savez_compressed(resampled_logits_file, predicted_logits)
                     print(f"Saved resampled logits to {resampled_logits_file}")
 
 
