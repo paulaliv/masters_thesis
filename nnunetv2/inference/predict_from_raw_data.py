@@ -2,6 +2,7 @@ import inspect
 import itertools
 import multiprocessing
 import os
+import nibabel as nib
 from copy import deepcopy
 from queue import Queue
 from threading import Thread
@@ -396,14 +397,17 @@ class nnUNetPredictor(object):
     def reconstruct_and_crop_features(self,
                                       full_feature_volume,
                                       tumor_mask,
-                                      uniform_size:  [208,256,48],
-                                      context: [1,7,7]
+                                      uniform_size,
+                                      context
 
 
                                       ):
 
 
         # Tumor bounding box
+        print(f'original tumor mask shape is {tumor_mask.shape}')
+        print(f'original feature map size is {full_feature_volume.shape}')
+        print(f'uniform size is {uniform_size}')
         coords = np.where(tumor_mask == 1)
         if coords[0].size == 0:
             print('Warning: empty mask, no tumor region found')
@@ -428,6 +432,10 @@ class nnUNetPredictor(object):
             # Crop features
             cropped_features = full_feature_volume[:, z_slice, y_slice, x_slice]
             cropped_mask = tumor_mask[z_slice, y_slice, x_slice]
+
+            print(f'shape of feature map after cropping {cropped_features.shape}')
+            print(f'shape of mask after cropping {cropped_mask.shape}')
+
 
             # Pad or crop to uniform_size
             c, cz, cy, cx = cropped_features.shape
@@ -473,14 +481,24 @@ class nnUNetPredictor(object):
                          start_y:start_y + desired_y,
                          start_x:start_x + desired_x]
 
-                cropped_mask = cropped_mask[
+                padded_mask = padded_mask[
                                start_z:start_z + desired_z,
                                start_y:start_y + desired_y,
                                start_x:start_x + desired_x
                                ]
+            assert padded.shape[1:] == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {padded.shape}"
+            assert padded_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {padded_mask.shape}"
+
+            if np.sum(padded_mask) == 0:
+                print("Warning: padded mask is empty — tumor might have been cropped out")
+
+            tumor_region_features = padded[:, padded_mask == 1]
+            if np.all(tumor_region_features == 0):
+                print("Warning: features in tumor region are all zero")
 
             # returns cropped and padded feature volume, and spatial info
-            return padded, (z_slice, y_slice, x_slice), cropped_mask
+            return padded, (z_slice, y_slice, x_slice), padded_mask
+
 
 
     def predict_from_data_iterator(self,
@@ -527,21 +545,28 @@ class nnUNetPredictor(object):
 
                     print(f"Feature shape is {features.shape}")
 
-                    uniform_size = [208, 256, 48]
+                    #niform_size = [208, 256, 48]
+                    uniform_size = (48, 272, 256)
+                    
                     context = [1, 7, 7]
                     tumor_mask = prediction.argmax(0).numpy()
                     mask_shape = tumor_mask.shape
                     roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(
                         full_feature_volume=features,
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
-                    feature_file = ofile + "features.npy"
-                    np.save(feature_file, features)
-                    print(f"Saved features to {feature_file}")
 
-                    feature_file_roi = ofile + "features_roi.npy"
-                    np.save(feature_file_roi, roi_features)
+                    #convert feature file to nifty
+                    # feature_file = ofile + "features.npz"
+                    # np.save(feature_file, features)
+                    # print(f"Saved features to {feature_file}")
+
+                    feature_file_roi = ofile + "_features_roi.npz"
+                    np.savez(feature_file_roi, roi_features)
                     print(f"Saved features to {feature_file_roi}")
 
+                    cropped_mask_file = ofile + "_cropped_mask.npz"
+                    np.savez(cropped_mask_file, cropped_mask)
+                    print(f"Saved features to {cropped_mask_file}")
                     # patch_locations = ofile + "patch_locations.npy"
                     # np.save(patch_locations, patch_locations)
                     # print(f'Saved patch locations to {patch_locations}')
@@ -705,6 +730,7 @@ class nnUNetPredictor(object):
                 new_features = new_features.to('cpu')
                 torch.cuda.empty_cache()
 
+
                 mask_shape = new_prediction.shape[1:]
                 print(f'mask shape: {mask_shape}')
 
@@ -731,6 +757,7 @@ class nnUNetPredictor(object):
 
             if self.return_features:
             # Average full reconstructed feature volumes
+                all_full_feature_volumes = [torch.as_tensor(x) for x in all_full_feature_volumes]
                 ensemble_features = sum(all_full_feature_volumes) / len(all_full_feature_volumes)
 
         else:
