@@ -17,14 +17,14 @@ sys.path.append('/gpfs/home6/palfken/masters_thesis/external/dynamic-network-arc
 
 
 
-def main(input_folder, output_folder, model_dir):
+def main(input_folder, output_folder, model_dir,progress_dir):
     folds = (0,1)
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),return_features = True
     ,)
 
-    progress_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/FeaturesTr"
+    #progress_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/FeaturesTr"
 
 
     processed_files = []
@@ -76,5 +76,6 @@ if __name__ == '__main__':
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]
     model_dir = sys.argv[3]
+    progress_dir = sys.argv[4]
 
-    main(input_folder, output_folder, model_dir)
+    main(input_folder, output_folder, model_dir,progress_dir)

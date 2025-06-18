@@ -46,15 +46,20 @@ def compute_confidence_score(logits, pred_mask, class_of_interest=1):
     if isinstance(logits, np.ndarray):
         logits = torch.from_numpy(logits)
 
-    probs = F.softmax(logits, dim=0)  # softmax over classes
-    tumor_probs = probs[class_of_interest]  # probs for tumor class
+    if isinstance(pred_mask, np.ndarray):
+        pred_mask = torch.from_numpy(pred_mask).bool()
+    else:
+        pred_mask = pred_mask.bool()
 
-    pred_mask = pred_mask.astype(bool) if isinstance(pred_mask, np.ndarray) else pred_mask.bool()
+    probs = F.softmax(logits, dim=0)  # softmax over classes
+    tumor_probs = probs[class_of_interest]  # shape (X, Y, Z)
+
     if pred_mask.sum() == 0:
-        # No predicted tumor voxels, return confidence 0 or nan
         return float('nan')
 
+    # Index tumor_probs with pred_mask without any transpose/permute
     mean_confidence = tumor_probs[pred_mask].mean().item()
+
     return mean_confidence
 
 def correlate_confidence_dice(confidences, dices):
@@ -155,7 +160,6 @@ def collect_features():
             print(f'Processing {stem}')
             # === retrieve patient data ===
             mask_dir = os.path.join(preds_dir, file)
-         mask_reordered = np.transpose(mask, (2, 0, 1))
             gt_dir = os.path.join(image_dir, stem + '.nii.gz')
             logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy.npz')
             #print(f'Ground truth directory {gt_dir}')
@@ -164,12 +168,16 @@ def collect_features():
             logits1 = np.load(logits_dir)
 
             logits = logits1[logits1.files[0]]
+            logits_reshaped = np.transpose(logits, (0,3, 2, 1))
             print(logits.dtype)
 
-            print('Logits shape:', logits.shape)
+            print('Logits shape:', logits_reshaped.shape)
 
             mask = nib.load(mask_dir).get_fdata()
+
+            print(f'Mask shape {mask.shape}')
             gt = nib.load(gt_dir).get_fdata()
+            print(f'GT shape {gt.shape}')
             mask = mask.astype(np.uint8)
             patient = subtype[subtype['nnunet_id'] == stem]
             if not patient.empty:
