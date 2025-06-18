@@ -2,6 +2,8 @@ import inspect
 import itertools
 import multiprocessing
 import os
+from collections import defaultdict
+
 import nibabel as nib
 from copy import deepcopy
 from queue import Queue
@@ -357,42 +359,81 @@ class nnUNetPredictor(object):
                                                             num_processes)
         return self.predict_from_data_iterator(iterator, save_probabilities, num_processes_segmentation_export)
 
+    from collections import defaultdict
 
-    def reconstruct_full_feature_volume(self, patch_features, patch_locations, tumor_mask_shape):
-        """
-        Reconstruct full feature volume from per patch features and their locations.
-            Needed for extraction of ROI- feature map and potentially visualization
-        """
+    def reconstruct_full_feature_volume_sparse(self, patch_features, patch_locations, tumor_mask_shape):
         C = patch_features.shape[1]
         D, H, W = tumor_mask_shape
 
-        full_feature_volume = np.zeros((C, D, H, W), dtype=np.float32)
-        count_map = np.zeros((D, H, W), dtype=np.float32)
+        assert patch_features.shape[0] == len(
+            patch_locations), "Mismatch between number of patches and number of locations"
+        assert patch_features.ndim == 5, "patch_features must be of shape (N, C, d, h, w)"
+        assert isinstance(tumor_mask_shape, (tuple, list)) and len(
+            tumor_mask_shape) == 3, "tumor_mask_shape must be (D, H, W)"
+
+        #create sparse dictionary
+        #each key is a voxel (z, y, x) and maps to [sum_vector, count]
+        voxel_dict = defaultdict(lambda: [np.zeros(C, dtype=np.float32), 0])  # (C,), count
 
         for i, (z, y, x) in enumerate(patch_locations):
-            patch = patch_features[i]  # (C, d, h, w)
-            # Ensure it's a NumPy array
+            patch = patch_features[i]
             if isinstance(patch, torch.Tensor):
                 patch = patch.cpu().numpy()
-
-            # Ensure it's float32 (for addition)
             patch = patch.astype(np.float32)
 
-            d, h, w = patch.shape[1:]  # should match tile_size
+            d, h, w = patch.shape[1:]
 
-            full_feature_volume[:, z:z + d, y:y + h, x:x + w] += patch
-            #counts overlapping patches per voxel
-            count_map[z:z + d, y:y + h, x:x + w] += 1
+            assert z + d <= D and y + h <= H and x + w <= W, f"Patch {i} goes out of volume bounds"
 
-        # Avoid division by zero
-        count_map[count_map == 0] = 1
-        #averaging at each voxel -> corrects for overlapping regions
-        full_feature_volume = full_feature_volume / count_map
+            for dz in range(d):
+                for dy in range(h):
+                    for dx in range(w):
+                        zz, yy, xx = z + dz, y + dy, x + dx
+                        voxel_dict[(zz, yy, xx)][0] += patch[:, dz, dy, dx] #accumulate features
+                        voxel_dict[(zz, yy, xx)][1] += 1 #count overlap
 
-        assert full_feature_volume.shape[1:] == tumor_mask_shape, \
-            f"Shape mismatch: features {full_feature_volume.shape[1:]}, mask {tumor_mask_shape}"
+        # Convert sparse dict to dense array
+        full_feature_volume = np.zeros((C, D, H, W), dtype=np.float32)
+        for (zz, yy, xx), (vals, count) in voxel_dict.items():
+            full_feature_volume[:, zz, yy, xx] = vals / count
 
         return full_feature_volume
+
+    # def reconstruct_full_feature_volume(self, patch_features, patch_locations, tumor_mask_shape):
+    #     """
+    #     Reconstruct full feature volume from per patch features and their locations.
+    #         Needed for extraction of ROI- feature map and potentially visualization
+    #     """
+    #     C = patch_features.shape[1]
+    #     D, H, W = tumor_mask_shape
+    #
+    #     full_feature_volume = np.zeros((C, D, H, W), dtype=np.float32)
+    #     count_map = np.zeros((D, H, W), dtype=np.float32)
+    #
+    #     for i, (z, y, x) in enumerate(patch_locations):
+    #         patch = patch_features[i]  # (C, d, h, w)
+    #         # Ensure it's a NumPy array
+    #         if isinstance(patch, torch.Tensor):
+    #             patch = patch.cpu().numpy()
+    #
+    #         # Ensure it's float32 (for addition)
+    #         patch = patch.astype(np.float32)
+    #
+    #         d, h, w = patch.shape[1:]  # should match tile_size
+    #
+    #         full_feature_volume[:, z:z + d, y:y + h, x:x + w] += patch
+    #         #counts overlapping patches per voxel
+    #         count_map[z:z + d, y:y + h, x:x + w] += 1
+    #
+    #     # Avoid division by zero
+    #     count_map[count_map == 0] = 1
+    #     #averaging at each voxel -> corrects for overlapping regions
+    #     full_feature_volume = full_feature_volume / count_map
+    #
+    #     assert full_feature_volume.shape[1:] == tumor_mask_shape, \
+    #         f"Shape mismatch: features {full_feature_volume.shape[1:]}, mask {tumor_mask_shape}"
+    #
+    #     return full_feature_volume
 
     def reconstruct_and_crop_features(self,
                                       full_feature_volume,
@@ -402,6 +443,19 @@ class nnUNetPredictor(object):
 
 
                                       ):
+        """
+           Crops and pads feature map and tumor mask to uniform size centered around tumor.
+
+           Args:
+               feature_map: torch.Tensor of shape (C, Z, Y, X)
+               tumor_mask: numpy array of shape (Z, Y, X)
+               uniform_size: desired output shape (Z, Y, X)
+               margin: number of voxels to extend beyond tumor bbox
+
+           Returns:
+               cropped_features: torch.Tensor of shape (C, Z, Y, X)
+               cropped_mask: np.ndarray of shape (Z, Y, X)
+           """
 
 
         # Tumor bounding box
@@ -448,71 +502,66 @@ class nnUNetPredictor(object):
             print("Unique labels in tumor_mask:", unique)
             print("Tumor voxels =", (cropped_mask != 0).sum())
 
-            # Pad or crop to uniform_size
-            c, cz, cy, cx = cropped_features.shape
+            # ---------------- padding if too small ----------------
+            final_z, final_y, final_x = cropped_mask.shape
             desired_z, desired_y, desired_x = uniform_size
 
-            # Padding amounts: pad before and after (center)
-            pad_z_before = max((desired_z - cz) // 2, 0)
-            pad_y_before = max((desired_y - cy) // 2, 0)
-            pad_x_before = max((desired_x - cx) // 2, 0)
+            pad_z = max(desired_z - final_z, 0)
+            pad_y = max(desired_y - final_y, 0)
+            pad_x = max(desired_x - final_x, 0)
 
-            pad_z_after = max(desired_z - cz - pad_z_before, 0)
-            pad_y_after = max(desired_y - cy - pad_y_before, 0)
-            pad_x_after = max(desired_x - cx - pad_x_before, 0)
+            # symmetric padding
+            pad = [(pad_z // 2, pad_z - pad_z // 2),
+                   (pad_y // 2, pad_y - pad_y // 2),
+                   (pad_x // 2, pad_x - pad_x // 2)]
 
-            # Pad if needed
-            if any(p > 0 for p in [pad_z_before, pad_z_after, pad_y_before, pad_y_after, pad_x_before, pad_x_after]):
-                padded = np.pad(
-                    cropped_features,
-                    ((0, 0), (pad_z_before, pad_z_after), (pad_y_before, pad_y_after), (pad_x_before, pad_x_after)),
-                    mode='constant', constant_values=0
-                )
-                padded_mask = np.pad(
-                cropped_mask,
-                ((pad_z_before, pad_z_after), (pad_y_before, pad_y_after), (pad_x_before, pad_x_after)),
-                mode='constant', constant_values=0
-            )
-            else:
-                padded = cropped_features
-                padded_mask = cropped_mask
+            if any(p > 0 for p in (pad_z, pad_y, pad_x)):
+                cropped_mask = np.pad(cropped_mask, pad, mode='constant', constant_values=0)
+                cropped_features = torch.nn.functional.pad(cropped_features,
+                                                           (pad[2][0], pad[2][1], pad[1][0], pad[1][1], pad[0][0],
+                                                            pad[0][1]),
+                                                           mode='constant', value=0)
+
+            print(f"Shape after padding: features = {cropped_features.shape}, mask = {cropped_mask.shape}")
+
+
 
             # If cropped features are larger than uniform size, do center crop with warning
-            final_c, final_z, final_y, final_x = padded.shape
-            if final_z > desired_z or final_y > desired_y or final_x > desired_x:
-                print(
-                    f"Warning: ROI+margin size {final_z, final_y, final_x} larger than uniform size {desired_z, desired_y, desired_x}. Cropping.")
+            final_c, final_z, final_y, final_x = cropped_features.shape
 
-                start_z = (final_z - desired_z) // 2
-                start_y = (final_y - desired_y) // 2
-                start_x = (final_x - desired_x) // 2
+            # ---------- final crop if padded volume is still larger ----------
+            if any([final_z > desired_z, final_y > desired_y, final_x > desired_x]):
+                # crop around tumour centre, not volume centre
+                tz, ty, tx = np.where(cropped_mask == 1)
+                cz_tum, cy_tum, cx_tum = int(tz.mean()), int(ty.mean()), int(tx.mean())
 
-                padded = padded[:,
-                         start_z:start_z + desired_z,
+                # compute crop start indices so that tumour centre stays inside
+                start_z = min(max(cz_tum - desired_z // 2, 0), final_z - desired_z)
+                start_y = min(max(cy_tum - desired_y // 2, 0), final_y - desired_y)
+                start_x = min(max(cx_tum - desired_x // 2, 0), final_x - desired_x)
+
+                cropped_features = cropped_features[:, start_z:start_z + desired_z,
                          start_y:start_y + desired_y,
                          start_x:start_x + desired_x]
+                cropped_mask = cropped_mask[start_z:start_z + desired_z,
+                              start_y:start_y + desired_y,
+                              start_x:start_x + desired_x]
+            print(f"Final cropped feature shape: {cropped_features.shape}")
+            print(f"Final cropped mask shape: {cropped_mask.shape}")
+            print(f"Tumor voxels after final crop = {np.sum(cropped_mask == 1)}")
 
-                padded_mask = padded_mask[
-                               start_z:start_z + desired_z,
-                               start_y:start_y + desired_y,
-                               start_x:start_x + desired_x
-                               ]
-            assert padded.shape[1:] == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {padded.shape}"
-            assert padded_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {padded_mask.shape}"
+            assert cropped_mask.sum() > 0, "ERROR: Tumor lost after final cropping!"
+
+            assert cropped_features.shape[1:] == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {cropped_features.shape}"
+            assert cropped_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {cropped_mask.shape}"
             # if np.sum(padded_mask) == 0:
             #     print("Warning: padded mask is empty — tumor might have been cropped out")
-            if np.sum(padded_mask) == 0:
+            if np.sum(cropped_mask) == 0:
                 raise RuntimeError(
                     "Aborting: Padded tumor mask is empty — tumor may have been cropped out or not predicted.")
 
-            tumor_region_features = padded[:, padded_mask == 1]
-            if tumor_region_features.size == 0 or np.all(tumor_region_features == 0):
-                print("Warning: features in tumor region are all zero or empty")
-
-
-
             # returns cropped and padded feature volume, and spatial info
-            return padded, (z_slice, y_slice, x_slice), padded_mask
+            return cropped_features, cropped_mask
 
 
 
@@ -566,7 +615,7 @@ class nnUNetPredictor(object):
                     context = [1, 7, 7]
                     tumor_mask = prediction.argmax(0).numpy()
                     mask_shape = tumor_mask.shape
-                    roi_features, crop_slices, cropped_mask = self.reconstruct_and_crop_features(
+                    roi_features, cropped_mask = self.reconstruct_and_crop_features(
                         full_feature_volume=features,
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
 
@@ -612,7 +661,7 @@ class nnUNetPredictor(object):
                     )
 
                     # Save resampled logits AFTER resampling
-                    resampled_logits_file = ofile + "_resampled_logits.npy"
+                    resampled_logits_file = ofile + "_resampled_logits.npz"
                     np.savez_compressed(resampled_logits_file, predicted_logits)
                     print(f"Saved resampled logits to {resampled_logits_file}")
 
@@ -749,7 +798,7 @@ class nnUNetPredictor(object):
                 mask_shape = new_prediction.shape[1:]
                 print(f'mask shape: {mask_shape}')
 
-                full_feature_volume = self.reconstruct_full_feature_volume(new_features, new_patch_positions, mask_shape)
+                full_feature_volume = self.reconstruct_full_feature_volume_sparse(new_features, new_patch_positions, mask_shape)
                 all_full_feature_volumes.append(full_feature_volume)
 
 
