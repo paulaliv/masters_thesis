@@ -532,6 +532,8 @@ class nnUNetPredictor(object):
 
             # ---------- final crop if padded volume is still larger ----------
             if any([final_z > desired_z, final_y > desired_y, final_x > desired_x]):
+                print('Warning: ROI region is larger than uniform size, image will be cropped')
+
                 # crop around tumour centre, not volume centre
                 tz, ty, tx = np.where(cropped_mask == 1)
                 cz_tum, cy_tum, cx_tum = int(tz.mean()), int(ty.mean()), int(tx.mean())
@@ -611,9 +613,11 @@ class nnUNetPredictor(object):
                     print(f"Feature shape is {features.shape}")
 
                     #niform_size = [208, 256, 48]
-                    uniform_size = (48, 272, 256)
-                    
-                    context = [1, 7, 7]
+                    #uniform_size = (48, 272, 256)
+
+                    uniform_size = [48, 272, 256]
+
+                    context = [3, 15, 15]
                     tumor_mask = prediction.argmax(0).numpy()
                     roi_features, cropped_mask = self.reconstruct_and_crop_features(
                         full_feature_volume=features,
