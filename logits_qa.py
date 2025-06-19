@@ -31,6 +31,10 @@ df = pd.read_csv(table_dir)
 subtype = tabular_data[['nnunet_id','Final_Classification']]
 #
 #
+def crop_to_min_shape(arr1, arr2):
+    min_shape = tuple(min(a, b) for a, b in zip(arr1.shape, arr2.shape))
+    return arr1[tuple(slice(0, s) for s in min_shape)], arr2[tuple(slice(0, s) for s in min_shape)]
+
 def compute_confidence_score(logits, pred_mask, class_of_interest=1):
     """
     Compute mean max softmax probability over predicted tumor region.
@@ -56,9 +60,13 @@ def compute_confidence_score(logits, pred_mask, class_of_interest=1):
 
     if pred_mask.sum() == 0:
         return float('nan')
+    pred_mask_reshaped = np.transpose(pred_mask, (2,1,0))
+
+    if tumor_probs.shape != pred_mask_reshaped.shape:
+        pred_mask_reshaped, tumor_probs = crop_to_min_shape(pred_mask_reshaped, tumor_probs)
 
     # Index tumor_probs with pred_mask without any transpose/permute
-    mean_confidence = tumor_probs[pred_mask].mean().item()
+    mean_confidence = tumor_probs[pred_mask_reshaped].mean().item()
 
     return mean_confidence
 
@@ -204,6 +212,7 @@ def collect_features():
             confidences = []
 
             conf = compute_confidence_score(logits, mask)
+            print(f'Confidence: {conf}')
             #print(f'Logit gap std: {logit_gap_std}')
 
             df.loc[len(df)] = [
@@ -254,6 +263,7 @@ def create_corr_map():
 
 data = collect_features()
 print(data.head(10))
+df.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv', index=False)
 
 '''
 dice_score                    1.000000

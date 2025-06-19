@@ -435,42 +435,76 @@ class nnUNetPredictor(object):
     #
     #     return full_feature_volume
 
-    def _smart_crop(self, volume, mask, target_shape):
-        """Crop a C‑Z‑Y‑X volume/mask pair to target_shape without losing tumour."""
-        C, Z, Y, X = volume.shape
-        dz, dy, dx = target_shape  # desired spatial sizes
+    def _smart_crop(self, volume, mask, target_shape, debug=False):
+        """
+        Crop a C‑Z‑Y‑X volume (torch or np) and its mask to `target_shape`
+        while guaranteeing that at least part of the tumour remains.
 
-        # bounding‑box of tumour in the current mask
+        Parameters
+        ----------
+        volume : np.ndarray | torch.Tensor
+            Shape (C, Z, Y, X)
+        mask   : np.ndarray  (binary)
+            Shape (Z, Y, X)
+        target_shape : tuple(int, int, int)
+            Desired (dz, dy, dx)
+        debug : bool
+            If True prints crop indices and tumour stats.
+        """
+        # --- shapes ---
+        C, Z, Y, X = volume.shape
+        dz, dy, dx = target_shape
+
+        # --- bounding box of tumour ---
         zz, yy, xx = np.where(mask == 1)
         z_min, z_max = zz.min(), zz.max()
         y_min, y_max = yy.min(), yy.max()
         x_min, x_max = xx.min(), xx.max()
 
         def get_start(min_c, max_c, win, total):
+            """Return start index so [start, start+win) keeps tumour inside."""
             size = max_c - min_c + 1
-            if size >= win:  # tumour already larger than window
-                return max(min_c + size // 2 - win // 2, 0)
-            # free space left and right of tumour
-            left = min_c
-            right = total - max_c - 1
-            extra = win - size  # space we still have to add
-            pad_left = min(left, extra // 2)
-            pad_right = min(right, extra - pad_left)
-            start = min_c - pad_left
-            # if we still don’t fill the window (tumour near a border) slide the other way
-            start = min(max(start, 0), total - win)
-            return start
+            if size >= win:  # tumour larger than window
+                # keep centre of tumour inside
+                centre = (min_c + max_c) // 2
+                start = centre - win // 2
+            else:
+                # put tumour roughly in the middle, then adjust if near borders
+                pad_left = (win - size) // 2
+                pad_right = win - size - pad_left
+                start = min_c - pad_left
+            # clip to valid range
+            return int(np.clip(start, 0, total - win))
 
         s_z = get_start(z_min, z_max, dz, Z)
         s_y = get_start(y_min, y_max, dy, Y)
         s_x = get_start(x_min, x_max, dx, X)
 
+        # --- crop ---
         vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
         mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
 
-        # final safety check
+        # --- safety fallback: if tumour lost, recrop around bbox front edge ---
+        if mask_crop.sum() == 0:
+            # Start so that bbox min corner is inside window
+            s_z = int(np.clip(z_min, 0, Z - dz))
+            s_y = int(np.clip(y_min, 0, Y - dy))
+            s_x = int(np.clip(x_min, 0, X - dx))
+
+            vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+            mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+
+        if debug:
+            print(f"bbox z [{z_min},{z_max}] → start_z={s_z}")
+            print(f"bbox y [{y_min},{y_max}] → start_y={s_y}")
+            print(f"bbox x [{x_min},{x_max}] → start_x={s_x}")
+            print("Tumour voxels in crop =", mask_crop.sum())
+
         assert mask_crop.sum() > 0, "Tumour lost after smart crop!"
+
         return vol_crop, mask_crop
+
+
 
     def reconstruct_and_crop_features(self,
                                       full_feature_volume,
