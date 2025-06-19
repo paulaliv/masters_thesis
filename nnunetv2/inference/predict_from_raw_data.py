@@ -435,6 +435,43 @@ class nnUNetPredictor(object):
     #
     #     return full_feature_volume
 
+    def _smart_crop(self, volume, mask, target_shape):
+        """Crop a C‑Z‑Y‑X volume/mask pair to target_shape without losing tumour."""
+        C, Z, Y, X = volume.shape
+        dz, dy, dx = target_shape  # desired spatial sizes
+
+        # bounding‑box of tumour in the current mask
+        zz, yy, xx = np.where(mask == 1)
+        z_min, z_max = zz.min(), zz.max()
+        y_min, y_max = yy.min(), yy.max()
+        x_min, x_max = xx.min(), xx.max()
+
+        def get_start(min_c, max_c, win, total):
+            size = max_c - min_c + 1
+            if size >= win:  # tumour already larger than window
+                return max(min_c + size // 2 - win // 2, 0)
+            # free space left and right of tumour
+            left = min_c
+            right = total - max_c - 1
+            extra = win - size  # space we still have to add
+            pad_left = min(left, extra // 2)
+            pad_right = min(right, extra - pad_left)
+            start = min_c - pad_left
+            # if we still don’t fill the window (tumour near a border) slide the other way
+            start = min(max(start, 0), total - win)
+            return start
+
+        s_z = get_start(z_min, z_max, dz, Z)
+        s_y = get_start(y_min, y_max, dy, Y)
+        s_x = get_start(x_min, x_max, dx, X)
+
+        vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+        mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+
+        # final safety check
+        assert mask_crop.sum() > 0, "Tumour lost after smart crop!"
+        return vol_crop, mask_crop
+
     def reconstruct_and_crop_features(self,
                                       full_feature_volume,
                                       tumor_mask,
@@ -533,22 +570,25 @@ class nnUNetPredictor(object):
             # ---------- final crop if padded volume is still larger ----------
             if any([final_z > desired_z, final_y > desired_y, final_x > desired_x]):
                 print('Warning: ROI region is larger than uniform size, image will be cropped')
-
-                # crop around tumour centre, not volume centre
-                tz, ty, tx = np.where(cropped_mask == 1)
-                cz_tum, cy_tum, cx_tum = int(tz.mean()), int(ty.mean()), int(tx.mean())
-
-                # compute crop start indices so that tumour centre stays inside
-                start_z = min(max(cz_tum - desired_z // 2, 0), final_z - desired_z)
-                start_y = min(max(cy_tum - desired_y // 2, 0), final_y - desired_y)
-                start_x = min(max(cx_tum - desired_x // 2, 0), final_x - desired_x)
-
-                cropped_features = cropped_features[:, start_z:start_z + desired_z,
-                         start_y:start_y + desired_y,
-                         start_x:start_x + desired_x]
-                cropped_mask = cropped_mask[start_z:start_z + desired_z,
-                              start_y:start_y + desired_y,
-                              start_x:start_x + desired_x]
+                cropped_features, cropped_mask = self._smart_crop(
+                    cropped_features, cropped_mask,
+                    (desired_z, desired_y, desired_x)
+                )
+                # # crop around tumour centre, not volume centre
+                # tz, ty, tx = np.where(cropped_mask == 1)
+                # cz_tum, cy_tum, cx_tum = int(tz.mean()), int(ty.mean()), int(tx.mean())
+                #
+                # # compute crop start indices so that tumour centre stays inside
+                # start_z = min(max(cz_tum - desired_z // 2, 0), final_z - desired_z)
+                # start_y = min(max(cy_tum - desired_y // 2, 0), final_y - desired_y)
+                # start_x = min(max(cx_tum - desired_x // 2, 0), final_x - desired_x)
+                #
+                # cropped_features = cropped_features[:, start_z:start_z + desired_z,
+                #          start_y:start_y + desired_y,
+                #          start_x:start_x + desired_x]
+                # cropped_mask = cropped_mask[start_z:start_z + desired_z,
+                #               start_y:start_y + desired_y,
+                #               start_x:start_x + desired_x]
             print(f"Final cropped feature shape: {cropped_features.shape}")
             print(f"Final cropped mask shape: {cropped_mask.shape}")
             print(f"Tumor voxels after final crop = {np.sum(cropped_mask == 1)}")
