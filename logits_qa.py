@@ -158,8 +158,7 @@ def compute_logit_gap(logits):
     return logit_gap_std, logit_gap_mean
 
 def collect_features():
-    df = pd.DataFrame(columns=["case_id", "subtype", "dice_score","min_msp","mean_msp",
-        "conf","logit_gap_mean", "logit_gap_std"])
+    df = pd.DataFrame(columns=["case_id", "subtype", "dice_score","min_msp","mean_msp", "conf","logit_gap_mean", "logit_gap_std"])
 
     for file in os.listdir(preds_dir):
         if file.endswith('.nii.gz'):
@@ -209,7 +208,6 @@ def collect_features():
             # === Logit gap ===
             logit_gap_std, logit_gap_mean  = compute_logit_gap(logits)
 
-            confidences = []
 
             conf = compute_confidence_score(logits, mask)
             print(f'Confidence: {conf}')
@@ -223,6 +221,95 @@ def collect_features():
 
     print(f"Processed {len(df)} cases")
     return df
+
+def get_conf():
+    conf_list =[]
+    case_ids = []
+    for file in os.listdir(preds_dir):
+        if file.endswith('.nii.gz'):
+
+            stem = file.replace('.nii.gz', '')
+            print(f'Processing {stem}')
+            # === retrieve patient data ===
+            mask_dir = os.path.join(preds_dir, file)
+            gt_dir = os.path.join(image_dir, stem + '.nii.gz')
+            logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy.npz')
+            #print(f'Ground truth directory {gt_dir}')
+            #print(f'Mask directory: {mask_dir}')
+            #print(f'Logits directory: {logits_dir}')
+            logits1 = np.load(logits_dir)
+
+            logits = logits1[logits1.files[0]]
+            logits_reshaped = np.transpose(logits, (0,3, 2, 1))
+            print(logits.dtype)
+
+            print('Logits shape:', logits_reshaped.shape)
+
+            mask = nib.load(mask_dir).get_fdata()
+
+            print(f'Mask shape {mask.shape}')
+            gt = nib.load(gt_dir).get_fdata()
+            print(f'GT shape {gt.shape}')
+            mask = mask.astype(np.uint8)
+
+            conf = compute_confidence_score(logits, mask)
+            print(f'Confidence: {conf}')
+
+            case_ids.append(stem)
+            conf_list.append(conf)
+
+    return pd.DataFrame({
+        "case_id": case_ids,
+        "conf": conf_list
+    })
+
+
+
+
+
+
+def correlate_metrics_per_subtype(df, metrics, target_col='dice_score', group_col='subtype'):
+    """
+    Computes Pearson and Spearman correlations of multiple metrics with Dice, per subtype.
+
+    Args:
+        df: pandas DataFrame with all columns
+        metrics: list of metric column names to correlate with target
+        target_col: the target column (e.g., 'dice_score')
+        group_col: column to group by (e.g., 'subtype')
+
+    Returns:
+        pandas DataFrame with correlations per metric per subtype
+    """
+    results = []
+    for subtype, group in df.groupby(group_col):
+        for metric in metrics:
+            x = group[metric].values
+            y = group[target_col].values
+            valid = ~np.isnan(x) & ~np.isnan(y)
+            if valid.sum() > 1:
+                pearson_corr, pearson_p = pearsonr(x[valid], y[valid])
+                spearman_corr, spearman_p = spearmanr(x[valid], y[valid])
+                results.append({
+                    'subtype': subtype,
+                    'metric': metric,
+                    'pearson_corr': pearson_corr,
+                    'pearson_pval': pearson_p,
+                    'spearman_corr': spearman_corr,
+                    'spearman_pval': spearman_p,
+                    'n_samples': valid.sum()
+                })
+            else:
+                results.append({
+                    'subtype': subtype,
+                    'metric': metric,
+                    'pearson_corr': np.nan,
+                    'pearson_pval': np.nan,
+                    'spearman_corr': np.nan,
+                    'spearman_pval': np.nan,
+                    'n_samples': valid.sum()
+                })
+    return pd.DataFrame(results)
 
 
 
@@ -261,10 +348,35 @@ def create_corr_map():
 #print(df.isna().sum())
 
 
-data = collect_features()
-print(data.head(10))
-df.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv', index=False)
+# data = collect_features()
+# print(data.head(10))
+# df.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv', index=False)
+df_final = pd.read_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv')
+#conf_scores = get_conf()
+#df_final = df_final.merge(conf_scores, on="case_id", how="left")
+print(df_final.columns)
 
+print(df_final.isna().sum())
+subtypes = list(df_final['subtype'].unique())
+
+
+
+
+
+
+
+# metrics= ['min_msp', 'mean_msp', 'logit_gap_mean', 'logit_gap_std','conf']
+# results = correlate_metrics_per_subtype(df_final,metrics)
+# df.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits_qa.csv', index = False)
+#
+# sns.set_theme(style="whitegrid")
+# plt.figure(figsize=(12, 6))
+# sns.barplot(data=results, x="subtype", y="pearson_corr", hue="metric")
+# plt.xticks(rotation=45)
+# plt.title("Per-Subtype Pearson Correlation with Dice Score")
+# plt.ylabel("Pearson Correlation")
+# plt.tight_layout()
+# plt.show()
 '''
 dice_score                    1.000000
 subtype_LeiomyoSarcomas       0.273008
