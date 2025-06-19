@@ -19,10 +19,11 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 import torch.optim as optim
+from scipy.stats import pearsonr, spearmanr
 
 
-preds_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/LogitsTr_resampled'
-image_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
+preds_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/LogitsTs'
+image_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTs'
 tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
 tabular_data = pd.read_csv(tabular_data_dir)
 table_dir = r'/home/bmep/plalfken/my-scratch/Downloads/logit_features.csv'
@@ -48,12 +49,17 @@ def compute_confidence_score(logits, pred_mask, class_of_interest=1):
         mean_confidence: float - average confidence inside predicted tumor region
     """
     if isinstance(logits, np.ndarray):
+        #logits = np.clip(logits, -1e3, 1e3)
+        #print("Clipped Logits")
+        #print(np.min(logits), np.max(logits))
         logits = torch.from_numpy(logits)
+
 
     if isinstance(pred_mask, np.ndarray):
         pred_mask = torch.from_numpy(pred_mask).bool()
     else:
         pred_mask = pred_mask.bool()
+    logits = logits.clamp(min=-100, max=100)
 
     probs = F.softmax(logits, dim=0)  # softmax over classes
     tumor_probs = probs[class_of_interest]  # shape (X, Y, Z)
@@ -67,6 +73,7 @@ def compute_confidence_score(logits, pred_mask, class_of_interest=1):
 
     # Index tumor_probs with pred_mask without any transpose/permute
     mean_confidence = tumor_probs[pred_mask_reshaped].mean().item()
+
 
     return mean_confidence
 
@@ -225,6 +232,8 @@ def collect_features():
 def get_conf():
     conf_list =[]
     case_ids = []
+    subtypes = []
+    dice_scores = []
     for file in os.listdir(preds_dir):
         if file.endswith('.nii.gz'):
 
@@ -233,7 +242,7 @@ def get_conf():
             # === retrieve patient data ===
             mask_dir = os.path.join(preds_dir, file)
             gt_dir = os.path.join(image_dir, stem + '.nii.gz')
-            logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npy.npz')
+            logits_dir = os.path.join(preds_dir, f'{stem}_resampled_logits.npz')
             #print(f'Ground truth directory {gt_dir}')
             #print(f'Mask directory: {mask_dir}')
             #print(f'Logits directory: {logits_dir}')
@@ -241,25 +250,39 @@ def get_conf():
 
             logits = logits1[logits1.files[0]]
             logits_reshaped = np.transpose(logits, (0,3, 2, 1))
-            print(logits.dtype)
 
-            print('Logits shape:', logits_reshaped.shape)
+            patient = subtype[subtype['nnunet_id'] == stem]
+            if not patient.empty:
+                subtype_label = patient['Final_Classification'].values[0]
+            else:
+                subtype_label = "Unknown"
+            print(f'Subtype {subtype_label}')
+            subtypes.append(subtype_label)
+            #print(f'Mask shape: {mask.shape}, GT shape: {gt.shape}, Logits shape: {logits.shape}')
 
             mask = nib.load(mask_dir).get_fdata()
 
-            print(f'Mask shape {mask.shape}')
+
             gt = nib.load(gt_dir).get_fdata()
-            print(f'GT shape {gt.shape}')
+
             mask = mask.astype(np.uint8)
+
+            # === compute all features ===
+            dice = compute_dice(mask, gt)
+            print(f'Dice: {dice}')
+            dice_scores.append(dice)
 
             conf = compute_confidence_score(logits, mask)
             print(f'Confidence: {conf}')
+
 
             case_ids.append(stem)
             conf_list.append(conf)
 
     return pd.DataFrame({
         "case_id": case_ids,
+        "subtype": subtypes,
+        "dice_score": dice_scores,
         "conf": conf_list
     })
 
@@ -324,7 +347,7 @@ def create_corr_map():
     print("Correlation of each feature with Dice score:\n")
     print(correlation_matrix)
     # Extract correlation between confidence metrics and Dice
-    dice_corr = correlation_matrix[['dice_score']].T
+   # dice_corr = correlation_matrix[['dice_score']].T
 
     # Choose only confidence metrics and subtype one-hots
     columns_to_plot = ['dice_score', 'min_msp', 'mean_msp', 'logit_gap_mean', 'logit_gap_std']
@@ -350,20 +373,43 @@ def create_corr_map():
 
 # data = collect_features()
 # print(data.head(10))
-# df.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv', index=False)
-df_final = pd.read_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/confidence_train.csv')
-#conf_scores = get_conf()
-#df_final = df_final.merge(conf_scores, on="case_id", how="left")
-print(df_final.columns)
-
-print(df_final.isna().sum())
-subtypes = list(df_final['subtype'].unique())
 
 
+#df_final.drop(['conf_x', 'conf_y'])
+# = get_conf()
+#conf_scores.to_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_val.csv')
+conf_scores = pd.read_csv(r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_train.csv')
+df_clean = conf_scores.dropna(subset=["dice_score", "conf", "subtype"])
+results = []
 
+# Loop through subtypes
+for subtype in df_clean["subtype"].unique():
+    subset = df_clean[df_clean["subtype"] == subtype]
 
+    if len(subset) < 3:
+        print(f"Skipping {subtype} (not enough samples)")
+        continue
 
+    dice = subset["dice_score"].values
+    conf = subset["conf"].values
+    # Compute Pearson and Spearman correlations
+    pearson_corr, _ = pearsonr(conf, dice)
+    spearman_corr, _ = spearmanr(conf, dice)
 
+    results.append({
+        "subtype": subtype,
+        "n": len(subset),
+        "pearson": round(pearson_corr, 3),
+        "spearman": round(spearman_corr, 3),
+        "mean_dice": round(dice.mean(), 3),
+        "std_dice": round(dice.std(), 3),
+        "mean_conf": round(conf.mean(), 3),
+        "std_conf": round(conf.std(), 3),
+
+    })
+
+correlation_df = pd.DataFrame(results)
+print(correlation_df.sort_values(by="pearson", ascending=False))
 
 # metrics= ['min_msp', 'mean_msp', 'logit_gap_mean', 'logit_gap_std','conf']
 # results = correlate_metrics_per_subtype(df_final,metrics)

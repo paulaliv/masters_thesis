@@ -13,7 +13,7 @@ import torch
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch.nn.functional as F
 import time
-
+import sys
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
@@ -35,13 +35,6 @@ import torch.optim as optim
 #     'fold_3': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_3/validation',
 #     'fold_4': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/validation',
 # }
-fold_paths = {
-    'fold_0': '/gpfs/home6/palfken/masters_thesis/fold_0',
-    'fold_1': '/gpfs/home6/palfken/masters_thesis/fold_1',
-    'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
-    'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
-    'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
-}
 
 
 class ConvBlock(nn.Module):
@@ -345,3 +338,18 @@ def main(preprocessed_dir, logits_dir):
     train_one_fold(0,encoder, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
+
+
+
+if __name__ == '__main__':
+    fold_paths = {
+        'fold_0': '/gpfs/home6/palfken/masters_thesis/fold_0',
+        'fold_1': '/gpfs/home6/palfken/masters_thesis/fold_1',
+        'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
+        'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
+        'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
+    }
+    preprocessed= sys.argv[1]
+    logits = sys.argv[2]
+
+    main(preprocessed,logits)
