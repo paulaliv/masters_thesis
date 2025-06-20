@@ -183,9 +183,9 @@ class QADataset(Dataset):
         print('Label tensor shape : ', label_tensor.shape)
 
 
-        assert image.shape[0] == logits.shape[0] and \
-               image.shape[2:] == logits.shape[2:], \
-            f"Batch and spatial dimensions must match. Got encoder_out: {image.shape}, logits: {logits.shape}"
+        assert image_tensor.shape[0] == logits_tensor.shape[0] and \
+               image_tensor.shape[2:] == logits_tensor.shape[2:], \
+            f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {logits_tensor.shape}"
 
         x = torch.cat([image_tensor, logits_tensor], dim=0)
         print(f'Shape after concatenating: {x.shape}')
