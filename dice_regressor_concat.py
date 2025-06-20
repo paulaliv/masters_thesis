@@ -175,7 +175,8 @@ class QADataset(Dataset):
         if self.transform:
             image_tensor = self.transform(image_tensor)
 
-
+        if logits_tensor.ndim == 5:
+            logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
 
         print('Image tensor shape : ', image_tensor.shape)
         print('Logits tensor shape : ', logits_tensor.shape)
@@ -183,7 +184,7 @@ class QADataset(Dataset):
 
 
         assert image.shape[0] == logits.shape[0] and \
-               image.shape[1:] == logits.shape[2:], \
+               image.shape[2:] == logits.shape[2:], \
             f"Batch and spatial dimensions must match. Got encoder_out: {image.shape}, logits: {logits.shape}"
 
         x = torch.cat([image_tensor, logits_tensor], dim=0)
