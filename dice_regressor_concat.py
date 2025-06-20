@@ -37,20 +37,6 @@ import torch.optim as optim
 # }
 
 
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels=64, conv_op=nn.Conv3d):
-        super().__init__()
-        self.block = nn.Sequential(
-            conv_op(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.InstanceNorm3d(out_channels),
-            nn.LeakyReLU(inplace=True),
-            conv_op(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.InstanceNorm3d(out_channels),
-            nn.LeakyReLU(inplace=True),
-        )
-
-    def forward(self, x):
-        return self.block(x)
 
 class QAHead(nn.Module):
     def __init__(self, input_channels):
@@ -68,35 +54,25 @@ class QAHead(nn.Module):
         return self.fc(x)
 
 class QA_Model(nn.Module):
-    def __init__(self, encoder, logit_channels, shared_channels = 64):
+    def __init__(self, encoder):
         super().__init__()
         self.encoder = encoder
         encoder_out_channels = encoder.output_channels[-1]
 
-        self.shared_processor = ConvBlock(
-            in_channels=encoder_out_channels + logit_channels,
-            out_channels=shared_channels
-        )
          # Last stage channels
-        self.head = QAHead(input_channels=shared_channels)
+        self.head = QAHead(input_channels=encoder_out_channels)
 
-    def forward(self, image, logits):
-        image_features = self.encoder(image)
-        print(f'Encoder Output Shape {image_features.shape}')
+    def forward(self, x):
 
-        if isinstance(image_features, (list, tuple)):
+
+        features = self.encoder(x)
+        print(f'Encoder Output Shape {features.shape}')
+
+        if isinstance(x, (list, tuple)):
             #remove skip connections
-            image_features = image_features[-1]
-        assert image_features.ndim == 5 and logits.ndim == 5, \
-            f"Expected 5D tensors, got shapes {image_features.shape} and {logits.shape}"
+            features = features[-1]
 
-        assert image_features.shape[0] == logits.shape[0] and \
-               image_features.shape[2:] == logits.shape[2:], \
-            f"Batch and spatial dimensions must match. Got encoder_out: {image_features.shape}, logits: {logits.shape}"
-
-        x = torch.cat([image_features, logits], dim=1)  # concat over channels
-        shared_features = self.shared_processor(x)
-        return self.head(shared_features)
+        return self.head(features)
 
 
 
@@ -120,16 +96,6 @@ encoder = ResidualEncoder(
     block=BasicBlockD,
     return_skips=False
 )
-
-# # Instantiate model
-# qa_model = QA_Model(encoder, logit_channels=1)
-#
-# # Use in forward pass
-# image = torch.randn(2, 1, 128, 128, 128)
-# logits = torch.randn(2, 1, 128, 128, 128)
-#
-# out = qa_model(image, logits)  # shape [2, 3]
-
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, transform=None):
@@ -209,12 +175,55 @@ class QADataset(Dataset):
         if self.transform:
             image_tensor = self.transform(image_tensor)
 
+
+
         print('Image tensor shape : ', image_tensor.shape)
         print('Logits tensor shape : ', logits_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
 
+        assert image.ndim == 5 and logits.ndim == 5, \
+            f"Expected 5D tensors, got shapes {image.shape} and {logits.shape}"
 
-        return image_tensor,logits_tensor, label_tensor, subtype
+        assert image.shape[0] == logits.shape[0] and \
+               image.shape[2:] == logits.shape[2:], \
+            f"Batch and spatial dimensions must match. Got encoder_out: {image.shape}, logits: {logits.shape}"
+
+        x = torch.cat([image_tensor, logits_tensor], dim=0)
+        print(f'Shape after concatenating: {x.shape}')
+
+
+        return {
+            'input': x,  # shape (C_total, D, H, W)
+            'label': label_tensor,  # scalar tensor
+            'subtype': subtype
+        }
+
+
+def pad_tensor(t, target_shape):
+    """
+    Pads a 4‑D tensor (C, D, H, W) on the right/bottom sides to target_shape=(D,H,W).
+    """
+    _, d, h, w = t.shape
+    td, th, tw = target_shape
+    pad = (0, tw - w,          # W: left, right
+           0, th - h,          # H: top, bottom
+           0, td - d)          # D: front, back
+    return F.pad(t, pad, value=0)
+
+
+def pad_collate_fn(batch):
+    # batch is a list of dicts from __getitem__
+    # find max D,H,W in this batch
+    max_d = max(item['input'].shape[1] for item in batch)
+    max_h = max(item['input'].shape[2] for item in batch)
+    max_w = max(item['input'].shape[3] for item in batch)
+    tgt_shape = (max_d, max_h, max_w)
+
+    inputs  = torch.stack([pad_tensor(item['input'], tgt_shape)  for item in batch])
+    labels  = torch.stack([item['label'] for item in batch])
+    subtypes = [item['subtype'] for item in batch]
+
+    return inputs, labels, subtypes
 
 def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, device):
     print(f"Training fold {fold} ...")
@@ -242,14 +251,16 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True,
+    collate_fn=pad_collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False,pin_memory=True,
+    collate_fn=pad_collate_fn)
 
 
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QA_Model(encoder, logit_channels=1).to(device)
+    model = QA_Model(encoder).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.CrossEntropyLoss()
 
@@ -263,10 +274,10 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         print(f'Epoch {epoch}')
         model.train()
         train_losses = []
-        for image, logits, label, subtype in train_loader:
-            image, logits, label = image.to(device), logits.to(device), label.to(device)
+        for input, label, subtype in train_loader:
+            input, label = input.to(device), label.to(device)
             optimizer.zero_grad()
-            preds = model(image, logits)  # shape: [B, 3]
+            preds = model(input)  # shape: [B, 3]
             loss = criterion(preds, label)
             loss.backward()
             optimizer.step()
@@ -284,9 +295,9 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 
 
         with torch.no_grad():
-            for image, logits, label, subtype in val_loader:
-                image, logits, label = image.to(device), logits.to(device), label.to(device).long()
-                preds = model(image, logits)
+            for input, label, subtype in val_loader:
+                input, label = input.to(device), label.to(device).long()
+                preds = model(input)
                 print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
                 val_loss = criterion(preds, label)
                 val_losses.append(val_loss.item())
