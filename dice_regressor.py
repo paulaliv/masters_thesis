@@ -121,14 +121,14 @@ encoder = ResidualEncoder(
     return_skips=False
 )
 
-# Instantiate model
-qa_model = QA_Model(encoder, logit_channels=1)
-
-# Use in forward pass
-image = torch.randn(2, 1, 128, 128, 128)
-logits = torch.randn(2, 1, 128, 128, 128)
-
-out = qa_model(image, logits)  # shape [2, 3]
+# # Instantiate model
+# qa_model = QA_Model(encoder, logit_channels=1)
+#
+# # Use in forward pass
+# image = torch.randn(2, 1, 128, 128, 128)
+# logits = torch.randn(2, 1, 128, 128, 128)
+#
+# out = qa_model(image, logits)  # shape [2, 3]
 
 
 class QADataset(Dataset):
@@ -238,6 +238,7 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 
 
     # Initialize your QA model and optimizer
+    print('Initiating Model')
     model = QA_Model(encoder, logit_channels=1).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.CrossEntropyLoss()
@@ -248,7 +249,8 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
     patience = 10
     patience_counter = 0
 
-    for epoch in range(20):  # max epochs
+    for epoch in range(20):
+        print(f'Epoch {epoch}')
         model.train()
         train_losses = []
         for image, logits, label, subtype in train_loader:
