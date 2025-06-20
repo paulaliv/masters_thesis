@@ -1,15 +1,11 @@
 import os
+import sys
 
 import numpy as np
 from scipy.spatial import distance
 from sympy.solvers.diophantine.diophantine import prime_as_sum_of_two_squares
 import pandas as pd
-# data containing patient id under nnunet_id and label under Final_Classification
-tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-tabular_data = pd.read_csv(tabular_data_dir)
-# Feature maps stored i folder always with name patient_id_features.npy
-feature_dir = r'/home/bmep/plalfken/my-scratch/Downloads'
-subtype = tabular_data[['nnunet_id', 'Final_Classification']]
+
 
 def load_patient_data(patient_id):
     """Load the features for a given patient."""
@@ -115,13 +111,13 @@ def compute_distances(features, mean, inv_cov):
 #         for cls, (mean_cls, inv_cov_cls) in class_stats.items():
 #             dists = compute_distances(feats, mean_cls, inv_cov_cls)
 #             print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
-def main():
+def main(feature_dir_Tr, feature_dir_Ts, tabular_data):
     # Prepare data: load features & labels
     patient_ids = tabular_data['nnunet_id'].tolist()
     labels = tabular_data['Final_Classification'].tolist()
 
     all_features = []
-    for file in os.listdir(feature_dir):
+    for file in os.listdir(feature_dir_Tr):
         patient_id = file.replace('features.npy', '')
         features, labels = load_patient_data(patient_id)
         flat_features = flatten(features)
@@ -153,4 +149,11 @@ def main():
             print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
 
 if __name__ == "__main__":
-    main()
+    # data containing patient id under nnunet_id and label under Final_Classification
+    tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
+    tabular_data = pd.read_csv(tabular_data_dir)
+    # Feature maps stored i folder always with name patient_id_features.npy
+    feature_dir_Tr = sys.argv[0]
+    feature_dir_Ts = sys.argv[1]
+    subtype = tabular_data[['nnunet_id', 'Final_Classification']]
+    main(feature_dir_Tr,feature_dir_Ts,subtype)

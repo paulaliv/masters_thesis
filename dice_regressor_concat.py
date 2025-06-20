@@ -181,8 +181,6 @@ class QADataset(Dataset):
         print('Logits tensor shape : ', logits_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
 
-        assert image.ndim == 5 and logits.ndim == 5, \
-            f"Expected 5D tensors, got shapes {image.shape} and {logits.shape}"
 
         assert image.shape[0] == logits.shape[0] and \
                image.shape[2:] == logits.shape[2:], \
