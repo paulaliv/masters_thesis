@@ -3,6 +3,8 @@ from collections import defaultdict
 from dynamic_network_architectures.building_blocks.residual import BasicBlockD
 from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
+from torch.cpu.amp import autocast
+
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
 import pandas as pd
@@ -17,6 +19,7 @@ import sys
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
+from torch.cuda.amp import autocast, GradScaler
 
 import torch.optim as optim
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
@@ -249,9 +252,9 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
@@ -267,7 +270,7 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
-
+    scaler = GradScaler()
     for epoch in range(20):
         print(f'Epoch {epoch}')
         model.train()
@@ -275,10 +278,12 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         for input, label, subtype in train_loader:
             input, label = input.to(device), label.to(device)
             optimizer.zero_grad()
-            preds = model(input)  # shape: [B, 3]
-            loss = criterion(preds, label)
-            loss.backward()
-            optimizer.step()
+            with autocast():
+                preds = model(input)  # shape: [B, 3]
+                loss = criterion(preds, label)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             train_losses.append(loss.item())
 
 
