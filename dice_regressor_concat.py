@@ -79,7 +79,7 @@ class QA_Model(nn.Module):
 # Instantiate encoder
 
 encoder = ResidualEncoder(
-    input_channels=1,
+    input_channels=3,
     n_stages=5,
     features_per_stage=[32, 64, 128, 256, 320],
     conv_op=nn.Conv3d,
