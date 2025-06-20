@@ -176,6 +176,9 @@ class QADataset(Dataset):
 
         image = data
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
+        image = np.asarray(image)
+        print(type(image))
+        # Should be: <class 'numpy.ndarray'>
 
         # Load predicted mask (.nii.gz)
         logits_path = os.path.join(self.logits_dir, f"{case_id}_raw_logits.npy")
