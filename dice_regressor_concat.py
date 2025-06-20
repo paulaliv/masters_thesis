@@ -252,9 +252,9 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
