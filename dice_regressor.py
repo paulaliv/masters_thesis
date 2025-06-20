@@ -178,7 +178,7 @@ class QADataset(Dataset):
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         # Load predicted mask (.nii.gz)
-        logits_path = os.path.join(self.logits_dir, f"{case_id}_resampled_logits.npy")
+        logits_path = os.path.join(self.logits_dir, f"{case_id}_raw_logits.npy")
         logits = np.load(logits_path)  # shape (H, W, D)
         print(f'Logits shape: {logits.shape}')
         logits = np.expand_dims(logits, axis=0)  # to shape: (1, H, W, D)
