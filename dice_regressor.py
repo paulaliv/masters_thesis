@@ -177,6 +177,7 @@ class QADataset(Dataset):
         image = data
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         image = np.asarray(image)
+        print(f'Image Shape {image.shape}')
         print(type(image))
         # Should be: <class 'numpy.ndarray'>
 
@@ -206,6 +207,11 @@ class QADataset(Dataset):
 
         if self.transform:
             image_tensor = self.transform(image_tensor)
+
+        print('Image tensor shape : ', image_tensor.shape)
+        print('Logits tensor shape : ', logits_tensor.shape)
+        print('Label tensor shape : ', label_tensor.shape)
+
 
         return image_tensor,logits_tensor, label_tensor, subtype
 
