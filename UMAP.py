@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
-import umap.umap as umap  # pip install umap-learn
+import umap # pip install umap-learn
 from collections import defaultdict
 from tqdm import tqdm
 
