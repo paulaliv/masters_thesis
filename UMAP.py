@@ -39,7 +39,8 @@ def load_feature_vectors(feature_dir: str) -> dict[str, np.ndarray]:
     for path in tqdm(sorted(glob.glob(pattern)), desc=f"Loading from {feature_dir}"):
         fname = os.path.basename(path)
         nn_id = fname.replace('_features_roi.npz','') # 'STT_0001_features.npy' -> 'STT_0001'
-        feat = np.load(path)[0]
+        feat1 = np.load(path)
+        feat = feat1[feat1.files[0]]
         print(f'Original Feature shape: {feat.shape}')# shape (C, D, H, W) or (C, H, W) or (C, N)
         if feat.ndim > 1:
             feat_vec = feat.mean(tuple(range(1, feat.ndim)))  # global average
