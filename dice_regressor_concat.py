@@ -291,12 +291,24 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         print(f'Epoch {epoch}')
         model.train()
         train_losses = []
+        print(f'before train loader')
+        print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+        print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+
         for input, label, subtype in train_loader:
             input, label = input.to(device), label.to(device)
+            print('After loading input and moving to device')
+            print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+            print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+
             optimizer.zero_grad()
             with autocast():
                 preds = model(input)  # shape: [B, 3]
                 loss = criterion(preds, label)
+                print('after computing loss')
+                print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+                print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -305,19 +317,22 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 
         avg_train_loss = sum(train_losses) / len(train_losses)
 
+
         # Validation step
         model.eval()
         val_losses = []
         all_subtypes = []
         all_preds = []
         all_labels = []
-
+        torch.cuda.empty_cache()
+        print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+        print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
         with torch.no_grad():
             for input, label, subtype in val_loader:
                 input, label = input.to(device), label.to(device).long()
                 preds = model(input)
-                print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
+                #print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
                 val_loss = criterion(preds, label)
                 val_losses.append(val_loss.item())
 
