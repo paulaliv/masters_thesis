@@ -66,7 +66,9 @@ def combine_features(train_vecs: dict, test_vecs: dict) -> tuple[list[str], np.n
 def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts, image_dir):
     # 1. load subtype table
     df_tr = pd.read_csv(csv_path_tr, dtype=str)
+    print(f'df_tr columns: {df_tr.columns}')
     df_ts = pd.read_csv(csv_path_ts, dtype=str)
+    print(f'df_ts columns: {df_ts.columns}')
     df_tr = df_tr[['case_id', 'subtype']].dropna()
     df_ts = df_ts[['case_id', 'subtype']].dropna()
 
