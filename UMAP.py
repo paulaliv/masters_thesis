@@ -35,12 +35,15 @@ def load_feature_vectors(feature_dir: str) -> dict[str, np.ndarray]:
     dict { nnunet_id (str) : 1‑D np.ndarray }
     """
     vectors = {}
-    pattern = os.path.join(feature_dir, "*features.npz")
+    pattern = os.path.join(feature_dir, "*_features_roi.npz")
     for path in tqdm(sorted(glob.glob(pattern)), desc=f"Loading from {feature_dir}"):
-        nn_id = os.path.basename(path).split("_")[0]  # 'STT_0001_features.npy' -> 'STT_0001'
-        feat = np.load(path)                          # shape (C, D, H, W) or (C, H, W) or (C, N)
+        fname = os.path.basename(path)
+        nn_id = fname.replace('_features_roi.npz','') # 'STT_0001_features.npy' -> 'STT_0001'
+        feat = np.load(path)[0]
+        print(f'Original Feature shape: {feat.shape}')# shape (C, D, H, W) or (C, H, W) or (C, N)
         if feat.ndim > 1:
             feat_vec = feat.mean(tuple(range(1, feat.ndim)))  # global average
+            print(f'Averaged Feature shape: {feat_vec.shape}')
         else:
             feat_vec = feat                                  # already 1‑D
         vectors[nn_id] = feat_vec.astype(np.float32)
@@ -60,11 +63,16 @@ def combine_features(train_vecs: dict, test_vecs: dict) -> tuple[list[str], np.n
     return all_ids, np.vstack(feats)  # (N, C)
 
 
-def main(feature_dir_tr: str, feature_dir_ts: str, csv_path: str):
+def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts):
     # 1. load subtype table
-    df = pd.read_csv(csv_path, dtype=str)
-    df = df[['nnunet_id', 'Final_Classification']].dropna()
-    subtype_map = dict(zip(df['nnunet_id'], df['Final_Classification']))
+    df_tr = pd.read_csv(csv_path_tr, dtype=str)
+    df_ts = pd.read_csv(csv_path_ts, dtype=str)
+    df_tr = df_tr[['case_id', 'subtype']].dropna()
+    df_ts = df_ts[['case_id', 'subtype']].dropna()
+
+    df = df_tr.merge(df_ts, on='nnunet_id', how='left')
+    subtype_map = dict(zip(df['case_id'], df['subtype']))
+
 
     # 2. load feature vectors
     vec_tr = load_feature_vectors(feature_dir_tr)
@@ -77,6 +85,8 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path: str):
     y = [subtype_map.get(cid, 'NA') for cid in case_ids]
 
     # 5. UMAP dimensionality reduction
+    #n-components: 2d data
+    #n_neighbours: considers 15 nearest neighbours for each point
     reducer = umap.UMAP(
         n_components=2,
         n_neighbors=15,
@@ -119,10 +129,12 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path: str):
 
 
 if __name__ == "__main__":
-    tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-    tabular_data = pd.read_csv(tabular_data_dir)
+    tabular_data_dir_tr = r'/gpfs/home6/palfken/masters_thesis/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_train.csv'
+
+    tabular_data_dir_ts = r'/gpfs/home6/palfken/masters_thesis/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_val.csv'
+
     # Feature maps stored i folder always with name patient_id_features.npy
     feature_dir_Tr = sys.argv[0]
     feature_dir_Ts = sys.argv[1]
-    subtype = tabular_data[['nnunet_id', 'Final_Classification']]
-    main(feature_dir_Tr, feature_dir_Ts, subtype)
+
+    main(feature_dir_Tr, feature_dir_Ts, tabular_data_dir_tr, tabular_data_dir_ts)
