@@ -129,9 +129,9 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
 
 
 if __name__ == "__main__":
-    tabular_data_dir_tr = r'/gpfs/home6/palfken/masters_thesis/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_train.csv'
+    tabular_data_dir_tr = r'/gpfs/home6/palfken/masters_thesis/conf_train.csv'
 
-    tabular_data_dir_ts = r'/gpfs/home6/palfken/masters_thesis/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/conf_val.csv'
+    tabular_data_dir_ts = r'/gpfs/home6/palfken/masters_thesis/conf_val.csv'
 
     # Feature maps stored i folder always with name patient_id_features.npy
     feature_dir_Tr = sys.argv[0]
