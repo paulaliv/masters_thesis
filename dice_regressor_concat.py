@@ -200,12 +200,15 @@ class QADataset(Dataset):
             'subtype': subtype
         }
 
+def get_padded_shape(shape, multiple=16):
+    return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
+
 def pad_tensor(t, target_shape):
     """
     Pads a 4D tensor (C, D, H, W) to a target shape (D, H, W), only on the right/bottom sides.
     Returns a tensor of shape (C, D, H, W), padded with zeros.
     """
-    print(f'shape before padding: {t.shape}')
+
 
     if t.ndim == 4:
         t = t.unsqueeze(0)  # (1, C, D, H, W)
@@ -230,7 +233,9 @@ def pad_collate_fn(batch):
     max_d = max(item['input'].shape[1] for item in batch)
     max_h = max(item['input'].shape[2] for item in batch)
     max_w = max(item['input'].shape[3] for item in batch)
-    tgt_shape = (max_d, max_h, max_w)
+
+    tgt_shape = get_padded_shape(max_d, max_h, max_w)
+    print(f'Target shape for padidng: {tgt_shape}')
 
     inputs  = torch.stack([pad_tensor(item['input'], tgt_shape)  for item in batch])
     labels  = torch.stack([item['label'] for item in batch])
