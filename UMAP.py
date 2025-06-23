@@ -182,8 +182,8 @@ if __name__ == "__main__":
     tabular_data_dir_ts = r'/gpfs/home6/palfken/masters_thesis/conf_val.csv'
 
     # Feature maps stored i folder always with name patient_id_features.npy
-    feature_dir_Tr = sys.argv[0]
-    feature_dir_Ts = sys.argv[1]
-    image_dir = sys.argv[2]
+    feature_dir_Tr = sys.argv[1]
+    feature_dir_Ts = sys.argv[2]
+    image_dir = sys.argv[3]
 
     main(feature_dir_Tr, feature_dir_Ts, tabular_data_dir_tr, tabular_data_dir_ts,image_dir)
