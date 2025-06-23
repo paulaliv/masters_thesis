@@ -73,6 +73,9 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     df_ts = df_ts[['case_id', 'subtype']].dropna()
 
     df = df_tr.merge(df_ts, on='case_id', how='left')
+    # Normalize column names to remove any invisible characters
+    df.columns = df.columns.str.strip()
+
     subtype_map = dict(zip(df['case_id'], df['subtype']))
 
 
