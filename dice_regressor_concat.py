@@ -226,15 +226,14 @@ def pad_tensor(t, target_shape):
     return t.squeeze(0)  # Return (C, D', H', W')
 
 
-
 def pad_collate_fn(batch):
     # batch is a list of dicts from __getitem__
     # find max D,H,W in this batch
     max_d = max(item['input'].shape[1] for item in batch)
     max_h = max(item['input'].shape[2] for item in batch)
     max_w = max(item['input'].shape[3] for item in batch)
-
-    tgt_shape = get_padded_shape(max_d, max_h, max_w)
+    target_shape = max_d, max_h, max_w
+    tgt_shape = get_padded_shape(target_shape)
     print(f'Target shape for padidng: {tgt_shape}')
 
     inputs  = torch.stack([pad_tensor(item['input'], tgt_shape)  for item in batch])
