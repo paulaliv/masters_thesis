@@ -30,16 +30,17 @@ def run_pca(feature_dir):
     all_feats = []  # shape (N, C, D, H, W)
 
     pattern = os.path.join(feature_dir, "*_features_roi.npz")
-    for file in os.listdir(feature_dir):
-        if file.endswith("_features_roi.npz"):
-            nn_id = file.replace('_features_roi.npz', '')  # 'STT_0001_features.npy' -> 'STT_0001'
-            feat1 = np.load(file)
-            feat = feat1[feat1.files[0]]
-            print(feat.shape)
-            C = feat.shape[0]
-            averaged_feat = feat.reshape(C, -1).mean(axis=1)
-            print(f'feature shape {averaged_feat.shape}')
-            all_feats.append(averaged_feat)
+    pattern = os.path.join(feature_dir, "*_features_roi.npz")
+    for path in tqdm(sorted(glob.glob(pattern)), desc=f"Loading from {feature_dir}"):
+        fname = os.path.basename(path)
+        nn_id = fname.replace('_features_roi.npz', '')  # 'STT_0001_features.npy' -> 'STT_0001'
+        feat1 = np.load(path)
+        feat = feat1[feat1.files[0]]
+        print(feat.shape)
+        C = feat.shape[0]
+        averaged_feat = feat.reshape(C, -1).mean(axis=1)
+        print(f'feature shape {averaged_feat.shape}')
+        all_feats.append(averaged_feat)
 
     x = np.vstack(all_feats)  # shape: (N, C)
     pca = PCA()
