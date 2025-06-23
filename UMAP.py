@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
-import umap  # pip install umap-learn
+import umap.umap as umap  # pip install umap-learn
 from collections import defaultdict
 from tqdm import tqdm
 
@@ -43,7 +43,11 @@ def load_feature_vectors(feature_dir: str) -> dict[str, np.ndarray]:
         feat = feat1[feat1.files[0]]
         print(f'Original Feature shape: {feat.shape}')# shape (C, D, H, W) or (C, H, W) or (C, N)
         if feat.ndim > 1:
-            feat_vec = feat.mean(tuple(range(1, feat.ndim)))  # global average
+            #feat_vec = feat.mean(tuple(range(1, feat.ndim)))  # global average
+            feat_vec = feat.mean(axis=(2, 3))  # shape: (320, 48)
+
+            # Option 2: Flatten everything except batch
+            #features_flat = features.view(320, -1)  # shape: (320, 48*272*256)
             print(f'Averaged Feature shape: {feat_vec.shape}')
         else:
             feat_vec = feat                                  # already 1‑D
