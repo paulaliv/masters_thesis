@@ -71,11 +71,17 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     df_ts = pd.read_csv(csv_path_ts, dtype=str)
     df_ts.columns = df_ts.columns.str.strip()
     print(f'df_ts columns: {df_ts.columns}')
+
     df_tr = df_tr[['case_id', 'subtype']].dropna()
     df_ts = df_ts[['case_id', 'subtype']].dropna()
 
     df = df_tr.merge(df_ts, on='case_id', how='left')
+
+    assert (df['subtype_x'] == df['subtype_y']).all(), "subtype columns differ!"
+    df['subtype'] = df['subtype_x']
+    df = df.drop(columns=['subtype_x', 'subtype_y'])
     print(f'df columns: {df.columns}')
+
     # Normalize column names to remove any invisible characters
     df.columns = df.columns.str.strip()
 
