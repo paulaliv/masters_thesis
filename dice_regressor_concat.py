@@ -70,8 +70,9 @@ class QA_Model(nn.Module):
 
         features = self.encoder(x)
         print(f'Encoder Output Shape {features.shape}')
+        # shape should be (B, 320, D/16, H/16, W/16)
 
-        if isinstance(x, (list, tuple)):
+        if isinstance(features, (list, tuple)):
             #remove skip connections
             features = features[-1]
 
@@ -199,17 +200,28 @@ class QADataset(Dataset):
             'subtype': subtype
         }
 
-
 def pad_tensor(t, target_shape):
     """
-    Pads a 4‑D tensor (C, D, H, W) on the right/bottom sides to target_shape=(D,H,W).
+    Pads a 4D tensor (C, D, H, W) to a target shape (D, H, W), only on the right/bottom sides.
+    Returns a tensor of shape (C, D, H, W), padded with zeros.
     """
-    _, d, h, w = t.shape
-    td, th, tw = target_shape
-    pad = (0, tw - w,          # W: left, right
-           0, th - h,          # H: top, bottom
-           0, td - d)          # D: front, back
-    return F.pad(t, pad, value=0)
+    print(f'shape before padding: {t.shape}')
+
+    if t.ndim == 4:
+        t = t.unsqueeze(0)  # (1, C, D, H, W)
+
+    _, C, D, H, W = t.shape
+    target_D, target_H, target_W = target_shape
+
+    pad = (
+        0, target_W - W,  # pad width (W)
+        0, target_H - H,  # pad height (H)
+        0, target_D - D   # pad depth (D)
+    )
+
+    t = F.pad(t, pad)  # Now shape is (1, C, D', H', W')
+    return t.squeeze(0)  # Return (C, D', H', W')
+
 
 
 def pad_collate_fn(batch):
