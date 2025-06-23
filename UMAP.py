@@ -35,8 +35,12 @@ def run_pca(feature_dir):
         nn_id = fname.replace('_features_roi.npz', '')  # 'STT_0001_features.npy' -> 'STT_0001'
         feat1 = np.load(path)
         feat = feat1[feat1.files[0]]
+        print(feat.shape)
         C = feat.shape[0]
-        all_feats.append(feat.reshape(C, -1).mean(axis=1))
+        averaged_feat = feat.reshape(C, -1).mean(axis=1)
+        print(f'feature shape {averaged_feat.shape}')
+        all_feats.append(averaged_feat)
+
     X = np.vstack(all_feats)  # shape: (N, C)
     pca = PCA()
     pca.fit(X)
