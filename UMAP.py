@@ -23,6 +23,31 @@ import sys
 import umap # pip install umap-learn
 from collections import defaultdict
 from tqdm import tqdm
+from sklearn.decomposition import PCA
+
+
+def run_pca(feature_dir):
+    all_feats = []  # shape (N, C, D, H, W)
+
+    pattern = os.path.join(feature_dir, "*_features_roi.npz")
+    for path in tqdm(sorted(glob.glob(pattern)), desc=f"Loading from {feature_dir}"):
+        fname = os.path.basename(path)
+        nn_id = fname.replace('_features_roi.npz', '')  # 'STT_0001_features.npy' -> 'STT_0001'
+        feat1 = np.load(path)
+        feat = feat1[feat1.files[0]]
+        C = feat.shape[0]
+        all_feats.append(feat.reshape(C, -1).mean(axis=1))
+    X = np.vstack(all_feats)  # shape: (N, C)
+    pca = PCA()
+    pca.fit(X)
+    print("Explained variance per PC:", pca.explained_variance_ratio_)
+
+    plt.plot(np.cumsum(pca.explained_variance_ratio_))
+    plt.xlabel("Number of principal components")
+    plt.ylabel("Cumulative explained variance")
+    plt.title("PCA - Channel-Level Feature Importance")
+    plt.grid()
+    plt.savefig(image_dir, dpi=300)
 
 
 def load_feature_vectors(feature_dir: str) -> dict[str, np.ndarray]:
@@ -90,59 +115,61 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
 
     subtype_map = dict(zip(df['case_id'], df['subtype']))
 
+    run_pca(feature_dir_tr)
 
-    # 2. load feature vectors
-    vec_tr = load_feature_vectors(feature_dir_tr)
-    vec_ts = load_feature_vectors(feature_dir_ts)
-
-    # 3. merge
-    case_ids, X = combine_features(vec_tr, vec_ts)   # X: (N, C)
-
-    # 4. attach labels (unknowns marked as 'NA')
-    y = [subtype_map.get(cid, 'NA') for cid in case_ids]
-
-    # 5. UMAP dimensionality reduction
-    #n-components: 2d data
-    #n_neighbours: considers 15 nearest neighbours for each point
-    reducer = umap.UMAP(
-        n_components=2,
-        n_neighbors=15,
-        min_dist=0.1,
-        metric="cosine",
-        random_state=42
-    )
-    X2d = reducer.fit_transform(X)  # (N, 2)
-
-    # 6. color palette
-    unique_labels = sorted(set(y))
-    cmap = plt.cm.tab20
-    color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_labels)}
-
-    # 7. scatter plot
-    plt.figure(figsize=(8, 6))
-    for lab in unique_labels:
-        idx = [i for i, l in enumerate(y) if l == lab]
-        plt.scatter(
-            X2d[idx, 0], X2d[idx, 1],
-            s=25, c=[color_lookup[lab]] * len(idx), label=lab, alpha=0.8
-        )
-    plt.xlabel("UMAP‑1")
-    plt.ylabel("UMAP‑2")
-    plt.title("ROI Feature Map Clusters by Subtype")
-    plt.legend(fontsize=8, loc='best', markerscale=1)
-    plt.tight_layout()
-    plt.savefig(image_dir, dpi=300)
-    plt.show()
-
-    # 8. print some cluster insight
-    print("\nCases per subtype:")
-    counts = defaultdict(int)
-    for l in y:
-        counts[l] += 1
-    for lab, n in counts.items():
-        print(f"  {lab:15s} : {n:4d}")
-
-    print("\nSaved plot -> umap_subtype_clusters.png")
+    #
+    # # 2. load feature vectors
+    # vec_tr = load_feature_vectors(feature_dir_tr)
+    # vec_ts = load_feature_vectors(feature_dir_ts)
+    #
+    # # 3. merge
+    # case_ids, X = combine_features(vec_tr, vec_ts)   # X: (N, C)
+    #
+    # # 4. attach labels (unknowns marked as 'NA')
+    # y = [subtype_map.get(cid, 'NA') for cid in case_ids]
+    #
+    # # 5. UMAP dimensionality reduction
+    # #n-components: 2d data
+    # #n_neighbours: considers 15 nearest neighbours for each point
+    # reducer = umap.UMAP(
+    #     n_components=2,
+    #     n_neighbors=15,
+    #     min_dist=0.1,
+    #     metric="cosine",
+    #     random_state=42
+    # )
+    # X2d = reducer.fit_transform(X)  # (N, 2)
+    #
+    # # 6. color palette
+    # unique_labels = sorted(set(y))
+    # cmap = plt.cm.tab20
+    # color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_labels)}
+    #
+    # # 7. scatter plot
+    # plt.figure(figsize=(8, 6))
+    # for lab in unique_labels:
+    #     idx = [i for i, l in enumerate(y) if l == lab]
+    #     plt.scatter(
+    #         X2d[idx, 0], X2d[idx, 1],
+    #         s=25, c=[color_lookup[lab]] * len(idx), label=lab, alpha=0.8
+    #     )
+    # plt.xlabel("UMAP‑1")
+    # plt.ylabel("UMAP‑2")
+    # plt.title("ROI Feature Map Clusters by Subtype")
+    # plt.legend(fontsize=8, loc='best', markerscale=1)
+    # plt.tight_layout()
+    # plt.savefig(image_dir, dpi=300)
+    # plt.show()
+    #
+    # # 8. print some cluster insight
+    # print("\nCases per subtype:")
+    # counts = defaultdict(int)
+    # for l in y:
+    #     counts[l] += 1
+    # for lab, n in counts.items():
+    #     print(f"  {lab:15s} : {n:4d}")
+    #
+    # print("\nSaved plot -> umap_subtype_clusters.png")
 
 
 if __name__ == "__main__":

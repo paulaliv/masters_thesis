@@ -19,7 +19,8 @@ import sys
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
-from torch.cuda.amp import autocast, GradScaler
+
+from torch.amp import GradScaler, autocast
 
 import torch.optim as optim
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
@@ -286,7 +287,7 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
-    scaler = GradScaler()
+    scaler = GradScaler('cuda')
     for epoch in range(20):
         print(f'Epoch {epoch}')
         model.train()
