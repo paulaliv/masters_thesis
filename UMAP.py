@@ -70,7 +70,7 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     df_tr = df_tr[['case_id', 'subtype']].dropna()
     df_ts = df_ts[['case_id', 'subtype']].dropna()
 
-    df = df_tr.merge(df_ts, on='nnunet_id', how='left')
+    df = df_tr.merge(df_ts, on='case_id', how='left')
     subtype_map = dict(zip(df['case_id'], df['subtype']))
 
 
