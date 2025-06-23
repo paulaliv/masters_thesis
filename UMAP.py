@@ -75,12 +75,10 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     df_tr = df_tr[['case_id', 'subtype']].dropna()
     df_ts = df_ts[['case_id', 'subtype']].dropna()
 
-    df = df_tr.merge(df_ts, on='case_id', how='left')
+    df = pd.concat([df_tr, df_ts], ignore_index=True)
 
-    assert (df['subtype_x'] == df['subtype_y']).all(), "subtype columns differ!"
-    df['subtype'] = df['subtype_x']
-    df = df.drop(columns=['subtype_x', 'subtype_y'])
     print(f'df columns: {df.columns}')
+    print(df['subtype'].isnull().sum())  #
 
     # Normalize column names to remove any invisible characters
     df.columns = df.columns.str.strip()
