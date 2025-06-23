@@ -63,7 +63,7 @@ def combine_features(train_vecs: dict, test_vecs: dict) -> tuple[list[str], np.n
     return all_ids, np.vstack(feats)  # (N, C)
 
 
-def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts):
+def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts, image_dir):
     # 1. load subtype table
     df_tr = pd.read_csv(csv_path_tr, dtype=str)
     df_ts = pd.read_csv(csv_path_ts, dtype=str)
@@ -114,7 +114,7 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     plt.title("ROI Feature Map Clusters by Subtype")
     plt.legend(fontsize=8, loc='best', markerscale=1)
     plt.tight_layout()
-    plt.savefig("umap_subtype_clusters.png", dpi=300)
+    plt.savefig(image_dir, dpi=300)
     plt.show()
 
     # 8. print some cluster insight
@@ -136,5 +136,6 @@ if __name__ == "__main__":
     # Feature maps stored i folder always with name patient_id_features.npy
     feature_dir_Tr = sys.argv[0]
     feature_dir_Ts = sys.argv[1]
+    image_dir = sys.argv[2]
 
-    main(feature_dir_Tr, feature_dir_Ts, tabular_data_dir_tr, tabular_data_dir_ts)
+    main(feature_dir_Tr, feature_dir_Ts, tabular_data_dir_tr, tabular_data_dir_ts,image_dir)
