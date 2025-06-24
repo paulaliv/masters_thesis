@@ -1,4 +1,4 @@
-case_id,dice,subtype
+case_id,dice_score,subtype
 DES_0008,0.5981629299213522,MyxofibroSarcomas
 DES_0011,0.8956556011849516,MyxofibroSarcomas
 DES_0015,0.8071456332241408,LeiomyoSarcomas

@@ -406,7 +406,7 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
 
 
 if __name__ == "__main__":
-    tabular_data_dir_tr = r'/gpfs/home6/palfken/masters_thesis/conf_train.csv'
+    tabular_data_dir_tr = r'/gpfs/home6/palfken/masters_thesis/all_folds'
 
     tabular_data_dir_ts = r'/gpfs/home6/palfken/masters_thesis/conf_val.csv'
 
