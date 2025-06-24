@@ -237,11 +237,11 @@ def main(feature_dir_tr: str, feature_dir_ts: str, csv_path_tr: str, csv_path_ts
     df_ts.columns = df_ts.columns.str.strip()
     print(f'df_ts columns: {df_ts.columns}')
 
-    df_tr = df_tr[['case_id', 'subtype', 'dice']].dropna()
-    df_ts = df_ts[['case_id', 'subtype','dice']].dropna()
+    df_tr = df_tr[['case_id', 'subtype', 'dice_score']].dropna()
+    df_ts = df_ts[['case_id', 'subtype','dice_score']].dropna()
 
-    df_tr['quality'] = df_tr['dice'].apply(categorize_dice)
-    df_ts['quality'] = df_ts['dice'].apply(categorize_dice)
+    df_tr['quality'] = df_tr['dice_score'].apply(categorize_dice)
+    df_ts['quality'] = df_ts['dice_score'].apply(categorize_dice)
 
 
 
