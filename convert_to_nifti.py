@@ -27,7 +27,7 @@ def main(data_dir,output_dir):
     nib.save(nifti_img, os.path.join(output_dir,'DES_0001_test_mask.nii.gz'))
 
     nifti_feat = nib.Nifti1Image(feat_array.astype(np.float32), identity_affine)
-    nib.save(nifti_feat, os.path_join(output_dir,'DES_0001_test_feat.nii.gz'))
+    nib.save(nifti_feat, os.path.join(output_dir,'DES_0001_test_feat.nii.gz'))
 
 if __name__ == '__main__':
     data_dir = sys.argv[1]
