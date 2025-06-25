@@ -36,7 +36,7 @@ class TumorClassifier(nn.Module):
             block="basic",  # "BASIC" for ResNet18/34, "BOTTLE" for ResNet50+
             layers=[2, 2, 2, 2],  # ResNet18 config
             n_input_channels=in_channels,
-            num_classes=0,
+            num_classes=,
             block_inplanes=[64, 128, 256, 512]
 
             # we'll define our own classifier head
