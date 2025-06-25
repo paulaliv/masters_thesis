@@ -96,6 +96,7 @@ class QADataset(Dataset):
         case_id = self.case_ids[idx]
         #dice_score = self.dice_scores[idx]
         subtype = self.subtypes[idx]
+        subtype = subtype.strip()
 
         print(f'Extracting image and label for case {case_id}')
 
