@@ -52,6 +52,7 @@ class TumorClassifier(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
+        print(f"x.shape before pooling: {x.shape}")
         pooled = self.pool(x)
         return self.classifier(pooled)
 
@@ -107,6 +108,7 @@ class QADataset(Dataset):
         #print("Data shape:", data.shape)
 
         image = data
+        print('image shape',image.shape)
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         image = np.asarray(image)
         #print(f'Image Shape {image.shape}')
