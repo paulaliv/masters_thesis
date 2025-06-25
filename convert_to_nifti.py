@@ -5,28 +5,33 @@ import os
 def main(data_dir,output_dir):
     # Load the .npz file
     #data_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/FeaturesTr'
-    image_name = 'DES_0001_cropped_mask.npz'
+    crop_name = 'DES_0001_cropped_mask.npz'
     feat_name = 'DES_0001_features_roi.npz'
-    mask_dir = os.path.join(data_dir, image_name)
+    og_mask = 'DES_0001.nii.gz'
+    mask_dir = os.path.join(data_dir, crop_name)
+    og_mask_dir = os.path.join(data_dir, og_mask)
     feat_dir = os.path.join(data_dir, feat_name)
     print('Loading images')
     feat = np.load(feat_dir)
     mask = np.load(mask_dir)
+
     mask_array = mask['arr_0.npy']  # or use the specific key if you saved it with one
     feat_array = feat['arr_0.npy']
     # # Optional: squeeze or select channel
     # if mask_array.ndim == 4:
     #     mask_array = mask_array[0]  # or array = array.squeeze() if appropriate
+    ref_nii = nib.load(og_mask_dir)
+    affine = ref_nii.affine
 
     # Load reference NIfTI to copy affine/header
     identity_affine = np.eye(4)
 
     # Save as NIfTI
     print('Saving images')
-    nifti_img = nib.Nifti1Image(mask_array.astype(np.float32), identity_affine)
+    nifti_img = nib.Nifti1Image(mask_array.astype(np.float32), affine)
     nib.save(nifti_img, os.path.join(output_dir,'DES_0001_test_mask.nii.gz'))
 
-    nifti_feat = nib.Nifti1Image(feat_array.astype(np.float32), identity_affine)
+    nifti_feat = nib.Nifti1Image(feat_array.astype(np.float32), affine)
     nib.save(nifti_feat, os.path.join(output_dir,'DES_0001_test_feat.nii.gz'))
 
 if __name__ == '__main__':
