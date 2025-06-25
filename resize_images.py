@@ -38,6 +38,7 @@ def _smart_crop(volume, mask, target_shape):
         _,dz, dy, dx = target_shape
 
         # --- bounding box of tumour ---
+        mask = mask.squeeze(0).cpu().numpy()
         zz, yy, xx = np.where(mask == 1)
         z_min, z_max = zz.min(), zz.max()
         y_min, y_max = yy.min(), yy.max()
@@ -84,14 +85,13 @@ def _smart_crop(volume, mask, target_shape):
         #     print(f"bbox y [{y_min},{y_max}] → start_y={s_y}")
         #     print(f"bbox x [{x_min},{x_max}] → start_x={s_x}")
         #     print("Tumour voxels in crop =", mask_crop.sum())
-        print(f"Tumor voxels of mask = {(mask_crop == 1).sum().item()}")
+
+        print(f"Tumor voxels of mask = {(mask_crop == 1).sum()}")
 
         if mask.sum() == 0 and mask_crop.sum() == 0:
             print('empty mask')
         elif mask_crop.sum() == 0 and mask.sum() > 0:
             print('Cropped out tumor')
-
-
 
         return vol_crop, crop_start
 
