@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import sys
 import os
+from torch.cuda.amp import GradScaler, autocast
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
 
@@ -167,42 +168,52 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True)
 
     for epoch in range(num_epochs):
+        model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
         running_loss, correct, total = 0.0, 0, 0
         preds_list, labels_list = [], []
+
+        scaler = GradScaler()
 
         for batch in train_loader:
             inputs = batch['input'].to(device)
             labels = batch['label'].to(device)
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            preds = torch.argmax(outputs, dim=1)
+            with autocast():
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                preds = torch.argmax(outputs, dim=1)
 
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             running_loss += loss.item() * inputs.size(0)
             correct += torch.sum(preds == labels.data)
             total += labels.size(0)
-            preds_list.extend(preds.cpu().numpy())
-            labels_list.extend(labels.cpu().numpy())
+
+            if epoch % 5 == 0:
+                preds_list.extend(preds.cpu().numpy())
+                labels_list.extend(labels.cpu().numpy())
+
 
 
         epoch_train_loss = running_loss / total
         epoch_train_acc = correct.double() / total
         print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
 
-        idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
-        pred_tumors = [idx_to_tumor[p] for p in preds_list]
-        true_tumors = [idx_to_tumor[t] for t in labels_list]
+        if epoch % 5 == 0:
+            idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
+            pred_tumors = [idx_to_tumor[p] for p in preds_list]
+            true_tumors = [idx_to_tumor[t] for t in labels_list]
 
-        print(classification_report(true_tumors, pred_tumors, digits=4))
-
+            print(classification_report(true_tumors, pred_tumors, digits=4))
+        del inputs, labels, outputs, preds
+        torch.cuda.empty_cache()
 
         # --- Validation phase ---
         model.eval()
@@ -241,6 +252,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         if epoch_val_loss < best_loss:
             best_loss = epoch_val_loss
             best_model_wts = copy.deepcopy(model.state_dict())
+            print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
+
             torch.save(best_model_wts, f"best_model_fold_{fold}.pth")
             patience_counter = 0
         else:
@@ -250,7 +263,7 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 model.load_state_dict(best_model_wts)
                 return model
 
-    model.load_state_dict(best_model_wts)
+    #model.load_state_dict(best_model_wts)
     return model
 
 def main(preprocessed_dir, fold_paths,device):
