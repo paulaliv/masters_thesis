@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import json
 
-from feature_visualization import cropped_mask
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
 from torch.utils.hipify.hipify_python import meta_data
@@ -88,7 +87,7 @@ def pad_or_crop(image, mask, target_shape):
 def main():
 
     data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/"
-    output_dir = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/classification_Tr"
+    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/classification_Tr"
     target_shape = (1, 96, 576, 640)
     ds = nnUNetDatasetBlosc2(data_dir)
     for fname in os.listdir(data_dir):
