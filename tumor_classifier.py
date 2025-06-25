@@ -18,6 +18,13 @@ import sys
 import os
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
+tumor_to_idx = {
+    "MyxofibroSarcomas": 0,
+    "LeiomyoSarcomas": 1,
+    "DTF": 2,
+    "MyxoidlipoSarcoma": 3,
+    "WDLPS": 4,
+}
 
 class TumorClassifier(nn.Module):
     def __init__(self, model_depth=18, in_channels=1, num_classes=5):  # change num_classes to match your setting
@@ -76,6 +83,8 @@ class QADataset(Dataset):
 
         self.transform = transform
 
+        self.tumor_to_idx = tumor_to_idx
+
     def __len__(self):
         return len(self.case_ids)
 
@@ -87,6 +96,8 @@ class QADataset(Dataset):
         print(f'Extracting image and label for case {case_id}')
 
 
+
+        label_idx = self.tumor_to_idx[subtype]
         # Load preprocessed image (.npz)
         #Check if its not case_id_0000
         data, seg, seg_prev, properties = self.ds.load_case(case_id)
@@ -105,7 +116,7 @@ class QADataset(Dataset):
 
 
         image_tensor = torch.from_numpy(image).float()
-        label_tensor = torch.tensor(subtype).long()
+        label_tensor = torch.tensor(label_idx).long()
 
         if self.transform:
             image_tensor = self.transform(image_tensor)
@@ -179,8 +190,13 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         epoch_train_acc = correct.double() / total
         print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
 
+        idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
+        pred_tumors = [idx_to_tumor[p] for p in preds_list]
+        true_tumors = [idx_to_tumor[t] for t in labels_list]
 
-        print(classification_report(labels_list, preds_list, digits=4))
+        print(classification_report(true_tumors, pred_tumors, digits=4))
+
+
         # --- Validation phase ---
         model.eval()
         val_loss, val_correct, val_total = 0.0, 0, 0
@@ -204,7 +220,9 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         epoch_val_acc = val_correct.double() / val_total
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
-        print(classification_report(val_labels_list, val_preds_list, digits=4))
+        val_pred_tumors = [idx_to_tumor[p] for p in val_preds_list]
+        val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
+        print(classification_report(val_true_tumors, val_pred_tumors, digits=4))
 
         scheduler.step(epoch_val_loss)
 
