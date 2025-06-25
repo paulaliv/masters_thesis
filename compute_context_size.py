@@ -6,7 +6,7 @@ import numpy as np
 import SimpleITK as sitk
 import pandas as pd
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
-from explore import case_id
+
 #
 #
 # def get_mask_bounding_box_size(mask_array):
