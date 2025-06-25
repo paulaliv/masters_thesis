@@ -84,7 +84,7 @@ class QADataset(Dataset):
         self.case_ids = self.metadata['case_id'].tolist()
         #self.dice_scores = self.metadata['dice'].tolist()
         self.subtypes = self.metadata['subtype'].tolist()
-        self.ds = nnUNetDatasetBlosc2(self.preprocessed_dir)
+        #self.ds = nnUNetDatasetBlosc2(self.preprocessed_dir)
 
         self.transform = transform
 
@@ -106,10 +106,10 @@ class QADataset(Dataset):
         label_idx = self.tumor_to_idx[subtype]
         # Load preprocessed image (.npz)
         #Check if its not case_id_0000
-        data, seg, seg_prev, properties = self.ds.load_case(case_id)
+        # data, seg, seg_prev, properties = self.ds.load_case(case_id)
         #print("Data shape:", data.shape)
-
-        image = data
+        file = f'{case_id}_resized.pt'
+        image = torch.load(os.path.join(self.preprocessed_dir, file))
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         image = np.asarray(image)

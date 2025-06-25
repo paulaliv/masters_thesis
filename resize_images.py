@@ -93,7 +93,7 @@ def _smart_crop(volume, mask, target_shape):
         elif mask_crop.sum() == 0 and mask.sum() > 0:
             print('Cropped out tumor')
 
-        return vol_crop, crop_start
+        return vol_crop, mask_crop, crop_start
 
 def pad_or_crop(image, mask, target_shape):
     # image: tensor [C, D, H, W]
@@ -131,21 +131,17 @@ def pad_or_crop(image, mask, target_shape):
 
     _, D, H, W = image.shape  # new shape after padding
     if any([D > tD, H > tH, W > tW]):
-        image, crop_start = _smart_crop(image, mask, target_shape)
+        image, mask_crop, crop_start = _smart_crop(image, mask, target_shape)
 
 
 
-
-
-
-
-
-    return image, crop_start, padding_info
+    return image, mask_crop, crop_start, padding_info
 
 def main():
 
     data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/"
-    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/classification_Tr/"
+    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/QA_Tr/"
+
 
     target_shape = (1, 96, 576, 640)
     ds = nnUNetDatasetBlosc2(data_dir)
@@ -161,7 +157,7 @@ def main():
             image = torch.tensor(np.array(image))
             mask = torch.tensor(np.array(mask))
 
-            resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
+            resized_image, resized_mask, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
 
             metadata = {
                 "pad": list(padding_info),  # tuple -> list
@@ -170,11 +166,12 @@ def main():
             }
 
             image_file_name = f'{case_id}_resized.pt'
+            mask_file_name = f'{case_id}_mask_resized'
             meta_file_name = f'{case_id}_meta.json'
 
             save_metadata(metadata, os.path.join(output_dir, meta_file_name))
             torch.save(resized_image, os.path.join(output_dir, image_file_name))
-
+            torch.save(resized_mask, os.path.join(output_dir, mask_file_name))
 
 if __name__ == "__main__":
     main()
