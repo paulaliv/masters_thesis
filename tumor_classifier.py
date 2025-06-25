@@ -302,7 +302,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         criterion = nn.CrossEntropyLoss()
 
         best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, plot_dir,fold_paths,criterion, optimizer, scheduler,
-                                    num_epochs=10, patience=10, device=device, fold=fold)
+                                    num_epochs=100, patience=10, device=device, fold=fold)
 
         plt.plot(train_losses, label='Train Loss')
         plt.plot(val_losses, label='Validation Loss')
