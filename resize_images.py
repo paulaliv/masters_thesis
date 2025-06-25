@@ -100,7 +100,7 @@ def main():
             image = data
             mask = seg
 
-            resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape )
+            resized_image, crop_start, padding_info = pad_or_crop(torch.tensor(image), torch.tensor(mask), target_shape )
             metadata = {
                 "pad": list(padding_info),
                 "crop_start": list(crop_start),
