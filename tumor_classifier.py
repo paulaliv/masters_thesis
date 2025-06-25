@@ -182,6 +182,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         for batch in train_loader:
             inputs = batch['input'].to(device)
             labels = batch['label'].to(device)
+            print("Input shape:", inputs.shape)
+
             optimizer.zero_grad()
             with autocast():
                 outputs = model(inputs)
