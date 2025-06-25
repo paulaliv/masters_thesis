@@ -58,10 +58,12 @@ def pad_or_crop(image, mask, target_shape):
         crop_w = max(W - tW, 0)
 
         # Find tumor centroid along each dim
-        tumor_indices = torch.nonzero(mask)
+        tumor_indices = torch.nonzero(mask[0])  # select only the first channel mask
         centroid = tumor_indices.float().mean(dim=0) if tumor_indices.numel() > 0 else torch.tensor(
             [D // 2, H // 2, W // 2])
         cD, cH, cW = centroid.int()
+
+
 
         # Compute crop start positions ensuring crop window fits inside the image
         start_d = max(min(cD - tD // 2, D - tD), 0)
@@ -104,7 +106,7 @@ def main():
             image = torch.tensor(np.array(image))
             mask = torch.tensor(np.array(mask))
 
-            resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape )
+            resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
             metadata = {
                 "pad": list(padding_info),
                 "crop_start": list(crop_start),
