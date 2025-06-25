@@ -1,7 +1,7 @@
 #
 import os
 from collections import defaultdict
-
+import torch
 import numpy as np
 import SimpleITK as sitk
 import pandas as pd
@@ -167,16 +167,14 @@ if __name__ == "__main__":
     # compute_mask_stats_with_ranking(mask_dir_Ts,subtype)
     image_shapes = []
 
-    data_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres'
-    ds = nnUNetDatasetBlosc2(data_dir)
-    for fname in os.listdir(data_dir):
-        if fname.endswith(".b2nd") and not fname.endswith("_seg.b2nd"):
-            case_id = fname.replace('.b2nd','')
-            print(case_id)
-            data, seg, seg_prev, properties = ds.load_case(case_id)
-            print("Data shape:", data.shape)
+    data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/classification_Tr/"
 
-            image = data
+    for fname in os.listdir(data_dir):
+        if fname.endswith("_resized.pt"):
+            case_id = fname.replace('_resized.pt', '')
+            print(case_id)
+            image = torch.load(os.path.join(data_dir, fname))
+
             image_shapes.append(image.shape)
         # Add other formats as needed
 
