@@ -273,5 +273,5 @@ if __name__ == '__main__':
     preprocessed= sys.argv[1]
 
 
-    main(preprocessed, fold_paths, device = 'cude')
+    main(preprocessed, fold_paths, device = 'cuda')
 
