@@ -35,7 +35,7 @@ def _smart_crop(volume, mask, target_shape):
         """
         # --- shapes ---
         C, Z, Y, X = volume.shape
-        dz, dy, dx = target_shape
+        _,dz, dy, dx = target_shape
 
         # --- bounding box of tumour ---
         zz, yy, xx = np.where(mask == 1)
