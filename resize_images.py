@@ -17,6 +17,84 @@ def save_metadata_npz(metadata, save_path):
     # Option 2: Save as npz (numpy compressed, fast to load)
     np.savez_compressed(save_path, **metadata)
 
+def _smart_crop(volume, mask, target_shape):
+        """
+        Crop a C‑Z‑Y‑X volume (torch or np) and its mask to `target_shape`
+        while guaranteeing that at least part of the tumour remains.
+
+        Parameters
+        ----------
+        volume : np.ndarray | torch.Tensor
+            Shape (C, Z, Y, X)
+        mask   : np.ndarray  (binary)
+            Shape (Z, Y, X)
+        target_shape : tuple(int, int, int)
+            Desired (dz, dy, dx)
+        debug : bool
+            If True prints crop indices and tumour stats.
+        """
+        # --- shapes ---
+        C, Z, Y, X = volume.shape
+        dz, dy, dx = target_shape
+
+        # --- bounding box of tumour ---
+        zz, yy, xx = np.where(mask == 1)
+        z_min, z_max = zz.min(), zz.max()
+        y_min, y_max = yy.min(), yy.max()
+        x_min, x_max = xx.min(), xx.max()
+
+        def get_start(min_c, max_c, win, total):
+            """Return start index so [start, start+win) keeps tumour inside."""
+            size = max_c - min_c + 1
+            if size >= win:  # tumour larger than window
+                # keep centre of tumour inside
+                centre = (min_c + max_c) // 2
+                start = centre - win // 2
+            else:
+                # put tumour roughly in the middle, then adjust if near borders
+                pad_left = (win - size) // 2
+                pad_right = win - size - pad_left
+                start = min_c - pad_left
+            # clip to valid range
+            return int(np.clip(start, 0, total - win))
+
+        s_z = get_start(z_min, z_max, dz, Z)
+        s_y = get_start(y_min, y_max, dy, Y)
+        s_x = get_start(x_min, x_max, dx, X)
+
+        crop_start = (s_z, s_y, s_x)
+
+        # --- crop ---
+        vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+        mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+
+        # --- safety fallback: if tumour lost, recrop around bbox front edge ---
+        if mask_crop.sum() == 0:
+            # Start so that bbox min corner is inside window
+            s_z = int(np.clip(z_min, 0, Z - dz))
+            s_y = int(np.clip(y_min, 0, Y - dy))
+            s_x = int(np.clip(x_min, 0, X - dx))
+
+            vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+            mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+            crop_start = (s_z, s_y, s_x)
+
+        # if debug:
+        #     print(f"bbox z [{z_min},{z_max}] → start_z={s_z}")
+        #     print(f"bbox y [{y_min},{y_max}] → start_y={s_y}")
+        #     print(f"bbox x [{x_min},{x_max}] → start_x={s_x}")
+        #     print("Tumour voxels in crop =", mask_crop.sum())
+        print(f"Tumor voxels of mask = {(mask_crop == 1).sum().item()}")
+
+        if mask.sum() == 0 and mask_crop.sum() == 0:
+            print('empty mask')
+        elif mask_crop.sum() == 0 and mask.sum() > 0:
+            print('Cropped out tumor')
+
+
+
+        return vol_crop, crop_start
+
 def pad_or_crop(image, mask, target_shape):
     # image: tensor [C, D, H, W]
     # mask: tumor mask tensor same spatial size as image (for tumor location)
@@ -53,34 +131,10 @@ def pad_or_crop(image, mask, target_shape):
 
     _, D, H, W = image.shape  # new shape after padding
     if any([D > tD, H > tH, W > tW]):
-        crop_d = max(D - tD, 0)
-        crop_h = max(H - tH, 0)
-        crop_w = max(W - tW, 0)
-
-        # Find tumor centroid along each dim
-        tumor_indices = torch.nonzero(mask[0])  # select only the first channel mask
-        centroid = tumor_indices.float().mean(dim=0) if tumor_indices.numel() > 0 else torch.tensor(
-            [D // 2, H // 2, W // 2])
-        cD, cH, cW = centroid.int()
+        image, crop_start = _smart_crop(image, mask, target_shape)
 
 
 
-        # Compute crop start positions ensuring crop window fits inside the image
-        start_d = max(min(cD - tD // 2, D - tD), 0)
-        start_h = max(min(cH - tH // 2, H - tH), 0)
-        start_w = max(min(cW - tW // 2, W - tW), 0)
-
-        crop_start = (start_d, start_h, start_w)
-        # Crop image and mask
-        image = image[:, start_d:start_d + tD, start_h:start_h + tH, start_w:start_w + tW]
-        cropped_mask = mask[start_d:start_d + tD, start_h:start_h + tH, start_w:start_w + tW]
-        print(f"Tumor voxels of mask = {(cropped_mask == 1).sum().item()}")
-
-
-        if mask.sum() == 0 and cropped_mask.sum() == 0:
-            print('empty mask')
-        elif cropped_mask.sum() == 0 and mask.sum() > 0:
-            print('Cropped out tumor')
 
 
 
