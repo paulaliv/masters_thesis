@@ -109,10 +109,12 @@ def main():
 
             resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
             metadata = {
-                "pad": list(padding_info),
-                "crop_start": list(crop_start),
+                "pad": padding_info if isinstance(padding_info, list) else padding_info.tolist(),
+                "crop_start": crop_start if isinstance(crop_start, list) else crop_start.tolist(),
                 "original_shape": list(data.shape)
             }
+
+
 
 
             image_file_name = f'{case_id}_resized.pt'
