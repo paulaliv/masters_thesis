@@ -167,7 +167,7 @@ if __name__ == "__main__":
     # compute_mask_stats_with_ranking(mask_dir_Ts,subtype)
     image_shapes = []
 
-    data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/classification_Tr/"
+    data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Classification_Tr/"
 
     for fname in os.listdir(data_dir):
         if fname.endswith("_resized.pt"):
