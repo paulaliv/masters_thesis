@@ -142,7 +142,7 @@ class QADataset(Dataset):
         }
 
 
-def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, scheduler, num_epochs, patience, device,fold):
+def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, optimizer, scheduler, num_epochs, patience, device,fold):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     patience_counter = 0
@@ -252,11 +252,14 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         epoch_val_acc = val_correct.double() / val_total
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+
         val_losses.append(epoch_val_loss)
 
         val_pred_tumors = [idx_to_tumor[p] for p in val_preds_list]
         val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
         print(classification_report(val_true_tumors, val_pred_tumors, digits=4))
+
+
 
         scheduler.step(epoch_val_loss)
 
@@ -268,6 +271,7 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         if epoch_val_loss < best_loss:
             best_loss = epoch_val_loss
             best_model_wts = copy.deepcopy(model.state_dict())
+            best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4)
             print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
 
             torch.save(best_model_wts, f"best_model_fold_{fold}.pth")
@@ -277,7 +281,14 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
             if patience_counter >= patience:
                 print("⏹️ Early stopping")
                 model.load_state_dict(best_model_wts)
-                return model
+
+
+                file = os.path.join(plot_dir, f"classification_report_fold_{fold}.txt")
+                with open(file, "w") as f:
+                    f.write(f"Final Classification Report for Fold {fold}:\n")
+                    f.write(best_report)
+                return model, train_losses, val_losses
+
 
     #model.load_state_dict(best_model_wts)
     return model, train_losses, val_losses
@@ -290,8 +301,8 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
         criterion = nn.CrossEntropyLoss()
 
-        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, fold_paths,criterion, optimizer, scheduler,
-                                    num_epochs=20, patience=10, device=device, fold=fold)
+        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, plot_dir,fold_paths,criterion, optimizer, scheduler,
+                                    num_epochs=10, patience=10, device=device, fold=fold)
 
         plt.plot(train_losses, label='Train Loss')
         plt.plot(val_losses, label='Validation Loss')
