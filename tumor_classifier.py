@@ -55,7 +55,7 @@ class TumorClassifier(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        print(f"x.shape before pooling: {x.shape}")
+        #print(f"x.shape before pooling: {x.shape}")
         #pooled = self.pool(x)
         return self.classifier(x)
 
@@ -101,7 +101,7 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
-        print(f'Extracting image and label for case {case_id}')
+        #print(f'Extracting image and label for case {case_id}')
 
 
 
@@ -131,8 +131,8 @@ class QADataset(Dataset):
             image_tensor = self.transform(image_tensor)
 
 
-        print('Image tensor shape : ', image_tensor.shape)
-        print('Label tensor shape : ', label_tensor.shape)
+        # print('Image tensor shape : ', image_tensor.shape)
+        # print('Label tensor shape : ', label_tensor.shape)
 
 
         return {
@@ -162,6 +162,7 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         )
         train_datasets.append(ds)
     train_dataset = ConcatDataset(train_datasets)
+    del train_datasets
 
     val_dataset = QADataset(
         fold=val_fold_id,
@@ -169,8 +170,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True, num_workers=4)
 
     for epoch in range(num_epochs):
         model.train()
@@ -183,13 +184,17 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         for batch in train_loader:
             inputs = batch['input'].to(device)
             labels = batch['label'].to(device)
-            print("Input shape:", inputs.shape)
+            #print("Input shape:", inputs.shape)
 
             optimizer.zero_grad()
             with autocast():
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
                 preds = torch.argmax(outputs, dim=1)
+                preds_cpu = preds.detach().cpu()
+                labels_cpu = labels.detach().cpu()
+                del outputs
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -200,8 +205,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
             total += labels.size(0)
 
             if epoch % 5 == 0:
-                preds_list.extend(preds.cpu().numpy())
-                labels_list.extend(labels.cpu().numpy())
+                preds_list.extend(preds_cpu.numpy())
+                labels_list.extend(labels_cpu.numpy())
 
 
 
@@ -230,12 +235,15 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
                 preds = torch.argmax(outputs, dim=1)
+                preds_cpu = preds.detach().cpu()
+                labels_cpu = labels.detach().cpu()
+                del outputs
 
                 val_loss += loss.item() * inputs.size(0)
                 val_correct += torch.sum(preds == labels.data)
                 val_total += labels.size(0)
-                val_preds_list.extend(preds.cpu().numpy())
-                val_labels_list.extend(labels.cpu().numpy())
+                val_preds_list.extend(preds_cpu.numpy())
+                val_labels_list.extend(labels_cpu.numpy())
 
         epoch_val_loss = val_loss / val_total
         epoch_val_acc = val_correct.double() / val_total
