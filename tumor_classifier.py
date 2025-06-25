@@ -108,7 +108,7 @@ class QADataset(Dataset):
         #print("Data shape:", data.shape)
 
         image = data
-        print('image shape',image.shape)
+
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         image = np.asarray(image)
         #print(f'Image Shape {image.shape}')
@@ -165,8 +165,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
