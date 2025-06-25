@@ -154,8 +154,9 @@ def pad_or_crop(image, mask, target_shape, context):
     else:
 
         coords = torch.nonzero(mask, as_tuple=False)
-        z_min, y_min, x_min = coords.min(dim=0).values
-        z_max, y_max, x_max = coords.max(dim=0).values
+
+        _,z_min, y_min, x_min = coords.min(dim=0).values
+        _,z_max, y_max, x_max = coords.max(dim=0).values
 
         # Extend bbox by margin, clip min coordinates at 0 and max coordinates at largest valid index
         z_min_m = max(z_min.item() - context[0], 0)
@@ -202,7 +203,7 @@ def pad_or_crop(image, mask, target_shape, context):
 
     # Crop if larger
 
-        _, D, H, W = image.shape  # new shape after padding
+        _, D, H, W = cropped_image.shape  # new shape after padding
         if any([D > tD, H > tH, W > tW]):
             cropped_image, cropped_mask, crop_start = _smart_crop(cropped_image, cropped_mask, target_shape)
 
