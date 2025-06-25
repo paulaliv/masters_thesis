@@ -108,14 +108,12 @@ def main():
             mask = torch.tensor(np.array(mask))
 
             resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
+
             metadata = {
-                "pad": padding_info if isinstance(padding_info, list) else padding_info.tolist(),
-                "crop_start": crop_start if isinstance(crop_start, list) else crop_start.tolist(),
-                "original_shape": list(data.shape)
+                "pad": list(padding_info),  # tuple -> list
+                "crop_start": crop_start.tolist(),  # tensor -> list
+                "original_shape": list(data.shape)  # tuple -> list
             }
-
-
-
 
             image_file_name = f'{case_id}_resized.pt'
             meta_file_name = f'{case_id}_meta.json'
