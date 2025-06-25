@@ -18,6 +18,7 @@ import sys
 import os
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
+
 tumor_to_idx = {
     "MyxofibroSarcomas": 0,
     "LeiomyoSarcomas": 1,

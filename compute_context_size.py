@@ -5,6 +5,8 @@ from collections import defaultdict
 import numpy as np
 import SimpleITK as sitk
 import pandas as pd
+from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
+from explore import case_id
 
 
 def get_mask_bounding_box_size(mask_array):
@@ -154,15 +156,38 @@ def compute_mask_stats_with_ranking(mask_dir, df, mask_ext=".nii.gz", pad=0):
     return tab, gstats
 
 if __name__ == "__main__":
-    mask_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
-    mask_dir_Ts = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTs'
-    tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-    tabular_data = pd.read_csv(tabular_data_dir)
-    print(tabular_data.columns)
-    subtype = tabular_data[['nnunet_id', 'Final_Classification']]
-    #compute_mask_stats(mask_dir,subtype)
-    #compute_mask_stats_with_ranking(mask_dir, subtype)
-    compute_mask_stats_with_ranking(mask_dir_Ts,subtype)
+    # mask_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
+    # mask_dir_Ts = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTs'
+    # tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
+    # tabular_data = pd.read_csv(tabular_data_dir)
+    # print(tabular_data.columns)
+    # subtype = tabular_data[['nnunet_id', 'Final_Classification']]
+    # #compute_mask_stats(mask_dir,subtype)
+    # #compute_mask_stats_with_ranking(mask_dir, subtype)
+    # compute_mask_stats_with_ranking(mask_dir_Ts,subtype)
+    image_shapes = []
+
+    data_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres'
+    ds = nnUNetDatasetBlosc2(data_dir)
+    for fname in os.listdir(data_dir):
+        if fname.endswith(".b2nd") and not fname.endswith("_seg.b2nd"):
+            case_id = fname.replace('.b2nd','')
+            print(case_id)
+            data, seg, seg_prev, properties = ds.load_case(case_id)
+            print("Data shape:", data.shape)
+
+            image = data
+            image_shapes.append(image.shape)
+        # Add other formats as needed
+
+    # Convert to numpy array for easy stats
+    shapes_array = np.array(image_shapes)
+    # Print axis-wise mean, min, max sizes
+    print("Number of samples:", len(shapes_array))
+    print("Mean shape: ", np.mean(shapes_array, axis=0))
+    print("Min shape:  ", np.min(shapes_array, axis=0))
+    print("Max shape:  ", np.max(shapes_array, axis=0))
+    print('95 Percentile', np.percentile(shapes_array, 93, axis =0))
 
 '''
 
