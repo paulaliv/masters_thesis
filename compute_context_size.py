@@ -7,153 +7,153 @@ import SimpleITK as sitk
 import pandas as pd
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 from explore import case_id
-
-
-def get_mask_bounding_box_size(mask_array):
-    coords = np.where(mask_array == 1)
-    if len(coords[0]) == 0:
-        return None  # empty mask
-    z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
-    z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
-    size = (z_max - z_min + 1, y_max - y_min + 1, x_max - x_min + 1)
-    return size
-
-def bbox_size(mask, pad=0):
-    """Return padded (z,y,x) size or None if empty."""
-    coords = np.where(mask == 1)
-    if coords[0].size == 0:
-        return None
-    zmin, ymin, xmin = np.min(coords, axis=1)
-    zmax, ymax, xmax = np.max(coords, axis=1)
-    zmin = max(zmin - pad, 0); ymin = max(ymin - pad, 0); xmin = max(xmin - pad, 0)
-    zmax = min(zmax + pad, mask.shape[0] - 1)
-    ymax = min(ymax + pad, mask.shape[1] - 1)
-    xmax = min(xmax + pad, mask.shape[2] - 1)
-    return (zmax - zmin + 1, ymax - ymin + 1, xmax - xmin + 1)
-
-def compute_stats_from_sizes(sizes):
-    sizes = np.array(sizes)
-    return {
-        "mean": np.mean(sizes, axis=0),
-        "std": np.std(sizes, axis=0),
-        "min": np.min(sizes, axis=0),
-        "max": np.max(sizes, axis=0),
-        "p95": np.percentile(sizes, 95, axis=0),
-        "p98": np.percentile(sizes, 98, axis=0)
-    }
-
-def stats(arr3d):
-    arr = np.array(arr3d)
-    return dict(
-        mean=arr.mean(axis=0),
-        std=arr.std(axis=0),
-        min=arr.min(axis=0),
-        max=arr.max(axis=0),
-        p95=np.percentile(arr, 95, axis=0),
-        p98=np.percentile(arr, 98, axis=0)
-    )
-def diag(v):  # length of 3‑D size vector
-    return np.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
-
-def print_stats(label, stats):
-    print(f"\nStats for {label}:")
-    print(f"  Mean bounding box size (z,y,x): {stats['mean']}")
-    print(f"  Std bounding box size (z,y,x): {stats['std']}")
-    print(f"  Min bounding box size (z,y,x): {stats['min']}")
-    print(f"  Max bounding box size (z,y,x): {stats['max']}")
-    print(f"  95 percentile (z,y,x): {stats['p95']}")
-    print(f"  98 percentile (z,y,x): {stats['p98']}")
-
-def compute_mask_stats(mask_dir, subtype_df, mask_ext=".nii.gz"):
-    all_sizes = []
-    subtype_sizes = defaultdict(list)
-
-    filenames = [f for f in os.listdir(mask_dir) if f.endswith(mask_ext)]
-    print(f"Found {len(filenames)} masks.")
-
-    for f in filenames:
-        stem = f.replace('.nii.gz', '')
-        mask_path = os.path.join(mask_dir, f)
-        mask_itk = sitk.ReadImage(mask_path)
-        mask_np = sitk.GetArrayFromImage(mask_itk)  # shape: [z,y,x]
-
-        # Get subtype
-        patient = subtype_df[subtype_df['nnunet_id'] == stem]
-        if not patient.empty:
-            subtype_label = patient['Final_Classification'].values[0]
-        else:
-            subtype_label = "Unknown"
-
-        # Binary mask
-        mask_bin = (mask_np > 0).astype(np.uint8)
-        bbox_size = get_mask_bounding_box_size(mask_bin)
-        if bbox_size is not None:
-            all_sizes.append(bbox_size)
-            subtype_sizes[subtype_label].append(bbox_size)
-        else:
-            print(f"Warning: Empty mask for file {f}")
-
-    # Global stats
-    global_stats = compute_stats_from_sizes(all_sizes)
-    print_stats("GLOBAL", global_stats)
-
-    # Per-subtype stats
-    for subtype_label, sizes in subtype_sizes.items():
-        stats = compute_stats_from_sizes(sizes)
-        print_stats(subtype_label, stats)
-
-    def diag(v):  # length of 3‑D size vector
-        return np.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
-
-# ---------- main ----------
-def compute_mask_stats_with_ranking(mask_dir, df, mask_ext=".nii.gz", pad=0):
-
-    global_sizes, subtype_sizes = [], defaultdict(list)
-
-    for fn in sorted(f for f in os.listdir(mask_dir) if f.endswith(mask_ext)):
-        stem = fn.replace(mask_ext, "").replace(".nii", "")
-        subtype = df.loc[df['nnunet_id'] == stem, 'Final_Classification'].iloc[0] \
-            if any(df['nnunet_id'] == stem) else "Unknown"
-
-        arr = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(mask_dir, fn)))
-        size = bbox_size((arr > 0).astype(np.uint8), pad=pad)
-        if size:
-            global_sizes.append(size);
-            subtype_sizes[subtype].append(size)
-
-    # -------- print global --------
-    gstats = stats(global_sizes)
-    print("\nGLOBAL stats");
-    [print(f"  {k}: {v}") for k, v in gstats.items()]
-
-    # -------- per‑subtype --------
-    subtype_table = []
-    for stype, lst in subtype_sizes.items():
-        st = stats(lst)
-        subtype_table.append(dict(
-            subtype=stype,
-            mean_diag=diag(st['mean']),
-            std_diag=diag(st['std']),
-            samples=len(lst),
-            **{f"{k}_{axis}": st[k][i] for k in ['mean', 'std', 'min', 'max', 'p95', 'p98']
-               for i, axis in enumerate(['z', 'y', 'x'])}
-        ))
-        # optional: print each subtype block
-        # print(f"\n{stype} ({len(lst)} cases)"); [print(f"  {k}: {v}") for k,v in st.items()]
-
-    tab = pd.DataFrame(subtype_table)
-
-    # -------- ranking --------
-    rank_mean = tab.sort_values('mean_diag', ascending=False)[['subtype', 'samples', 'mean_diag']]
-    rank_std = tab.sort_values('std_diag', ascending=False)[['subtype', 'samples', 'std_diag']]
-
-    print("\n=== Rank by MEAN diagonal size (largest first) ===")
-    print(rank_mean.to_string(index=False, formatters={'mean_diag': '{:.2f}'.format}))
-
-    print("\n=== Rank by STD diagonal size (highest variability first) ===")
-    print(rank_std.to_string(index=False, formatters={'std_diag': '{:.2f}'.format}))
-
-    return tab, gstats
+#
+#
+# def get_mask_bounding_box_size(mask_array):
+#     coords = np.where(mask_array == 1)
+#     if len(coords[0]) == 0:
+#         return None  # empty mask
+#     z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
+#     z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
+#     size = (z_max - z_min + 1, y_max - y_min + 1, x_max - x_min + 1)
+#     return size
+#
+# def bbox_size(mask, pad=0):
+#     """Return padded (z,y,x) size or None if empty."""
+#     coords = np.where(mask == 1)
+#     if coords[0].size == 0:
+#         return None
+#     zmin, ymin, xmin = np.min(coords, axis=1)
+#     zmax, ymax, xmax = np.max(coords, axis=1)
+#     zmin = max(zmin - pad, 0); ymin = max(ymin - pad, 0); xmin = max(xmin - pad, 0)
+#     zmax = min(zmax + pad, mask.shape[0] - 1)
+#     ymax = min(ymax + pad, mask.shape[1] - 1)
+#     xmax = min(xmax + pad, mask.shape[2] - 1)
+#     return (zmax - zmin + 1, ymax - ymin + 1, xmax - xmin + 1)
+#
+# def compute_stats_from_sizes(sizes):
+#     sizes = np.array(sizes)
+#     return {
+#         "mean": np.mean(sizes, axis=0),
+#         "std": np.std(sizes, axis=0),
+#         "min": np.min(sizes, axis=0),
+#         "max": np.max(sizes, axis=0),
+#         "p95": np.percentile(sizes, 95, axis=0),
+#         "p98": np.percentile(sizes, 98, axis=0)
+#     }
+#
+# def stats(arr3d):
+#     arr = np.array(arr3d)
+#     return dict(
+#         mean=arr.mean(axis=0),
+#         std=arr.std(axis=0),
+#         min=arr.min(axis=0),
+#         max=arr.max(axis=0),
+#         p95=np.percentile(arr, 95, axis=0),
+#         p98=np.percentile(arr, 98, axis=0)
+#     )
+# def diag(v):  # length of 3‑D size vector
+#     return np.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+#
+# def print_stats(label, stats):
+#     print(f"\nStats for {label}:")
+#     print(f"  Mean bounding box size (z,y,x): {stats['mean']}")
+#     print(f"  Std bounding box size (z,y,x): {stats['std']}")
+#     print(f"  Min bounding box size (z,y,x): {stats['min']}")
+#     print(f"  Max bounding box size (z,y,x): {stats['max']}")
+#     print(f"  95 percentile (z,y,x): {stats['p95']}")
+#     print(f"  98 percentile (z,y,x): {stats['p98']}")
+#
+# def compute_mask_stats(mask_dir, subtype_df, mask_ext=".nii.gz"):
+#     all_sizes = []
+#     subtype_sizes = defaultdict(list)
+#
+#     filenames = [f for f in os.listdir(mask_dir) if f.endswith(mask_ext)]
+#     print(f"Found {len(filenames)} masks.")
+#
+#     for f in filenames:
+#         stem = f.replace('.nii.gz', '')
+#         mask_path = os.path.join(mask_dir, f)
+#         mask_itk = sitk.ReadImage(mask_path)
+#         mask_np = sitk.GetArrayFromImage(mask_itk)  # shape: [z,y,x]
+#
+#         # Get subtype
+#         patient = subtype_df[subtype_df['nnunet_id'] == stem]
+#         if not patient.empty:
+#             subtype_label = patient['Final_Classification'].values[0]
+#         else:
+#             subtype_label = "Unknown"
+#
+#         # Binary mask
+#         mask_bin = (mask_np > 0).astype(np.uint8)
+#         bbox_size = get_mask_bounding_box_size(mask_bin)
+#         if bbox_size is not None:
+#             all_sizes.append(bbox_size)
+#             subtype_sizes[subtype_label].append(bbox_size)
+#         else:
+#             print(f"Warning: Empty mask for file {f}")
+#
+#     # Global stats
+#     global_stats = compute_stats_from_sizes(all_sizes)
+#     print_stats("GLOBAL", global_stats)
+#
+#     # Per-subtype stats
+#     for subtype_label, sizes in subtype_sizes.items():
+#         stats = compute_stats_from_sizes(sizes)
+#         print_stats(subtype_label, stats)
+#
+#     def diag(v):  # length of 3‑D size vector
+#         return np.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+#
+# # ---------- main ----------
+# def compute_mask_stats_with_ranking(mask_dir, df, mask_ext=".nii.gz", pad=0):
+#
+#     global_sizes, subtype_sizes = [], defaultdict(list)
+#
+#     for fn in sorted(f for f in os.listdir(mask_dir) if f.endswith(mask_ext)):
+#         stem = fn.replace(mask_ext, "").replace(".nii", "")
+#         subtype = df.loc[df['nnunet_id'] == stem, 'Final_Classification'].iloc[0] \
+#             if any(df['nnunet_id'] == stem) else "Unknown"
+#
+#         arr = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(mask_dir, fn)))
+#         size = bbox_size((arr > 0).astype(np.uint8), pad=pad)
+#         if size:
+#             global_sizes.append(size);
+#             subtype_sizes[subtype].append(size)
+#
+#     # -------- print global --------
+#     gstats = stats(global_sizes)
+#     print("\nGLOBAL stats");
+#     [print(f"  {k}: {v}") for k, v in gstats.items()]
+#
+#     # -------- per‑subtype --------
+#     subtype_table = []
+#     for stype, lst in subtype_sizes.items():
+#         st = stats(lst)
+#         subtype_table.append(dict(
+#             subtype=stype,
+#             mean_diag=diag(st['mean']),
+#             std_diag=diag(st['std']),
+#             samples=len(lst),
+#             **{f"{k}_{axis}": st[k][i] for k in ['mean', 'std', 'min', 'max', 'p95', 'p98']
+#                for i, axis in enumerate(['z', 'y', 'x'])}
+#         ))
+#         # optional: print each subtype block
+#         # print(f"\n{stype} ({len(lst)} cases)"); [print(f"  {k}: {v}") for k,v in st.items()]
+#
+#     tab = pd.DataFrame(subtype_table)
+#
+#     # -------- ranking --------
+#     rank_mean = tab.sort_values('mean_diag', ascending=False)[['subtype', 'samples', 'mean_diag']]
+#     rank_std = tab.sort_values('std_diag', ascending=False)[['subtype', 'samples', 'std_diag']]
+#
+#     print("\n=== Rank by MEAN diagonal size (largest first) ===")
+#     print(rank_mean.to_string(index=False, formatters={'mean_diag': '{:.2f}'.format}))
+#
+#     print("\n=== Rank by STD diagonal size (highest variability first) ===")
+#     print(rank_std.to_string(index=False, formatters={'std_diag': '{:.2f}'.format}))
+#
+#     return tab, gstats
 
 if __name__ == "__main__":
     # mask_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
