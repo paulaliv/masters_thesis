@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from monai.networks.nets import resnet
+from monai.networks.nets import ResNet
 import torch
 from sklearn.metrics import classification_report
 import numpy as np
@@ -30,11 +30,14 @@ class TumorClassifier(nn.Module):
     def __init__(self, model_depth=18, in_channels=1, num_classes=5):  # change num_classes to match your setting
         super().__init__()
         # Feature extractor
-        self.encoder = resnet.ResNet(
-            block_type="BASIC",  # "BASIC" for ResNet18/34, "BOTTLE" for ResNet50+
+        self.encoder = ResNet(
+            block="BASIC",  # "BASIC" for ResNet18/34, "BOTTLE" for ResNet50+
             layers=[2, 2, 2, 2],  # ResNet18 config
-            in_channels=in_channels,
-            num_classes=None  # we'll define our own classifier head
+            n_input_channels=in_channels,
+            num_classes=0,
+            block_inplanes=[64, 128, 256, 512]
+
+            # we'll define our own classifier head
         )
         #for feature extraction
         self.pool = nn.AdaptiveAvgPool3d(1)
