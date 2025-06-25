@@ -25,7 +25,8 @@ def pad_or_crop(image, mask, target_shape):
     _, D, H, W = image.shape
     _, tD, tH, tW = target_shape
 
-    print(f"Tumor voxels of mask = {np.sum(mask == 1)}")
+    print(f"Tumor voxels of mask = {(mask == 1).sum().item()}")
+
     if mask.sum() == 0:
         print('empty mask')
 
@@ -71,8 +72,9 @@ def pad_or_crop(image, mask, target_shape):
         # Crop image and mask
         image = image[:, start_d:start_d + tD, start_h:start_h + tH, start_w:start_w + tW]
         cropped_mask = mask[start_d:start_d + tD, start_h:start_h + tH, start_w:start_w + tW]
+        print(f"Tumor voxels of mask = {(cropped_mask == 1).sum().item()}")
 
-        print(f"Tumor voxels after final crop = {np.sum(cropped_mask == 1)}")
+
         if mask.sum() == 0 and cropped_mask.sum() == 0:
             print('empty mask')
         elif cropped_mask.sum() == 0 and mask.sum() > 0:
@@ -99,8 +101,10 @@ def main():
 
             image = data
             mask = seg
+            image = torch.tensor(np.array(image))
+            mask = torch.tensor(np.array(mask))
 
-            resized_image, crop_start, padding_info = pad_or_crop(torch.tensor(image), torch.tensor(mask), target_shape )
+            resized_image, crop_start, padding_info = pad_or_crop(image, mask, target_shape )
             metadata = {
                 "pad": list(padding_info),
                 "crop_start": list(crop_start),
