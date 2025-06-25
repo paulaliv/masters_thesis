@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import json
 
+import torch.nn.functional as F
+
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
 from torch.utils.hipify.hipify_python import meta_data
@@ -95,55 +97,128 @@ def _smart_crop(volume, mask, target_shape):
 
         return vol_crop, mask_crop, crop_start
 
-def pad_or_crop(image, mask, target_shape):
+def pad_or_crop(image, mask, target_shape, context):
     # image: tensor [C, D, H, W]
     # mask: tumor mask tensor same spatial size as image (for tumor location)
     # target_shape: (C, D, H, W)
 
     _, D, H, W = image.shape
     _, tD, tH, tW = target_shape
+    padding_info = (0, 0, 0, 0, 0, 0)
+    crop_start = (0, 0, 0)
 
     print(f"Tumor voxels of mask = {(mask == 1).sum().item()}")
 
     if mask.sum() == 0:
         print('empty mask')
 
-    # Pad if smaller
-    pad_d = max(tD - D, 0)
-    pad_h = max(tH - H, 0)
-    pad_w = max(tW - W, 0)
+    coords = np.where(mask == 1)
+    if coords[0].size == 0:
+        print('Warning: empty mask, no tumor region found')
+        # Pad if needed
+        D, H, W = image.shape[1:]
+        pad_d = max(tD - D, 0)
+        pad_h = max(tH - H, 0)
+        pad_w = max(tW - W, 0)
 
-    # Pad symmetrically (can change if needed)
-    pad = (pad_w // 2, pad_w - pad_w // 2,
-           pad_h // 2, pad_h - pad_h // 2,
-           pad_d // 2, pad_d - pad_d // 2)
+        padding_info = (
+            pad_w // 2, pad_w - pad_w // 2,
+            pad_h // 2, pad_h - pad_h // 2,
+            pad_d // 2, pad_d - pad_d // 2
+        )
 
-    padding_info = pad
-    crop_start = (0, 0, 0)
-    # PyTorch expects pad for last dims in reverse order for F.pad:
-    # (W_left, W_right, H_left, H_right, D_left, D_right)
-    import torch.nn.functional as F
-    if any(pad_i > 0 for pad_i in pad):
-        image = F.pad(image, pad)
-        mask = F.pad(mask, pad)
+        if any(p > 0 for p in padding_info):
+            image = F.pad(image, padding_info)
+            mask = F.pad(mask, padding_info)
+
+        # Center crop if dimensions still too large
+        _, D, H, W = image.shape
+        s_z = max((D - tD) // 2, 0)
+        s_y = max((H - tH) // 2, 0)
+        s_x = max((W - tW) // 2, 0)
+
+        cropped_image = image[:, s_z:s_z + tD, s_y:s_y + tH, s_x:s_x + tW]
+        cropped_mask = mask[s_z:s_z + tD, s_y:s_y + tH, s_x:s_x + tW]
+        crop_start = (s_z, s_y, s_x)
+        bbox = {
+            "z_min": None, "z_max": None,
+            "y_min": None, "y_max": None,
+            "x_min": None, "x_max": None,
+            "z_min_m": None, "z_max_m": None,
+            "y_min_m": None, "y_max_m": None,
+            "x_min_m": None, "x_max_m": None
+        }
+
+
+
+    else:
+
+        coords = torch.nonzero(mask, as_tuple=False)
+        z_min, y_min, x_min = coords.min(dim=0).values
+        z_max, y_max, x_max = coords.max(dim=0).values
+
+        # Extend bbox by margin, clip min coordinates at 0 and max coordinates at largest valid index
+        z_min_m = max(z_min.item() - context[0], 0)
+        y_min_m = max(y_min.item() - context[1], 0)
+        x_min_m = max(x_min.item() - context[2], 0)
+        z_max_m = min(z_max.item() + context[0], mask.shape[0] - 1)
+        y_max_m = min(y_max.item() + context[1], mask.shape[1] - 1)
+        x_max_m = min(x_max.item() + context[2], mask.shape[2] - 1)
+
+        bbox = {
+            "z_min": z_min.item(),
+            "z_max": z_max.item(),
+            "y_min": y_min.item(),
+            "y_max": y_max.item(),
+            "x_min": x_min.item(),
+            "x_max": x_max.item(),
+            "z_min_m": z_min_m,
+            "z_max_m": z_max_m,
+            "y_min_m": y_min_m,
+            "y_max_m": y_max_m,
+            "x_min_m": x_min_m,
+            "x_max_m": x_max_m}
+        # Crop features
+
+        cropped_image = image[:, z_min_m:z_max_m + 1, y_min_m:y_max_m + 1, x_min_m:x_max_m + 1]
+        cropped_mask = mask[z_min_m:z_max_m + 1, y_min_m:y_max_m + 1, x_min_m:x_max_m + 1]
+
+        # Pad if smaller
+        D, H, W = cropped_image.shape[1:]
+        pad_d = max(tD - D, 0)
+        pad_h = max(tH - H, 0)
+        pad_w = max(tW - W, 0)
+
+        # Pad symmetrically (can change if needed)
+        pad = (pad_w // 2, pad_w - pad_w // 2,
+               pad_h // 2, pad_h - pad_h // 2,
+               pad_d // 2, pad_d - pad_d // 2)
+
+        padding_info = pad
+
+        if any(pad_i > 0 for pad_i in pad):
+            cropped_image = F.pad(image, pad)
+            cropped_mask = F.pad(mask, pad)
 
     # Crop if larger
 
-    _, D, H, W = image.shape  # new shape after padding
-    if any([D > tD, H > tH, W > tW]):
-        image, mask_crop, crop_start = _smart_crop(image, mask, target_shape)
+        _, D, H, W = image.shape  # new shape after padding
+        if any([D > tD, H > tH, W > tW]):
+            cropped_image, cropped_mask, crop_start = _smart_crop(cropped_image, cropped_mask, target_shape)
 
 
 
-    return image, mask_crop, crop_start, padding_info
+    return cropped_image, cropped_mask, crop_start, padding_info, bbox
 
 def main():
 
     data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/"
-    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/QA_Tr/"
+    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Classification_Tr/"
 
 
-    target_shape = (1, 96, 576, 640)
+    target_shape = (1, 48, 272, 256)
+    context = (3,15,15)
+
     ds = nnUNetDatasetBlosc2(data_dir)
     for fname in os.listdir(data_dir):
         if fname.endswith(".b2nd") and not fname.endswith("_seg.b2nd"):
@@ -157,13 +232,16 @@ def main():
             image = torch.tensor(np.array(image))
             mask = torch.tensor(np.array(mask))
 
-            resized_image, resized_mask, crop_start, padding_info = pad_or_crop(image, mask, target_shape)
+            resized_image, resized_mask, crop_start, padding_info, bbox = pad_or_crop(image, mask, target_shape, context)
 
             metadata = {
                 "pad": list(padding_info),  # tuple -> list
                 "crop_start": list(crop_start),  # tensor -> list
-                "original_shape": list(data.shape)  # tuple -> list
+                "original_shape": list(data.shape),# tuple -> list
+                "bbox": bbox,
+                "context":context
             }
+
 
             image_file_name = f'{case_id}_resized.pt'
             mask_file_name = f'{case_id}_mask_resized'

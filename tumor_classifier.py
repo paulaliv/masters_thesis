@@ -19,7 +19,7 @@ import os
 from torch.cuda.amp import GradScaler, autocast
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 
-
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 tumor_to_idx = {
     "MyxofibroSarcomas": 0,
     "LeiomyoSarcomas": 1,
@@ -193,7 +193,7 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
-                del outputs
+            del outputs
 
 
             scaler.scale(loss).backward()
