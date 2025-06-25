@@ -43,7 +43,7 @@ class TumorClassifier(nn.Module):
             # we'll define our own classifier head
         )
         #for feature extraction
-        self.pool = nn.AdaptiveAvgPool3d(1)
+        #self.pool = nn.AdaptiveAvgPool3d(1)
         # Classification head
         self.classifier = nn.Sequential(
             nn.Flatten(),
@@ -56,13 +56,13 @@ class TumorClassifier(nn.Module):
     def forward(self, x):
         x = self.encoder(x)
         print(f"x.shape before pooling: {x.shape}")
-        pooled = self.pool(x)
-        return self.classifier(pooled)
+        #pooled = self.pool(x)
+        return self.classifier(x)
 
     def extract_features(self, x):
         x = self.encoder(x)
-        pooled = self.pool(x)
-        return pooled.view(pooled.size(0), -1) #sahpe (B,512)
+        #pooled = self.pool(x)
+        return x.view(x.size(0), -1) #sahpe (B,512)
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, fold_paths, transform=None):
