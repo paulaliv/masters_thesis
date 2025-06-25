@@ -91,7 +91,8 @@ def pad_or_crop(image, mask, target_shape):
 def main():
 
     data_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/"
-    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetPlans_3d_fullres/classification_Tr"
+    output_dir = r"/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/classification_Tr/"
+
     target_shape = (1, 96, 576, 640)
     ds = nnUNetDatasetBlosc2(data_dir)
     for fname in os.listdir(data_dir):
@@ -116,6 +117,7 @@ def main():
 
             image_file_name = f'{case_id}_resized.pt'
             meta_file_name = f'{case_id}_meta.json'
+
             save_metadata(metadata, os.path.join(output_dir, meta_file_name))
             torch.save(resized_image, os.path.join(output_dir, image_file_name))
 
