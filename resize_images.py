@@ -114,5 +114,5 @@ def main():
             torch.save(resized_image, os.path.join(output_dir, image_file_name))
 
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
