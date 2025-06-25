@@ -4,7 +4,6 @@ import torch.nn as nn
 from monai.networks.nets import ResNet
 import torch
 from sklearn.metrics import classification_report
-import numpy as np
 import copy
 from monai.metrics import ConfusionMatrixMetric
 from sklearn.metrics import classification_report
@@ -17,7 +16,9 @@ import pandas as pd
 import sys
 import os
 from torch.cuda.amp import GradScaler, autocast
-from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
+import matplotlib.pyplot as plt
+
+
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 tumor_to_idx = {
@@ -173,6 +174,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True, num_workers=4)
 
+    train_losses = []  # <-- add here, before the epoch loop
+    val_losses = []
     for epoch in range(num_epochs):
         model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
@@ -193,7 +196,6 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
-            del outputs
 
 
             scaler.scale(loss).backward()
@@ -214,13 +216,15 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         epoch_train_acc = correct.double() / total
         print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
 
+        train_losses.append(epoch_train_loss)
+
         if epoch % 5 == 0:
             idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
             pred_tumors = [idx_to_tumor[p] for p in preds_list]
             true_tumors = [idx_to_tumor[t] for t in labels_list]
 
             print(classification_report(true_tumors, pred_tumors, digits=4))
-        del inputs, labels, outputs, preds
+        del inputs, outputs,labels, preds
         torch.cuda.empty_cache()
 
         # --- Validation phase ---
@@ -237,7 +241,6 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
-                del outputs
 
                 val_loss += loss.item() * inputs.size(0)
                 val_correct += torch.sum(preds == labels.data)
@@ -249,6 +252,8 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
         epoch_val_acc = val_correct.double() / val_total
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+        val_losses.append(epoch_val_loss)
+
         val_pred_tumors = [idx_to_tumor[p] for p in val_preds_list]
         val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
         print(classification_report(val_true_tumors, val_pred_tumors, digits=4))
@@ -275,9 +280,9 @@ def train_one_fold(model, preprocessed_dir, fold_paths, criterion, optimizer, sc
                 return model
 
     #model.load_state_dict(best_model_wts)
-    return model
+    return model, train_losses, val_losses
 
-def main(preprocessed_dir, fold_paths,device):
+def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
         model = TumorClassifier(...)
         model.to(device)
@@ -285,8 +290,16 @@ def main(preprocessed_dir, fold_paths,device):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
         criterion = nn.CrossEntropyLoss()
 
-        best_model = train_one_fold(model, preprocessed_dir, fold_paths,criterion, optimizer, scheduler,
-                                    num_epochs=20, patience=5, device=device, fold=fold)
+        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, fold_paths,criterion, optimizer, scheduler,
+                                    num_epochs=20, patience=10, device=device, fold=fold)
+
+        plt.plot(train_losses, label='Train Loss')
+        plt.plot(val_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.title('Loss Curves')
+        plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
 
 
 
@@ -299,7 +312,8 @@ if __name__ == '__main__':
         'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
     }
     preprocessed= sys.argv[1]
+    plot_dir = sys.argv[2]
 
 
-    main(preprocessed, fold_paths, device = 'cuda')
+    main(preprocessed, plot_dir, fold_paths, device = 'cuda')
 
