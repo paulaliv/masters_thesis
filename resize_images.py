@@ -165,7 +165,7 @@ def main():
 
             metadata = {
                 "pad": list(padding_info),  # tuple -> list
-                "crop_start": crop_start.tolist(),  # tensor -> list
+                "crop_start": list(crop_start),  # tensor -> list
                 "original_shape": list(data.shape)  # tuple -> list
             }
 
