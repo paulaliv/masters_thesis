@@ -382,11 +382,19 @@ def extract_features(train_dir,device, plot_dir):
     model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
     model.to(device)
     model.eval()
-    train_dataset = QADataset(
-        fold='fold_0',
-        preprocessed_dir=train_dir,
-        fold_paths=fold_paths
-    )
+    # Combine training folds datasets
+    train_datasets = []
+    for train_fold in range(5):
+        ds = QADataset(
+            fold=train_fold,
+            preprocessed_dir=train_dir,
+            fold_paths=fold_paths
+        )
+        train_datasets.append(ds)
+    train_dataset = ConcatDataset(train_datasets)
+    del train_datasets
+
+
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=False, num_workers=4)
 
     # val_dataset = QADataset(
@@ -428,7 +436,17 @@ def extract_features(train_dir,device, plot_dir):
     X_train = np.concatenate(all_features_train, axis=0)
     y_train = np.array(all_labels_train)
 
+    from sklearn.preprocessing import StandardScaler
+    X_scaled = StandardScaler().fit_transform(X_train)
+
+    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
     plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
+    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+
+
+    plot_UMAP(X_scaled, y_train, neighbours=5, m='manhattan', name='UMAP_manh_5n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
+    plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
 
 
 
