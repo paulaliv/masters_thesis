@@ -19,11 +19,25 @@ from torch.cuda.amp import GradScaler, autocast
 import matplotlib.pyplot as plt
 import umap
 from sklearn.metrics.pairwise import rbf_kernel
-
+from monai.data import Dataset, DataLoader
 from scipy.spatial import distance
 import seaborn as sns
 
+from monai.transforms import (
+    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd
+)
+
+train_transforms = Compose([
+    LoadImaged(keys=["image", "label"]),
+    EnsureChannelFirstd(keys=["image", "label"]),
+    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=0),
+    RandRotate90d(keys=["image", "label"], prob=0.5, max_k=3),
+    RandGaussianNoised(keys="image", prob=0.2)
+])
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 tumor_to_idx = {
     "MyxofibroSarcomas": 0,
     "LeiomyoSarcomas": 1,
@@ -174,8 +188,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True, num_workers=4)
 
     train_losses = []  # <-- add here, before the epoch loop
     val_losses = []
@@ -448,14 +462,20 @@ def inter_class_distance(X_train, y_train, plot_dir):
       """
     sorted_tumors = sorted(tumor_to_idx.items(), key=lambda x: x[1])
     unique_subtypes = [tumor for tumor, _ in sorted_tumors]
-    #idx_mapping = {tumor: idx for idx, tumor in enumerate(unique_subtypes)}
+    idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
 
     mmd_matrix = np.zeros((len(unique_subtypes), len(unique_subtypes)))
 
-    for i, subtype_i in enumerate(unique_subtypes):
-        xi = X_train[y_train == subtype_i]
-        for j, subtype_j in enumerate(unique_subtypes):
-            xj = X_train[y_train == subtype_j]
+    # for i, subtype_i in enumerate(unique_subtypes):
+    #     xi = X_train[y_train == subtype_i]
+    #     for j, subtype_j in enumerate(unique_subtypes):
+    #         xj = X_train[y_train == subtype_j]
+    #         mmd_matrix[i, j] = compute_mmd(xi, xj)
+    #
+    for i, (_, idx_i) in enumerate(sorted_tumors):
+        xi = X_train[y_train == idx_i]
+        for j, (_, idx_j) in enumerate(sorted_tumors):
+            xj = X_train[y_train == idx_j]
             mmd_matrix[i, j] = compute_mmd(xi, xj)
 
     # Create pretty labels with names and indices
@@ -536,7 +556,8 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
         ds = QADataset(
             fold=train_fold,
             preprocessed_dir=train_dir,
-            fold_paths=fold_paths
+            fold_paths=fold_paths,
+            transform=train_transforms,
         )
         train_datasets.append(ds)
     train_dataset = ConcatDataset(train_datasets)
