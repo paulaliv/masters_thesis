@@ -172,7 +172,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
         ds = QADataset(
             fold=train_fold,
             preprocessed_dir=preprocessed_dir,
-            fold_paths=fold_paths
+            fold_paths=fold_paths,
+            transform=train_transforms
         )
         train_datasets.append(ds)
     train_dataset = ConcatDataset(train_datasets)
@@ -553,7 +554,6 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
             fold=train_fold,
             preprocessed_dir=train_dir,
             fold_paths=fold_paths,
-            transform=train_transforms,
         )
         train_datasets.append(ds)
     train_dataset = ConcatDataset(train_datasets)
