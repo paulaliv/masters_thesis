@@ -335,6 +335,7 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
 
     # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
     markers = {'train': 'o', 'val': 's'}
+
     cmap = plt.cm.tab20
     color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_subtypes)}
     # 7. scatter plot
@@ -365,6 +366,9 @@ def intra_class_distance(X_train, y_train):
     #Intra-Class distance
     intra_class_dists_maha = {}
     intra_class_dists_euc = {}
+    std_maha = {}
+    std_euc = {}
+
     for subtype in np.unique(y_train):
         features = X_train[y_train == subtype]
         mean_vec = features.mean(axis=0)
@@ -375,27 +379,35 @@ def intra_class_distance(X_train, y_train):
 
         mahalanobis = [distance.mahalanobis(f, mean_vec, inv_covmat) for f in features]
         euclidean = np.linalg.norm(features - mean_vec, axis=1)
+
         intra_class_dists_maha[subtype] = np.mean(mahalanobis)
         intra_class_dists_euc[subtype] = np.mean(euclidean)
 
-        return intra_class_dists_maha, intra_class_dists_euc
+        std_maha[subtype] = np.std(mahalanobis)
+        std_euc[subtype] = np.std(euclidean)
 
-def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, plot_dir):
+    return intra_class_dists_maha, intra_class_dists_euc, std_maha, std_euc
+
+def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, std_maha, std_euc,plot_dir):
     subtypes = list(intra_class_dists_maha.keys())
     maha_values = [intra_class_dists_maha[sub] for sub in subtypes]
     euc_values = [intra_class_dists_euc[sub] for sub in subtypes]
+    maha_err = [std_maha[sub] for sub in subtypes]
+    euc_err = [std_euc[sub] for sub in subtypes]
 
     x = np.arange(len(subtypes))
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(x - width/2, maha_values, width, label='Mahalanobis', color='steelblue')
-    ax.bar(x + width/2, euc_values, width, label='Euclidean', color='orange')
+    ax.bar(x - width/2, maha_values, width, yerr=maha_err, label='Mahalanobis', color='steelblue', capsize=5)
+    ax.bar(x + width/2, euc_values, width, yerr=euc_err, label='Euclidean', color='orange', capsize=5)
+
 
     ax.set_ylabel("Average Intra-Class Distance")
     ax.set_xlabel("Subtype")
-    ax.set_title("Intra-Class Distance per Tumor Subtype")
+    ax.set_title("Intra-Class Distance per Tumor Subtype (with Std)")
     ax.set_xticks(x)
+
     ax.set_xticklabels(subtypes, rotation=45)
     ax.legend()
     ax.grid(True, axis='y', linestyle='--', alpha=0.5)
@@ -403,8 +415,6 @@ def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, pl
     plt.tight_layout()
     plt.savefig(os.path.join(plot_dir, 'intra_class_distances.png'))
     plt.close()
-
-
 
 def compute_mmd(x, y, gamma=None):
     """
@@ -436,8 +446,10 @@ def inter_class_distance(X_train, y_train, plot_dir):
       Returns:
           mmd: float, squared MMD value between distributions of x and y
       """
+    sorted_tumors = sorted(tumor_to_idx.items(), key=lambda x: x[1])
+    unique_subtypes = [tumor for tumor, _ in sorted_tumors]
+    #idx_mapping = {tumor: idx for idx, tumor in enumerate(unique_subtypes)}
 
-    unique_subtypes = np.unique(y_train)
     mmd_matrix = np.zeros((len(unique_subtypes), len(unique_subtypes)))
 
     for i, subtype_i in enumerate(unique_subtypes):
@@ -446,15 +458,21 @@ def inter_class_distance(X_train, y_train, plot_dir):
             xj = X_train[y_train == subtype_j]
             mmd_matrix[i, j] = compute_mmd(xi, xj)
 
+    # Create pretty labels with names and indices
+    pretty_labels = [f"{tumor} ({tumor_to_idx[tumor]})" for tumor in unique_subtypes]#
 
-    print('MMD distance matrix')
-    print(mmd_matrix)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(mmd_matrix, xticklabels=unique_subtypes, yticklabels=unique_subtypes, cmap="viridis", annot=True, fmt=".3f")
+    # Plot heatmap
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(mmd_matrix, xticklabels=pretty_labels, yticklabels=pretty_labels,
+                cmap="viridis", annot=True, fmt=".3f")
     plt.title("MMD Distance Matrix Between Tumor Subtypes")
     plt.xlabel("Subtype")
     plt.ylabel("Subtype")
-    plt.savefig(os.path.join(plot_dir,'MMD_distance.png'))
+    plt.xticks(rotation=45, ha="right")
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, 'MMD_distance.png'))
+    plt.close()
 
     return mmd_matrix
 
@@ -578,8 +596,8 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
     plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
     #plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
 
-    maha, euc = intra_class_distance(X_scaled, y_train)
-    plot_intra_class_distances(maha,euc, plot_dir)
+    maha, euc, std_maha, std_euc = intra_class_distance(X_scaled, y_train)
+    plot_intra_class_distances(maha,euc, std_maha, std_euc,plot_dir)
     mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir)
     plot_mmd_diag_vs_offdiag(mmd_matrix,y_train, plot_dir)
 
