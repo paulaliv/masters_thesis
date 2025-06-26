@@ -8,7 +8,7 @@ import copy
 from monai.metrics import ConfusionMatrixMetric
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay
 from torch.utils.data import DataLoader, random_split,ConcatDataset
-
+from monai.data import pad_list_data_collate
 from torch.utils.data import Dataset
 import torch.optim as optim
 import numpy as np
@@ -185,7 +185,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
     val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True, num_workers=4)
 
     train_losses = []  # <-- add here, before the epoch loop
