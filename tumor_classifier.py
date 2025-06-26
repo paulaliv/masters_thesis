@@ -24,17 +24,20 @@ from scipy.spatial import distance
 import seaborn as sns
 
 from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd
+    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd,
+    ToTensord
 )
-
 train_transforms = Compose([
-    LoadImaged(keys=["image", "label"]),
-    EnsureChannelFirstd(keys=["image", "label"]),
+    # Don't use LoadImaged since data is already loaded
+    EnsureChannelFirstd(keys=["image"]),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=0),
-    RandRotate90d(keys=["image", "label"], prob=0.5, max_k=3),
-    RandGaussianNoised(keys="image", prob=0.2)
+    RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
+    RandRotate90d(keys=["image"], prob=0.5, max_k=3),
+    RandGaussianNoised(keys="image", prob=0.2),
+    ToTensord(keys=["image"]),
 ])
+
+
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -119,10 +122,6 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
-        #print(f'Extracting image and label for case {case_id}')
-
-
-
         label_idx = self.tumor_to_idx[subtype]
         # Load preprocessed image (.npz)
         #Check if its not case_id_0000
@@ -134,24 +133,21 @@ class QADataset(Dataset):
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         image = np.asarray(image)
         #print(f'Image Shape {image.shape}')
-        print(type(image))
-        # Should be: <class 'numpy.ndarray'>
+
+        data_dict = {'image': image }
         # nnU-Net raw images usually have multiple channels; choose accordingly:
         # Here, just take channel 0 for simplicity:
         #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
         # Map dice score to category
-
-
-        image_tensor = torch.from_numpy(image).float()
-        label_tensor = torch.tensor(label_idx).long()
-
         if self.transform:
-            image_tensor = self.transform(image_tensor)
+            data_dict = self.transform(data_dict)
+
+        image_tensor = data_dict['image']
+        label_tensor = torch.tensor(label_idx).long()
 
 
         # print('Image tensor shape : ', image_tensor.shape)
         # print('Label tensor shape : ', label_tensor.shape)
-
 
         return {
             'input': image_tensor,  # shape (C_total, D, H, W)
