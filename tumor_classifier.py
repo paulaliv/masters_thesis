@@ -18,8 +18,9 @@ import os
 from torch.cuda.amp import GradScaler, autocast
 import matplotlib.pyplot as plt
 import umap
-
-
+from sklearn.metrics.pairwise import rbf_kernel
+import distance
+import seaborn as sns
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 tumor_to_idx = {
@@ -358,8 +359,132 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
     plt.savefig(image_loc, dpi=300)
     plt.show()
 
-def compare_features(train, y_train):
-    pass
+def intra_class_distance(X_train, y_train):
+
+    #Intra-Class distance
+    intra_class_dists_maha = {}
+    intra_class_dists_euc = {}
+    for subtype in np.unique(y_train):
+        features = X_train[y_train == subtype]
+        mean_vec = features.mean(axis=0)
+
+        # Mahalanobis setup
+        cov = np.cov(features.T)
+        inv_covmat = np.linalg.pinv(cov)
+
+        mahalanobis = [distance.mahalanobis(f, mean_vec, inv_covmat) for f in features]
+        euclidean = np.linalg.norm(features - mean_vec, axis=1)
+        intra_class_dists_maha[subtype] = np.mean(mahalanobis)
+        intra_class_dists_euc[subtype] = np.mean(euclidean)
+
+        return intra_class_dists_maha, intra_class_dists_euc
+
+def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, plot_dir):
+    subtypes = list(intra_class_dists_maha.keys())
+    maha_values = [intra_class_dists_maha[sub] for sub in subtypes]
+    euc_values = [intra_class_dists_euc[sub] for sub in subtypes]
+
+    x = np.arange(len(subtypes))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x - width/2, maha_values, width, label='Mahalanobis', color='steelblue')
+    ax.bar(x + width/2, euc_values, width, label='Euclidean', color='orange')
+
+    ax.set_ylabel("Average Intra-Class Distance")
+    ax.set_xlabel("Subtype")
+    ax.set_title("Intra-Class Distance per Tumor Subtype")
+    ax.set_xticks(x)
+    ax.set_xticklabels(subtypes, rotation=45)
+    ax.legend()
+    ax.grid(True, axis='y', linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, 'intra_class_distances.png'))
+    plt.close()
+
+
+
+def compute_mmd(x, y, gamma=None):
+    """
+    Compute the Maximum Mean Discrepancy (MMD) between two samples x and y using RBF kernel.
+    Args:
+        x: numpy array, shape (n_samples_x, n_features)
+        y: numpy array, shape (n_samples_y, n_features)
+        gamma: float or None, kernel parameter for RBF. If None, 1/n_features is used.
+    Returns:
+        mmd: float, squared MMD value between distributions of x and y
+    """
+    if gamma is None:
+        gamma = 1.0 / x.shape[1]
+
+    Kxx = rbf_kernel(x, x, gamma=gamma)
+    Kyy = rbf_kernel(y, y, gamma=gamma)
+    Kxy = rbf_kernel(x, y, gamma=gamma)
+
+    mmd = Kxx.mean() + Kyy.mean() - 2 * Kxy.mean()
+    return mmd
+
+def inter_class_distance(X_train, y_train, plot_dir):
+    """
+      Compute the Maximum Mean Discrepancy (MMD) between two samples x and y using RBF kernel.
+      Args:
+          x: numpy array, shape (n_samples_x, n_features)
+          y: numpy array, shape (n_samples_y, n_features)
+          gamma: float or None, kernel parameter for RBF. If None, 1/n_features is used.
+      Returns:
+          mmd: float, squared MMD value between distributions of x and y
+      """
+
+    unique_subtypes = np.unique(y_train)
+    mmd_matrix = np.zeros((len(unique_subtypes), len(unique_subtypes)))
+
+    for i, subtype_i in enumerate(unique_subtypes):
+        xi = X_train[y_train == subtype_i]
+        for j, subtype_j in enumerate(unique_subtypes):
+            xj = X_train[y_train == subtype_j]
+            mmd_matrix[i, j] = compute_mmd(xi, xj)
+
+
+    print('MMD distance matrix')
+    print(mmd_matrix)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(mmd_matrix, xticklabels=unique_subtypes, yticklabels=unique_subtypes, cmap="viridis", annot=True, fmt=".3f")
+    plt.title("MMD Distance Matrix Between Tumor Subtypes")
+    plt.xlabel("Subtype")
+    plt.ylabel("Subtype")
+    plt.savefig(os.path.join(plot_dir,'MMD_distance.png'))
+
+    return mmd_matrix
+
+
+def plot_mmd_diag_vs_offdiag(mmd_matrix, y_train, plot_dir):
+    mmd_matrix = np.array(mmd_matrix)
+
+    unique_subtypes = np.unique(y_train)
+    # Diagonal values: intra-class distances (ideally close to 0)
+    diag_values = np.diag(mmd_matrix)
+
+    # Off-diagonal values: inter-class distances
+    off_diag_values = mmd_matrix[~np.eye(mmd_matrix.shape[0], dtype=bool)]
+
+    # Create boxplot data
+    data = [
+        diag_values,  # intra-class
+        off_diag_values  # inter-class
+    ]
+
+    plt.figure(figsize=(8, 6))
+    sns.boxplot(data=data, palette=["#66c2a5", "#fc8d62"])
+    plt.xticks([0, 1], ['Intra-Class (Diagonal)', 'Inter-Class (Off-Diagonal)'])
+    plt.ylabel('MMD Distance')
+    plt.title('Intra- vs Inter-Class MMD Comparison')
+    plt.grid(True, axis='y', linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, 'MMD_diag_vs_offdiag.png'))
+    plt.close()
+
 
 def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
@@ -445,12 +570,17 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
 
     plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
     plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
-    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+    #plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
 
 
     plot_UMAP(X_scaled, y_train, neighbours=5, m='manhattan', name='UMAP_manh_5n_fold0.png', image_dir=plot_dir)
     plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
-    plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
+    #plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
+
+    maha, euc = intra_class_distance(X_scaled, y_train)
+    plot_intra_class_distances(maha,euc, plot_dir)
+    mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir)
+    plot_mmd_diag_vs_offdiag(mmd_matrix,y_train, plot_dir)
 
 
 
