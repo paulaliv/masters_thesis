@@ -306,6 +306,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
     return model, train_losses, val_losses
 
 def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
+    print(f'feature shape {train.shape}')
 
     reducer = umap.UMAP(
         n_components=2,
@@ -427,7 +428,7 @@ def extract_features(train_dir,device, plot_dir):
     X_train = np.concatenate(all_features_train, axis=0)
     y_train = np.array(all_labels_train)
 
-    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0', image_dir =plot_dir)
+    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
 
 
 
@@ -440,7 +441,6 @@ if __name__ == '__main__':
         'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
         'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
         'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
-        'ood_val': '/gpfs/home6/palfken/masters_thesis/ood_val',
     }
     preprocessed= sys.argv[1]
     plot_dir = sys.argv[2]
