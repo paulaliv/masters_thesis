@@ -19,7 +19,8 @@ from torch.cuda.amp import GradScaler, autocast
 import matplotlib.pyplot as plt
 import umap
 from sklearn.metrics.pairwise import rbf_kernel
-import distance
+
+from scipy.spatial import distance
 import seaborn as sns
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
