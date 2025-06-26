@@ -358,6 +358,9 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
     plt.savefig(image_loc, dpi=300)
     plt.show()
 
+def compare_features(train, y_train):
+    pass
+
 def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
         model = TumorClassifier(...)
@@ -377,7 +380,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         plt.title('Loss Curves')
         plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
 
-def extract_features(train_dir,device, plot_dir):
+def extract_features(train_dir, fold_paths, device, plot_dir):
     model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
     model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
     model.to(device)
@@ -465,5 +468,5 @@ if __name__ == '__main__':
 
 
     # main(preprocessed, plot_dir, fold_paths, device = 'cuda')
-    extract_features(preprocessed, device = 'cuda', plot_dir = plot_dir)
+    extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
 
