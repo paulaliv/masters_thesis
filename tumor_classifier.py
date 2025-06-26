@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from monai.networks.nets import ResNet
 import torch
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 import copy
 from monai.metrics import ConfusionMatrixMetric
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay
@@ -273,7 +273,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
             best_loss = epoch_val_loss
             best_model_wts = copy.deepcopy(model.state_dict())
             best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0)
-            disp = ConfusionMatrixDisplay(confusion_matrix=best_report, display_labels=list(idx_to_tumor.values()))
+            cm = confusion_matrix(val_true_tumors,val_pred_tumors)
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(idx_to_tumor.values()))
 
             print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
 
@@ -319,7 +320,7 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
 
     # Map labels back to names (optional)
     idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
-    label_names_val = [idx_to_tumor[i] for i in y_val]
+
 
     label_names_train = [idx_to_tumor[i] for i in y_train]
 
