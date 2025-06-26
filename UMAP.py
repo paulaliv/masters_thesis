@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import sys
 import umap # pip install umap-learn
 from collections import defaultdict
-from tqdm import tqdm
+from tqdm import tqdmcmap
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import normalize

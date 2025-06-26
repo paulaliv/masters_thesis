@@ -332,7 +332,7 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
 
     # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
     markers = {'train': 'o', 'val': 's'}
-
+    cmap = plt.cm.tab20
     color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_subtypes)}
     # 7. scatter plot
     plt.figure(figsize=(8, 6))
@@ -443,7 +443,6 @@ if __name__ == '__main__':
         'ood_val': '/gpfs/home6/palfken/masters_thesis/ood_val',
     }
     preprocessed= sys.argv[1]
-
     plot_dir = sys.argv[2]
 
 
