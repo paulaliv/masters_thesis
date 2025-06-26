@@ -338,7 +338,7 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
     plt.figure(figsize=(8, 6))
     # for marker_type in ['train', 'val']:
     for subtype in unique_subtypes:
-        idx = [i for i, lab in y_train if lab == subtype]
+        idx = [i for i, lab in enumerate(y_train) if lab == subtype]
         if not idx: continue
         plt.scatter(
             train_umap[idx, 0], train_umap[idx, 1],
