@@ -29,7 +29,7 @@ from monai.transforms import (
 )
 train_transforms = Compose([
     # Don't use LoadImaged since data is already loaded
-    EnsureChannelFirstd(keys=["image"]),
+    EnsureChannelFirstd(keys=["image"],channel_dim=0),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
     RandRotate90d(keys=["image"], prob=0.5, max_k=3),
