@@ -6,7 +6,7 @@ import torch
 from sklearn.metrics import classification_report
 import copy
 from monai.metrics import ConfusionMatrixMetric
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, ConfusionMatrixDisplay
 from torch.utils.data import DataLoader, random_split,ConcatDataset
 
 from torch.utils.data import Dataset
@@ -223,7 +223,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
             pred_tumors = [idx_to_tumor[p] for p in preds_list]
             true_tumors = [idx_to_tumor[t] for t in labels_list]
 
-            print(classification_report(true_tumors, pred_tumors, digits=4))
+            print(classification_report(true_tumors, pred_tumors, digits=4, zero_division=0))
         del inputs, outputs,labels, preds
         torch.cuda.empty_cache()
 
@@ -257,7 +257,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
 
         val_pred_tumors = [idx_to_tumor[p] for p in val_preds_list]
         val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
-        print(classification_report(val_true_tumors, val_pred_tumors, digits=4))
+        print(classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0))
 
 
 
@@ -271,7 +271,9 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
         if epoch_val_loss < best_loss:
             best_loss = epoch_val_loss
             best_model_wts = copy.deepcopy(model.state_dict())
-            best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4)
+            best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0)
+            disp = ConfusionMatrixDisplay(confusion_matrix=best_report, display_labels=list(idx_to_tumor.values()))
+
             print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
 
             torch.save(best_model_wts, f"best_model_fold_{fold}.pth")
@@ -282,8 +284,16 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
                 print("⏹️ Early stopping")
                 model.load_state_dict(best_model_wts)
 
-
+                disp.plot(xticks_rotation=45)
+                plt.title(f"Confusion Matrix - Fold {fold}")
+                plt.tight_layout()
+                plt.savefig(os.path.join(plot_dir, f"confusion_matrix_fold_{fold}.png"))
+                plt.close()
                 file = os.path.join(plot_dir, f"classification_report_fold_{fold}.txt")
+
+                print('Best Report')
+                print(best_report)
+
                 with open(file, "w") as f:
                     f.write(f"Final Classification Report for Fold {fold}:\n")
                     f.write(best_report)
