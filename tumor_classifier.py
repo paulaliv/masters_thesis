@@ -386,8 +386,9 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
     model.to(device)
     model.eval()
     # Combine training folds datasets
+    train_fold_ids = [f"fold_{i}" for i in range(5)]
     train_datasets = []
-    for train_fold in range(5):
+    for train_fold in train_fold_ids:
         ds = QADataset(
             fold=train_fold,
             preprocessed_dir=train_dir,
