@@ -17,6 +17,7 @@ import sys
 import os
 from torch.cuda.amp import GradScaler, autocast
 import matplotlib.pyplot as plt
+import umap
 
 
 
@@ -303,6 +304,58 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
     #model.load_state_dict(best_model_wts)
     return model, train_losses, val_losses
 
+def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
+
+    reducer = umap.UMAP(
+        n_components=2,
+        n_neighbors=neighbours,
+        min_dist=0.1,
+        metric=m,
+        random_state=42
+    )
+    train_umap = reducer.fit_transform(train)  # (N, 2)
+    # Apply UMAP transform to validation data
+    # val_umap = reducer.transform(val)
+
+    # Map labels back to names (optional)
+    idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
+    label_names_val = [idx_to_tumor[i] for i in y_val]
+
+    label_names_train = [idx_to_tumor[i] for i in y_train]
+
+    # combined_umap = np.vstack([train_umap, val_umap])
+
+
+    # all_subtypes= np.concatenate([y_train, y_val])
+    unique_subtypes = sorted(set(y_train))
+
+    # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
+    markers = {'train': 'o', 'val': 's'}
+
+    color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_subtypes)}
+    # 7. scatter plot
+    plt.figure(figsize=(8, 6))
+    # for marker_type in ['train', 'val']:
+    for subtype in unique_subtypes:
+        idx = [i for i, lab in y_train if lab == subtype]
+        if not idx: continue
+        plt.scatter(
+            train_umap[idx, 0], train_umap[idx, 1],
+            s=25,
+            c=[color_lookup[subtype]] * len(idx),
+            label=f"{idx_to_tumor[subtype]} ",
+            alpha=0.8,
+        )
+
+    plt.xlabel("UMAP‑1")
+    plt.ylabel("UMAP‑2")
+    plt.title("ROI Feature Map Clusters by Subtype and Set")
+    plt.legend(fontsize=8, loc='best', markerscale=1)
+    plt.tight_layout()
+    image_loc = os.path.join(image_dir, name)
+    plt.savefig(image_loc, dpi=300)
+    plt.show()
+
 def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
         model = TumorClassifier(...)
@@ -322,6 +375,61 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         plt.title('Loss Curves')
         plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
 
+def extract_features(train_dir,device, plot_dir):
+    model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
+    model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
+    model.to(device)
+    model.eval()
+    train_dataset = QADataset(
+        fold='fold_0',
+        preprocessed_dir=train_dir,
+        fold_paths=fold_paths
+    )
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=False, num_workers=4)
+
+    # val_dataset = QADataset(
+    #     fold='ood_val',
+    #     preprocessed_dir=val_dir,
+    #     fold_paths=fold_paths
+    # )
+    # val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
+
+    # all_features_val = []
+    # all_labels_val = []
+
+    all_features_train = []
+    all_labels_train = []
+
+    # with torch.no_grad():
+    #     for batch in val_loader:
+    #         inputs = batch['input'].to(device)  # (B, C, D, H, W)
+    #         labels = batch['label'].cpu().numpy()  # class indices
+    #
+    #         features = model.extract_features(inputs).cpu().numpy()  # (B, 512)
+    #         all_features_val.append(features)
+    #         all_labels_val.extend(labels)
+    #
+    # # Combine into arrays
+    # X_val = np.concatenate(all_features_val, axis=0)
+    # y_val = np.array(all_labels_val)
+
+    with torch.no_grad():
+        for batch in train_loader:
+            inputs = batch['input'].to(device)  # (B, C, D, H, W)
+            labels = batch['label'].cpu().numpy()  # class indices
+
+            features = model.extract_features(inputs).cpu().numpy()  # (B, 512)
+            all_features_train.append(features)
+            all_labels_train.extend(labels)
+
+    # Combine into arrays
+    X_train = np.concatenate(all_features_train, axis=0)
+    y_train = np.array(all_labels_train)
+
+    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0', image_dir =plot_dir)
+
+
+
 
 
 if __name__ == '__main__':
@@ -331,10 +439,13 @@ if __name__ == '__main__':
         'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
         'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
         'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
+        'ood_val': '/gpfs/home6/palfken/masters_thesis/ood_val',
     }
     preprocessed= sys.argv[1]
+
     plot_dir = sys.argv[2]
 
 
-    main(preprocessed, plot_dir, fold_paths, device = 'cuda')
+    # main(preprocessed, plot_dir, fold_paths, device = 'cuda')
+    extract_features(preprocessed, device = 'cuda', plot_dir = plot_dir)
 
