@@ -301,7 +301,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
 
                 disp.plot(xticks_rotation=45)
                 plt.title(f"Confusion Matrix - Fold {fold}")
-                plt.tight_layout()
+                #plt.tight_layout()
                 plt.savefig(os.path.join(plot_dir, f"confusion_matrix_fold_{fold}.png"))
                 plt.close()
                 file = os.path.join(plot_dir, f"classification_report_fold_{fold}.txt")
@@ -634,6 +634,6 @@ if __name__ == '__main__':
     plot_dir = sys.argv[2]
 
 
-    #main(preprocessed, plot_dir, fold_paths, device = 'cuda')
-    extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
+    main(preprocessed, plot_dir, fold_paths, device = 'cuda')
+    #extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
 
