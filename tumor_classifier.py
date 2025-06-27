@@ -22,6 +22,8 @@ from sklearn.metrics.pairwise import rbf_kernel
 from monai.data import Dataset, DataLoader
 from scipy.spatial import distance
 import seaborn as sns
+from monai.losses import FocalLoss
+
 
 from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd,
@@ -48,6 +50,8 @@ tumor_to_idx = {
     "MyxoidlipoSarcoma": 3,
     "WDLPS": 4,
 }
+
+
 
 class TumorClassifier(nn.Module):
     def __init__(self, model_depth=18, in_channels=1, num_classes=5):  # change num_classes to match your setting
@@ -154,8 +158,26 @@ class QADataset(Dataset):
             'label': label_tensor,  # scalar tensor
         }
 
+# class FocalLoss(nn.Module):
+#     def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+#         super().__init__()
+#         self.alpha = alpha
+#         self.gamma = gamma
+#         self.reduction = reduction
+#
+#     def forward(self, inputs, targets):
+#         ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
+#         pt = torch.exp(-ce_loss)  # pt = softmax prob of true class
+#         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+#
+#         if self.reduction == 'mean':
+#             return focal_loss.mean()
+#         elif self.reduction == 'sum':
+#             return focal_loss.sum()
+#         else:
+#             return focal_loss
 
-def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, optimizer, scheduler, num_epochs, patience, device,fold):
+def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, scheduler, num_epochs, patience, device,fold):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     patience_counter = 0
@@ -188,6 +210,25 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
     val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True, num_workers=4)
 
+    class_counts = torch.tensor([
+        46,  # MyxofibroSarcomas (idx 0)
+        24,  # LeiomyoSarcomas    (idx 1)
+        54,  # DTF                (idx 2)
+        28,  # MyxoidlipoSarcoma  (idx 3)
+        44,  # WDLPS              (idx 4)
+    ], dtype=torch.float)
+
+    class_weights = 1.0 / class_counts
+    class_weights = class_weights / class_weights.sum()
+
+    class_weights = 1.0 / class_counts
+
+    loss_function = FocalLoss(
+        to_onehot_y=True,
+        softmax=True,
+        gamma=2.0,
+        weight=class_weights.to(device)  # alpha term
+    )
     train_losses = []  # <-- add here, before the epoch loop
     val_losses = []
     for epoch in range(num_epochs):
@@ -206,7 +247,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
             optimizer.zero_grad()
             with autocast():
                 outputs = model(inputs)
-                loss = criterion(outputs, labels)
+                loss = loss_function(outputs, labels)
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
@@ -251,7 +292,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
                 inputs = batch['input'].to(device)
                 labels = batch['label'].to(device)
                 outputs = model(inputs)
-                loss = criterion(outputs, labels)
+                loss = loss_function(outputs, labels)
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
@@ -287,7 +328,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
             best_model_wts = copy.deepcopy(model.state_dict())
             best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0)
             cm = confusion_matrix(val_true_tumors,val_pred_tumors)
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(idx_to_tumor.values()))
+            #disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(idx_to_tumor.values()))
 
             print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
 
@@ -299,9 +340,14 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, criterion, opt
                 print("⏹️ Early stopping")
                 model.load_state_dict(best_model_wts)
 
-                disp.plot(xticks_rotation=45)
-                plt.title(f"Confusion Matrix - Fold {fold}")
-                #plt.tight_layout()
+                labels = ["MyxofibroSarcomas", "LeiomyoSarcomas", "DTF", "MyxoidlipoSarcoma", "WDLPS"]
+                plt.figure(figsize=(8, 6))  # Increase figure size
+                sns.heatmap(cm, annot=True, fmt="d", cmap="viridis", xticklabels=labels, yticklabels=labels)
+                plt.title("Confusion Matrix - Fold 0", fontsize=14)
+                plt.xlabel("Predicted Label", fontsize=12)
+                plt.ylabel("True Label", fontsize=12)
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()  # Ensures everything fits in the figure area
                 plt.savefig(os.path.join(plot_dir, f"confusion_matrix_fold_{fold}.png"))
                 plt.close()
                 file = os.path.join(plot_dir, f"classification_report_fold_{fold}.txt")
@@ -528,10 +574,11 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
-        criterion = nn.CrossEntropyLoss()
+        #criterion = nn.CrossEntropyLoss()
 
-        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, plot_dir,fold_paths,criterion, optimizer, scheduler,
-                                    num_epochs=100, patience=10, device=device, fold=fold)
+
+        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, plot_dir,fold_paths,optimizer, scheduler,
+                                    num_epochs=100, patience=20, device=device, fold=fold)
 
         plt.plot(train_losses, label='Train Loss')
         plt.plot(val_losses, label='Validation Loss')
