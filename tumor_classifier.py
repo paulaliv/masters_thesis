@@ -679,6 +679,6 @@ if __name__ == '__main__':
     plot_dir = sys.argv[2]
 
 
-    main(preprocessed, plot_dir, fold_paths, device = 'cuda')
-    #extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
+    #main(preprocessed, plot_dir, fold_paths, device = 'cuda')
+    extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
 
