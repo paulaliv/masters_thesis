@@ -224,7 +224,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     loss_function = FocalLoss(
         to_onehot_y= True,
         use_softmax=False,
-        gamma=2.0,
+        gamma=3.0,
         weight=class_weights.to(device)  # alpha term
     )
     train_losses = []  # <-- add here, before the epoch loop
@@ -338,7 +338,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
                 print("⏹️ Early stopping")
                 model.load_state_dict(best_model_wts)
 
-                labels = ["MyxofibroSarcomas", "LeiomyoSarcomas", "DTF", "MyxoidlipoSarcoma", "WDLPS"]
+                labels = ["DTF", "LeiomyoSarcomas", "MyxofibroSarcomas", "MyxoidlipoSarcoma", "WDLPS"]
                 plt.figure(figsize=(8, 6))  # Increase figure size
                 sns.heatmap(cm, annot=True, fmt="d", cmap="viridis", xticklabels=labels, yticklabels=labels)
                 plt.title("Confusion Matrix - Fold 0", fontsize=14)
