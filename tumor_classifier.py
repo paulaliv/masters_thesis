@@ -224,7 +224,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     class_weights = 1.0 / class_counts
 
     loss_function = FocalLoss(
-        use_softmax=True,
+        use_softmax=False,
         gamma=2.0,
         weight=class_weights.to(device)  # alpha term
     )
