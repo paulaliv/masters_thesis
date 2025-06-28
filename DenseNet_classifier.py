@@ -220,7 +220,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         fold=val_fold_id,
         preprocessed_dir=preprocessed_dir,
         fold_paths=fold_paths,
-        transform=val_transform
+        transform=val_transforms
     )
 
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
