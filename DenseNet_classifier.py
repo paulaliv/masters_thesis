@@ -38,6 +38,12 @@ train_transforms = Compose([
     ToTensord(keys=["image"]),
 ])
 
+val_transforms = Compose([
+    EnsureChannelFirstd(keys=['image']),
+    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    ToTensord(keys=['image'])
+])
+
 
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -84,7 +90,7 @@ class TumorClassifier(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        #print(f"x.shape before pooling: {x.shape}")
+        print(f"x.shape before pooling: {x.shape}")
         #pooled = self.pool(x)
         return self.classifier(x)
 
@@ -144,7 +150,7 @@ class QADataset(Dataset):
 
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
-        image = np.asarray(image)
+        #image = np.asarray(image)
         #print(f'Image Shape {image.shape}')
 
         data_dict = {'image': image }
@@ -213,7 +219,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     val_dataset = QADataset(
         fold=val_fold_id,
         preprocessed_dir=preprocessed_dir,
-        fold_paths=fold_paths
+        fold_paths=fold_paths,
+        transform=val_transform
     )
 
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
