@@ -90,7 +90,7 @@ class TumorClassifier(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        print(f"x.shape before pooling: {x.shape}")
+
         #pooled = self.pool(x)
         return self.classifier(x)
 
