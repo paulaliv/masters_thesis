@@ -223,8 +223,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         transform=val_transforms
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, pin_memory=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, pin_memory=True, num_workers=4)
 
     class_counts = torch.tensor([
         46,  # MyxofibroSarcomas (idx 0)
@@ -235,11 +235,11 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     ], dtype=torch.float)
 
     class_weights = 1.0 / class_counts
-    class_weights = class_weights / class_weights.sum()
+    #class_weights = class_weights / class_weights.sum()
 
     loss_function = FocalLoss(
         to_onehot_y= True,
-        use_softmax=False,
+        use_softmax=True,
         gamma=3.0,
         weight=class_weights.to(device)  # alpha term
     )
