@@ -206,7 +206,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         transform=val_transforms
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=6, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, pin_memory=True, num_workers=4)
 
     class_counts = torch.tensor([
@@ -311,9 +311,16 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
         print(classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0))
 
-
-        if epoch > 10:
+        warmup_epochs = 10
+        base_lr = 1e-4
+        if epoch < warmup_epochs:
+            lr_scale = (epoch + 1) / warmup_epochs
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = base_lr * lr_scale
+        else:
             scheduler.step(epoch_val_loss)
+        # if epoch > 10:
+        #     scheduler.step(epoch_val_loss)
 
         # Log current learning rate(s)
         for i, param_group in enumerate(optimizer.param_groups):
