@@ -23,7 +23,8 @@ from scipy.spatial import distance
 import seaborn as sns
 from monai.losses import FocalLoss
 
-from monai.networks.nets import DenseNet121
+from monai.networks.nets import DenseNet121, DenseNet169
+
 from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd,
     ToTensord
@@ -72,7 +73,7 @@ class TumorClassifier(nn.Module):
         #
         #     # we'll define our own classifier head
         # )
-        self.encoder = DenseNet121(
+        self.encoder = DenseNet169(
             spatial_dims=3,  # 3D input
             in_channels=in_channels,
             out_channels=512  # number of features before classifier head
