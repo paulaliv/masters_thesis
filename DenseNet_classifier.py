@@ -173,24 +173,7 @@ class QADataset(Dataset):
             'label': label_tensor,  # scalar tensor
         }
 
-# class FocalLoss(nn.Module):
-#     def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
-#         super().__init__()
-#         self.alpha = alpha
-#         self.gamma = gamma
-#         self.reduction = reduction
-#
-#     def forward(self, inputs, targets):
-#         ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
-#         pt = torch.exp(-ce_loss)  # pt = softmax prob of true class
-#         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
-#
-#         if self.reduction == 'mean':
-#             return focal_loss.mean()
-#         elif self.reduction == 'sum':
-#             return focal_loss.sum()
-#         else:
-#             return focal_loss
+
 
 def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, scheduler, num_epochs, patience, device,fold):
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -329,8 +312,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         print(classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0))
 
 
-
-        scheduler.step(epoch_val_loss)
+        if epoch > 10:
+            scheduler.step(epoch_val_loss)
 
         # Log current learning rate(s)
         for i, param_group in enumerate(optimizer.param_groups):
