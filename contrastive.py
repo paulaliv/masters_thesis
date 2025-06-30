@@ -284,9 +284,9 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             with autocast():
                 logits, embeddings = model(inputs)
                 classification_loss = loss_function(logits, labels)
-                contrastive_loss = supervised_contrastive_loss(embeddings, labels)
+                contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
                 loss = classification_loss + 0.1 * contrastive_loss
-                preds = torch.argmax(outputs, dim=1)
+                preds = torch.argmax(logits, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
 
@@ -329,9 +329,11 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             for batch in val_loader:
                 inputs = batch['input'].to(device)
                 labels = batch['label'].to(device)
-                outputs = model(inputs)
-                loss = loss_function(outputs, labels)
-                preds = torch.argmax(outputs, dim=1)
+                logits, embeddings = model(inputs)
+                classification_loss = loss_function(logits, labels)
+                contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
+                loss = classification_loss + 0.1 * contrastive_loss
+                preds = torch.argmax(logits, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
 
