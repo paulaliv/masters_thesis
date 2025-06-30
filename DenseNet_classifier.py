@@ -95,7 +95,7 @@ class TumorClassifier(nn.Module):
             nn.Dropout(0.2),
             nn.Linear(512, 128),
             nn.ReLU(),
-            nn.Linear(128, num_classes),
+            nn.Linear(128, num_classes)
         )
 
 
