@@ -317,7 +317,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             true_tumors = [idx_to_tumor[t] for t in labels_list]
 
             print(classification_report(true_tumors, pred_tumors, digits=4, zero_division=0))
-        del inputs, outputs,labels, preds
+        del inputs,logits,embeddings,labels, preds
         torch.cuda.empty_cache()
 
         # --- Validation phase ---
