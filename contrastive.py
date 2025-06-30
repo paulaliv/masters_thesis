@@ -60,7 +60,7 @@ tumor_to_idx = {
 
 
 class TumorClassifier(nn.Module):
-    def __init__(self, in_channels=1, num_classes=5):  # change num_classes to match your setting
+    def __init__(self, model_depth=18,in_channels=1, num_classes=5):  # change num_classes to match your setting
         super().__init__()
         # Feature extractor
         # self.encoder = ResNet(
@@ -73,7 +73,7 @@ class TumorClassifier(nn.Module):
         #
         #     # we'll define our own classifier head
         # )
-        self.encoder = DenseNet169(
+        self.encoder = DenseNet121(
             spatial_dims=3,  # 3D input
             in_channels=in_channels,
             out_channels=512  # number of features before classifier head
