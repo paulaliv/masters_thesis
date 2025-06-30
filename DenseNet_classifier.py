@@ -588,8 +588,8 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
         model = TumorClassifier(...)
         model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, min_lr=1e-6)
         #criterion = nn.CrossEntropyLoss()
 
 

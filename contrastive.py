@@ -246,8 +246,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
         transform=val_transforms
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
-    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, pin_memory=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, pin_memory=True, num_workers=4)
 
     class_counts = torch.tensor([
         46,  # MyxofibroSarcomas (idx 0)
@@ -260,10 +260,10 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     class_weights = 1.0 / class_counts
     #class_weights = class_weights / class_weights.sum()
     cross_entropy_loss= nn.CrossEntropyLoss()
-    loss_function = FocalLoss(
+    focal_loss = FocalLoss(
         to_onehot_y= True,
         use_softmax=True,
-        gamma=3.0,
+        gamma=2.0,
         weight=class_weights.to(device)  # alpha term
     )
     train_losses = []  # <-- add here, before the epoch loop
@@ -285,9 +285,10 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             with autocast():
                 logits, embeddings = model(inputs)
                 #classification_loss = loss_function(logits, labels)
-                classification_loss = cross_entropy_loss(logits, labels)
+                classification_loss = focal_loss(logits, labels)
                 contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
-                loss = classification_loss + 0.1 * contrastive_loss
+                lambda_val = min(epoch / 10, 1.0) * 0.01
+                loss = classification_loss + lambda_val * contrastive_loss
                 preds = torch.argmax(logits, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
@@ -332,10 +333,12 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
                 inputs = batch['input'].to(device)
                 labels = batch['label'].to(device)
                 logits, embeddings = model(inputs)
-                #classification_loss = loss_function(logits, labels)
-                classification_loss = cross_entropy_loss(logits, labels)
+                #classification_loss = focal_loss(logits, labels)
+                classification_loss = focal_loss(logits, labels)
                 contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
-                loss = classification_loss + 0.1 * contrastive_loss
+                lambda_val = min(epoch / 10, 1.0) * 0.01
+                loss = classification_loss + lambda_val * contrastive_loss
+
                 preds = torch.argmax(logits, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()
@@ -622,8 +625,8 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
     for fold in range(1):
         model = TumorClassifier(...)
         model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
         #criterion = nn.CrossEntropyLoss()
 
 
