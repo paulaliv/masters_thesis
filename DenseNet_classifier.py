@@ -60,7 +60,7 @@ tumor_to_idx = {
 
 
 class TumorClassifier(nn.Module):
-    def __init__(self, model_depth=18, in_channels=1, num_classes=5):  # change num_classes to match your setting
+    def __init__(self, in_channels=1, num_classes=5):  # change num_classes to match your setting
         super().__init__()
         # Feature extractor
         # self.encoder = ResNet(
@@ -578,7 +578,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         model = TumorClassifier(...)
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
         #criterion = nn.CrossEntropyLoss()
 
 
