@@ -80,25 +80,28 @@ class TumorClassifier(nn.Module):
         )
         #for feature extraction
         #self.pool = nn.AdaptiveAvgPool3d(1)
-        # Classification head
-        self.classifier = nn.Sequential(
+
+        self.embedding_head = nn.Sequential(
             nn.Flatten(),
             nn.Linear(512, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, num_classes)
+            nn.Dropout(0.3)
         )
+        self.classifier = nn.Linear(128, num_classes)
+
 
     def forward(self, x):
         x = self.encoder(x)
+        embeddings = self.embedding_head(x)
+        logits = self.classifier(embeddings)
 
         #pooled = self.pool(x)
-        return self.classifier(x)
+        return logits, embeddings
 
     def extract_features(self, x):
         x = self.encoder(x)
-        #pooled = self.pool(x)
-        return x.view(x.size(0), -1) #sahpe (B,512)
+        embeddings = self.embedding_head(x)
+        return embeddings #sahpe (B,512)
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, fold_paths, transform=None):
@@ -176,6 +179,41 @@ class QADataset(Dataset):
 
 
 
+def supervised_contrastive_loss(embeddings, labels, temperature):
+    """
+       embeddings: (batch_size, embedding_dim)
+       labels: (batch_size,)
+       """
+    device = embeddings.device
+    batch_size = embeddings.shape[0]
+    labels = labels.contiguous().view(-1, 1)  # (B,1)
+
+    mask = torch.eq(labels, labels.T).float().to(device)  # (B, B)
+
+    embeddings = F.normalize(embeddings, dim=1)
+
+    similarity_matrix = torch.matmul(embeddings, embeddings.T)  # (B, B)
+    logits = similarity_matrix / temperature
+
+    # For numerical stability
+    logits_max, _ = torch.max(logits, dim=1, keepdim=True)
+    logits = logits - logits_max.detach()
+
+    # Mask self-contrast cases
+    mask_self = torch.eye(batch_size, dtype=torch.bool).to(device)
+    mask = mask * (~mask_self).float()
+
+    # Compute log_prob
+    exp_logits = torch.exp(logits) * (~mask_self).float()
+    log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
+
+    mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-12)
+
+    loss = -mean_log_prob_pos
+    loss = loss.mean()
+
+    return loss
+
 def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, scheduler, num_epochs, patience, device,fold):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
@@ -244,8 +282,10 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
 
             optimizer.zero_grad()
             with autocast():
-                outputs = model(inputs)
-                loss = loss_function(outputs, labels)
+                logits, embeddings = model(inputs)
+                classification_loss = loss_function(outputs, labels)
+                contrastive_loss = supervised_contrastive_loss(embeddings, labels)
+                loss = classification_loss + 0.1 * contrastive_loss
                 preds = torch.argmax(outputs, dim=1)
                 preds_cpu = preds.detach().cpu()
                 labels_cpu = labels.detach().cpu()

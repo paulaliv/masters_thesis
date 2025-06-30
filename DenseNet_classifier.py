@@ -73,7 +73,7 @@ class TumorClassifier(nn.Module):
         #
         #     # we'll define our own classifier head
         # )
-        self.encoder = DenseNet169(
+        self.encoder = DenseNet121(
             spatial_dims=3,  # 3D input
             in_channels=in_channels,
             out_channels=512  # number of features before classifier head
@@ -83,10 +83,12 @@ class TumorClassifier(nn.Module):
         # Classification head
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512, 128),
+            nn.Linear(512, 512),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(128, num_classes)
+            nn.Linear(512, 128),
+            nn.ReLU(),
+            nn.Linear(128,num_classes)
         )
 
     def forward(self, x):
