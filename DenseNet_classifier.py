@@ -81,9 +81,18 @@ class TumorClassifier(nn.Module):
         #for feature extraction
         #self.pool = nn.AdaptiveAvgPool3d(1)
         # Classification head
+        # self.classifier = nn.Sequential(
+        #     nn.Flatten(),
+        #     nn.Linear(512, 128),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.2),
+        #     nn.Linear(128, num_classes),
+        # )
+
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(512, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(512, 128),
@@ -580,7 +589,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         model = TumorClassifier(...)
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
         #criterion = nn.CrossEntropyLoss()
 
 
