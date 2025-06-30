@@ -283,7 +283,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             optimizer.zero_grad()
             with autocast():
                 logits, embeddings = model(inputs)
-                classification_loss = loss_function(outputs, labels)
+                classification_loss = loss_function(logits, labels)
                 contrastive_loss = supervised_contrastive_loss(embeddings, labels)
                 loss = classification_loss + 0.1 * contrastive_loss
                 preds = torch.argmax(outputs, dim=1)
