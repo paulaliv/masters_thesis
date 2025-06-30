@@ -6,6 +6,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import copy
 from monai.metrics import ConfusionMatrixMetric
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay
+from torch.nn.functional import cross_entropy
 from torch.utils.data import DataLoader, random_split,ConcatDataset
 from monai.data import pad_list_data_collate
 from torch.utils.data import Dataset
@@ -258,7 +259,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
 
     class_weights = 1.0 / class_counts
     #class_weights = class_weights / class_weights.sum()
-
+    cross_entropy_loss= nn.CrossEntropyLoss()
     loss_function = FocalLoss(
         to_onehot_y= True,
         use_softmax=True,
@@ -283,7 +284,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             optimizer.zero_grad()
             with autocast():
                 logits, embeddings = model(inputs)
-                classification_loss = loss_function(logits, labels)
+                #classification_loss = loss_function(logits, labels)
+                classification_loss = cross_entropy_loss(logits, labels)
                 contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
                 loss = classification_loss + 0.1 * contrastive_loss
                 preds = torch.argmax(logits, dim=1)
@@ -330,7 +332,8 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
                 inputs = batch['input'].to(device)
                 labels = batch['label'].to(device)
                 logits, embeddings = model(inputs)
-                classification_loss = loss_function(logits, labels)
+                #classification_loss = loss_function(logits, labels)
+                classification_loss = cross_entropy_loss(logits, labels)
                 contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
                 loss = classification_loss + 0.1 * contrastive_loss
                 preds = torch.argmax(logits, dim=1)
