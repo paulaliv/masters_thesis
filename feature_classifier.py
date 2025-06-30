@@ -73,7 +73,7 @@ class TumorClassifier(nn.Module):
         #
         #     # we'll define our own classifier head
         # )
-        self.encoder = DenseNet121(
+        self.encoder = DenseNet169(
             spatial_dims=3,  # 3D input
             in_channels=in_channels,
             out_channels=512  # number of features before classifier head
@@ -81,23 +81,13 @@ class TumorClassifier(nn.Module):
         #for feature extraction
         #self.pool = nn.AdaptiveAvgPool3d(1)
         # Classification head
-        # self.classifier = nn.Sequential(
-        #     nn.Flatten(),
-        #     nn.Linear(512, 128),
-        #     nn.ReLU(),
-        #     nn.Dropout(0.3),
-        #     nn.Linear(128, num_classes)
-        # )
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(512, 128),
             nn.ReLU(),
-            nn.Linear(128, num_classes),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes)
         )
-
 
     def forward(self, x):
         x = self.encoder(x)
@@ -588,7 +578,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
         model = TumorClassifier(...)
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
         #criterion = nn.CrossEntropyLoss()
 
 
