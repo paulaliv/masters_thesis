@@ -22,6 +22,7 @@ from monai.data import Dataset, DataLoader
 from scipy.spatial import distance
 import seaborn as sns
 from monai.losses import FocalLoss
+from MedicalNet.models import resnet18
 
 from monai.networks.nets import DenseNet121, DenseNet169
 
