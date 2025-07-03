@@ -29,7 +29,8 @@ def main(case_id):
 
     # ---- Load resized ----
     resized_image = torch.load(resized_image_dir)  # shape: [1, Z, Y, X]
-    resized_mask = torch.load(resized_mask_dir)    # same shape
+    
+    resized_mask = torch.load(resized_mask_dir, weights_only=False)
 
     # ---- Save resized ----
 
