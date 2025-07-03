@@ -16,7 +16,11 @@ def save_nifti_from_tensor(tensor, path, spacing=(1, 1, 1)):
     if tensor.ndim == 4:
         tensor = tensor[0]  # take first channel
     affine = np.diag(spacing + (1,))
-    nib_img = nib.Nifti1Image(tensor.numpy().astype(np.float32), affine)
+    if hasattr(tensor, "numpy"):
+        nib_img = nib.Nifti1Image(tensor.numpy().astype(np.float32), affine)
+    else:
+        nib_img = tensor.astype(np.float32)
+
     nib.save(nib_img, path)
 
 
@@ -29,7 +33,7 @@ def main(case_id):
 
     # ---- Load resized ----
     resized_image = torch.load(resized_image_dir)  # shape: [1, Z, Y, X]
-    
+
     resized_mask = torch.load(resized_mask_dir, weights_only=False)
 
     # ---- Save resized ----
