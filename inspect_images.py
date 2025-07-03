@@ -39,8 +39,8 @@ def main(case_id):
 
     # ---- Save resized ----
 
-    save_nifti_from_tensor(resized_image, os.path.join(output_dir,'resized_image.nii.gz'))
-    save_nifti_from_tensor(resized_mask,  os.path.join(output_dir,'resized_mask.nii.gz'))
+    save_nifti_from_tensor(resized_image, os.path.join(output_dir,f'{case_id}_resized_image.nii.gz'))
+    save_nifti_from_tensor(resized_mask,  os.path.join(output_dir,f'{case_id}_resized_mask.nii.gz'))
 
     # ---- Load original ----
 
@@ -52,8 +52,8 @@ def main(case_id):
     mask  = torch.tensor(np.array(mask))   # same shape
 
     # ---- Save original ----
-    save_nifti_from_tensor(image, os.path.join(output_dir,'original_image.nii.gz'))
-    save_nifti_from_tensor(mask,  os.path.join(output_dir,'original_mask.nii.gz'))
+    save_nifti_from_tensor(image, os.path.join(output_dir,f'{case_id}_original_image.nii.gz'))
+    save_nifti_from_tensor(mask,  os.path.join(output_dir,f'{case_id}_original_mask.nii.gz'))
 
 
 
