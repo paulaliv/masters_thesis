@@ -35,6 +35,7 @@ def main(case_id):
     resized_image = torch.load(resized_image_dir)  # shape: [1, Z, Y, X]
 
     resized_mask = torch.load(resized_mask_dir, weights_only=False)
+    resized_mask = torch.tensor(resized_mask)  # Now it's a tensor
 
     # ---- Save resized ----
 
