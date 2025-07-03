@@ -21,7 +21,7 @@ def save_nifti_from_tensor(tensor, path, spacing=(1, 1, 1)):
 
 
 def main(case_id):
-    og_image_dir = "/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Task002_SoftTissue/nnUNetPlans_3d_fullres"
+    og_image_dir = "/gpfs/home6/palfken/nnUNetFrame/nnunet_preprocessed/Task002_SoftTissue/nnUNetPlans_3d_fullres/"
     meta_data = os.path.join("/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres_v2/Classification_Tr/",f'{case_id}_meta.json')
     resized_image_dir = os.path.join("/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres_v2/Classification_Tr/",f"{case_id}_resized.pt")
     resized_mask_dir = os.path.join("/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres_v2/Classification_Tr/",f"{case_id}_mask_resized")
@@ -39,8 +39,8 @@ def main(case_id):
     # ---- Load original ----
 
     ds = nnUNetDatasetBlosc2(og_image_dir)
-    fname = 'DES_0001'
-    image, mask, _, _ = ds.load_case(fname)
+    print('og image dir,',og_image_dir)
+    image, mask, _, _ = ds.load_case(case_id)
 
     image = torch.tensor(np.array(image))  # [1, Z, Y, X]
     mask  = torch.tensor(np.array(mask))   # same shape
