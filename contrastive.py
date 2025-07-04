@@ -190,7 +190,8 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     batch_size = embeddings.shape[0]
     labels = labels.contiguous().view(-1, 1)  # (B,1)
 
-    mask = torch.eq(labels, labels.T).float().to(device)  # (B, B)
+    with torch.no_grad():
+        mask = torch.eq(labels, labels.T).float().to(device)  # (B, B)
 
     embeddings = F.normalize(embeddings, dim=1)
 
@@ -206,8 +207,9 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     mask = mask * (~mask_self).float()
 
     # Compute log_prob
-    exp_logits = torch.exp(logits) * (~mask_self).float()
-    log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
+    # exp_logits = torch.exp(logits) * (~mask_self).float()
+    # log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
+    log_prob = logits - torch.logsumexp(logits + (~mask_self).log(), dim=1, keepdim=True)
 
     mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-12)
 
@@ -216,10 +218,12 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
 
     return loss
 
-def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, rank, world_size, device,):
-    best_model_wts = copy.deepcopy(model.state_dict())
+def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size, device,):
+
     best_loss = float('inf')
-    patience_counter = 0
+
+    best_model_wts = None
+
 
     from torch.utils.data.distributed import DistributedSampler
     if world_size > 1:
@@ -231,52 +235,58 @@ def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, rank,
 
 
 
-    train_loader = DataLoader(train_dataset, batch_size=12, sampler=train_sampler, num_workers=4,
-                              pin_memory=True,collate_fn=pad_list_data_collate)
+    train_loader = DataLoader(train_dataset, batch_size=12, sampler=train_sampler, num_workers=4,shuffle=shuffle,in_memory=True,collate_fn=pad_list_data_collate)
 
     #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
     train_losses = []  # <-- add here, before the epoch loop
+    accum_steps = 2
+
 
     for epoch in range(num_epochs):
         model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
-        running_loss, correct, total = 0.0, 0, 0
+
+        running_loss, total = 0.0, 0
+        optimizer.zero_grad()
 
         scaler = GradScaler()
 
-        for batch in train_loader:
+        for i, batch in enumerate(train_loader):
             inputs = batch['input'].to(device)
             labels = batch['label'].to(device)
-            #print("Input shape:", inputs.shape)
 
-            optimizer.zero_grad()
             with autocast():
                 embeddings = model(inputs)
-
-                loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
-
-                labels_cpu = labels.detach().cpu()
-
+                loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
+                loss = loss / accum_steps  # Scale loss for accumulation
 
             scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+
+            if (i + 1) % accum_steps == 0 or (i + 1) == len(train_loader):
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
             running_loss += loss.item() * inputs.size(0)
             total += labels.size(0)
 
-            if epoch % 10 == 0:
-                #create UMAP
-                pass
+            if loss < best_loss:
+                best_loss = loss
+                best_model_wts = copy.deepcopy(model.state_dict())
 
         epoch_train_loss = running_loss / total
         print(f"Train Loss: {epoch_train_loss:.4f}")
 
-        train_losses.append(epoch_train_loss)
+        #train_losses.append(epoch_train_loss)
 
         del inputs,embeddings,labels
         torch.cuda.empty_cache()
+
+    torch.save(model.state_dict(), os.path.join(plot_dir,'final_model.pth'))
+    if best_model_wts is not None:
+        if rank == 0:
+            torch.save(best_model_wts,os.path.join(plot_dir,'best_con_loss_model.pth'))
 
 
     return model, train_losses
@@ -471,14 +481,13 @@ def main(preprocessed_dir, plot_dir, fold_paths, world_size, rank, device):
     del train_datasets
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
 
     best_model, train_losses = train(
         model=model,
         train_dataset=train_dataset,
         plot_dir=plot_dir,
         optimizer=optimizer,
-        scheduler=scheduler,
         num_epochs=50,
         rank=rank,
         world_size=world_size,
