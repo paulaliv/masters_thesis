@@ -462,7 +462,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
 
     best_model, train_losses = train(model, train_dataset, plot_dir,optimizer, scheduler,
-                                num_epochs=100,device=device)
+                                num_epochs=50,device=device)
 
 
 def extract_features(train_dir, fold_paths, device, plot_dir, trained = False):
@@ -602,7 +602,9 @@ if __name__ == '__main__':
 
 
     extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = False)
+    extract_latent_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = False)
     main(preprocessed, plot_dir, fold_paths, device = 'cuda')
     extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = True)
+    extract_latent_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained=True)
 
 
