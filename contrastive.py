@@ -216,13 +216,25 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
 
     return loss
 
-def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, device):
+def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, device, rank, world_size):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     patience_counter = 0
 
+    from torch.utils.data.distributed import DistributedSampler
+    if world_size > 1:
+        train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
+        shuffle = False  # sampler handles shuffling
+    else:
+        train_sampler = None
+        shuffle = True
 
-    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
+
+
+    train_loader = DataLoader(train_dataset, batch_size=16, sampler=train_sampler, num_workers=4,
+                              pin_memory=True,collate_fn=pad_list_data_collate)
+
+    #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
     train_losses = []  # <-- add here, before the epoch loop
 
@@ -439,7 +451,7 @@ def inter_class_distance(X_train, y_train, plot_dir, tag):
     return mmd_matrix
 
 
-def main(preprocessed_dir, plot_dir, fold_paths, device):
+def main(preprocessed_dir, plot_dir, fold_paths, world_size, rank, device):
     model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
     model.to(device)
 
@@ -461,7 +473,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, device):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
 
-    best_model, train_losses = train(model, train_dataset, plot_dir,optimizer, scheduler,
+    best_model, train_losses = train(model, train_dataset, plot_dir,optimizer, scheduler, rank, world_size,
                                 num_epochs=50,device=device)
 
 
@@ -587,21 +599,20 @@ def extract_latent_features(train_dir, fold_paths, device, plot_dir, trained = F
     mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir, tag)
 
 import torch.distributed as dist
-
 def setup_device_and_dist():
     if "LOCAL_RANK" in os.environ:
-        # Multi-GPU (torchrun)
+        # torchrun launch
         local_rank = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(local_rank)
         dist.init_process_group(backend='nccl')
-        print(f"Running distributed on GPU {local_rank}")
-        return local_rank
+        world_size = dist.get_world_size()
+        print(f"Running distributed on GPU {local_rank} / {world_size}")
+        return local_rank, world_size
     else:
-        # Single GPU or CPU
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         torch.cuda.set_device(device)
         print(f"Running on device: {device}")
-        return 0
+        return 0, 1  # local_rank, world_size
 
 
 
@@ -616,16 +627,17 @@ if __name__ == '__main__':
     preprocessed= sys.argv[1]
     plot_dir = sys.argv[2]
 
-    local_rank = setup_device_and_dist()
+
+
+    local_rank, world_size = setup_device_and_dist()
     device = torch.device(f'cuda:{local_rank}' if torch.cuda.is_available() else 'cpu')
+    if local_rank == 0:
+        extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
+        extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
+    main(preprocessed, plot_dir, fold_paths,world_size, local_rank,device = device)
 
-
-
-
-    extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
-    extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
-    main(preprocessed, plot_dir, fold_paths, device = device)
-    extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = True)
-    extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained=True)
+    if local_rank == 0:
+        extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = True)
+        extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained=True)
 
 
