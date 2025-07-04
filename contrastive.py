@@ -275,7 +275,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
     #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
     train_losses = []  # <-- add here, before the epoch loop
-    accum_steps = 2
+    accum_steps = 4
 
     scaler = GradScaler()
     for epoch in range(num_epochs):
@@ -291,9 +291,8 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
 
             with autocast():
                 embeddings = model(inputs)
-                combined_embeddings, combined_labels = gather_embeddings_labels(embeddings, labels)
-                print(combined_embeddings.requires_grad)
-                loss = supervised_contrastive_loss(combined_embeddings, combined_labels, temperature=0.1)
+
+                loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
                 loss = loss / accum_steps  # Scale loss for accumulation
 
             scaler.scale(loss).backward()
