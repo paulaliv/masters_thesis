@@ -557,7 +557,7 @@ def extract_latent_features(train_dir, fold_paths, device, plot_dir, trained = F
             inputs = batch['input'].to(device)  # (B, C, D, H, W)
             labels = batch['label'].cpu().numpy()  # class indices
 
-            features = model.forwad(inputs).cpu().numpy()  # (B, 512)
+            features = model.forward(inputs).cpu().numpy()  # (B, 512)
             all_features_train.append(features)
             all_labels_train.extend(labels)
 
