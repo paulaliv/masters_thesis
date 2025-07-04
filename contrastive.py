@@ -209,11 +209,19 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     # Mask self-contrast cases
     mask_self = torch.eye(batch_size, dtype=torch.bool).to(device)
     mask = mask * (~mask_self).float()
+    mask = mask_self.float()  # convert boolean mask to float (1.0 or 0.0)
+
+    # To mask self-similarities, you want to add -inf where mask is zero (False)
+    neg_inf = -1e9  # or torch.finfo(logits.dtype).min for float precision
+
+    masked_logits = logits + (1.0 - mask) * neg_inf
+
+    log_prob = logits - torch.logsumexp(masked_logits, dim=1, keepdim=True)
 
     # Compute log_prob
     # exp_logits = torch.exp(logits) * (~mask_self).float()
     # log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
-    log_prob = logits - torch.logsumexp(logits + (~mask_self).log(), dim=1, keepdim=True)
+
     if torch.isnan(log_prob).any() or torch.isinf(log_prob).any():
         print("Nan/inf detected in log_prob!")
 
