@@ -80,7 +80,7 @@ class TumorClassifier(nn.Module):
             out_channels=512  # number of features before classifier head
         )
         #for feature extraction
-        #self.pool = nn.AdaptiveAvgPool3d(1)
+        self.pool = nn.AdaptiveAvgPool3d(1)
 
         self.embedding_head = nn.Sequential(
             nn.Flatten(),
@@ -88,21 +88,22 @@ class TumorClassifier(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.3)
         )
-        self.classifier = nn.Linear(128, num_classes)
+        #self.classifier = nn.Linear(128, num_classes)
 
 
     def forward(self, x):
         x = self.encoder(x)
         embeddings = self.embedding_head(x)
-        logits = self.classifier(embeddings)
+        #logits = self.classifier(embeddings)
 
-        #pooled = self.pool(x)
-        return logits, embeddings
+        return embeddings
 
-    def extract_features(self, x):
+    def extract_encoder_features(self, x):
         x = self.encoder(x)
-        embeddings = self.embedding_head(x)
-        return embeddings #sahpe (B,512)
+        print(f'shape encoder output: {x.shape}')
+
+        #embeddings = self.embedding_head(x)
+        return x
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, fold_paths, transform=None):
@@ -215,64 +216,20 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
 
     return loss
 
-def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, scheduler, num_epochs, patience, device,fold):
+def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, device):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     patience_counter = 0
 
-    print(f"Training fold {fold} ...")
-
-    # Initialize datasets for this fold
-    train_fold_ids = [f"fold_{i}" for i in range(5) if i != fold]  # other folds for training
-    val_fold_id = f"fold_{fold}"  # current fold for validation
-
-    # Combine training folds datasets
-    train_datasets = []
-    for train_fold in train_fold_ids:
-        ds = QADataset(
-            fold=train_fold,
-            preprocessed_dir=preprocessed_dir,
-            fold_paths=fold_paths,
-            transform=train_transforms
-        )
-        train_datasets.append(ds)
-    train_dataset = ConcatDataset(train_datasets)
-    del train_datasets
-
-    val_dataset = QADataset(
-        fold=val_fold_id,
-        preprocessed_dir=preprocessed_dir,
-        fold_paths=fold_paths,
-        transform=val_transforms
-    )
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, pin_memory=True, num_workers=4)
 
-    class_counts = torch.tensor([
-        46,  # MyxofibroSarcomas (idx 0)
-        24,  # LeiomyoSarcomas    (idx 1)
-        54,  # DTF                (idx 2)
-        28,  # MyxoidlipoSarcoma  (idx 3)
-        44,  # WDLPS              (idx 4)
-    ], dtype=torch.float)
-
-    class_weights = 1.0 / class_counts
-    #class_weights = class_weights / class_weights.sum()
-    cross_entropy_loss= nn.CrossEntropyLoss()
-    focal_loss = FocalLoss(
-        to_onehot_y= True,
-        use_softmax=True,
-        gamma=2.0,
-        weight=class_weights.to(device)  # alpha term
-    )
     train_losses = []  # <-- add here, before the epoch loop
-    val_losses = []
+
     for epoch in range(num_epochs):
         model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
         running_loss, correct, total = 0.0, 0, 0
-        preds_list, labels_list = [], []
 
         scaler = GradScaler()
 
@@ -283,14 +240,10 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
 
             optimizer.zero_grad()
             with autocast():
-                logits, embeddings = model(inputs)
-                #classification_loss = loss_function(logits, labels)
-                classification_loss = focal_loss(logits, labels)
-                contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
-                lambda_val = min(epoch / 10, 1.0) * 0.01
-                loss = classification_loss + lambda_val * contrastive_loss
-                preds = torch.argmax(logits, dim=1)
-                preds_cpu = preds.detach().cpu()
+                embeddings = model(inputs)
+
+                loss = supervised_contrastive_loss(embeddings, labels, temperature = 0.1)
+
                 labels_cpu = labels.detach().cpu()
 
 
@@ -299,123 +252,22 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
             scaler.update()
 
             running_loss += loss.item() * inputs.size(0)
-            correct += torch.sum(preds == labels.data)
             total += labels.size(0)
 
-            if epoch % 5 == 0:
-                preds_list.extend(preds_cpu.numpy())
-                labels_list.extend(labels_cpu.numpy())
-
-
+            if epoch % 10 == 0:
+                #create UMAP
+                pass
 
         epoch_train_loss = running_loss / total
-        epoch_train_acc = correct.double() / total
-        print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
+        print(f"Train Loss: {epoch_train_loss:.4f}")
 
         train_losses.append(epoch_train_loss)
 
-        if epoch % 5 == 0:
-            idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
-            pred_tumors = [idx_to_tumor[p] for p in preds_list]
-            true_tumors = [idx_to_tumor[t] for t in labels_list]
-
-            print(classification_report(true_tumors, pred_tumors, digits=4, zero_division=0))
-        del inputs,logits,embeddings,labels, preds
+        del inputs,embeddings,labels
         torch.cuda.empty_cache()
 
-        # --- Validation phase ---
-        model.eval()
-        val_loss, val_correct, val_total = 0.0, 0, 0
-        val_preds_list, val_labels_list = [], []
 
-        with torch.no_grad():
-            for batch in val_loader:
-                inputs = batch['input'].to(device)
-                labels = batch['label'].to(device)
-                logits, embeddings = model(inputs)
-                #classification_loss = focal_loss(logits, labels)
-                classification_loss = focal_loss(logits, labels)
-                contrastive_loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
-                lambda_val = min(epoch / 10, 1.0) * 0.01
-                loss = classification_loss + lambda_val * contrastive_loss
-
-                preds = torch.argmax(logits, dim=1)
-                preds_cpu = preds.detach().cpu()
-                labels_cpu = labels.detach().cpu()
-
-                val_loss += loss.item() * inputs.size(0)
-                val_correct += torch.sum(preds == labels.data)
-                val_total += labels.size(0)
-                val_preds_list.extend(preds_cpu.numpy())
-                val_labels_list.extend(labels_cpu.numpy())
-
-        epoch_val_loss = val_loss / val_total
-        epoch_val_acc = val_correct.double() / val_total
-
-        print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
-
-        val_losses.append(epoch_val_loss)
-
-        val_pred_tumors = [idx_to_tumor[p] for p in val_preds_list]
-        val_true_tumors = [idx_to_tumor[t] for t in val_labels_list]
-        print(classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0))
-
-        warmup_epochs = 10
-        base_lr = 1e-4
-        if epoch < warmup_epochs:
-            lr_scale = (epoch + 1) / warmup_epochs
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = base_lr * lr_scale
-        else:
-            scheduler.step(epoch_val_loss)
-        # if epoch > 10:
-        #     scheduler.step(epoch_val_loss)
-
-        # Log current learning rate(s)
-        for i, param_group in enumerate(optimizer.param_groups):
-            print(f"LR after scheduler step (param group {i}): {param_group['lr']:.6f}")
-
-
-        if epoch_val_loss < best_loss:
-            best_loss = epoch_val_loss
-            best_model_wts = copy.deepcopy(model.state_dict())
-            best_report = classification_report(val_true_tumors, val_pred_tumors, digits=4, zero_division=0)
-            cm = confusion_matrix(val_true_tumors,val_pred_tumors)
-            #disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(idx_to_tumor.values()))
-
-            print(f"✅ New best model saved at epoch {epoch + 1} with val loss {epoch_val_loss:.4f}")
-
-            torch.save(best_model_wts, f"best_model_fold_{fold}.pth")
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= patience:
-                print("⏹️ Early stopping")
-                model.load_state_dict(best_model_wts)
-
-                labels = ["DTF", "LeiomyoSarcomas", "MyxofibroSarcomas", "MyxoidlipoSarcoma", "WDLPS"]
-                plt.figure(figsize=(8, 6))  # Increase figure size
-                sns.heatmap(cm, annot=True, fmt="d", cmap="viridis", xticklabels=labels, yticklabels=labels)
-                plt.title("Confusion Matrix - Fold 0", fontsize=14)
-                plt.xlabel("Predicted Label", fontsize=12)
-                plt.ylabel("True Label", fontsize=12)
-                plt.xticks(rotation=45, ha='right')
-                plt.tight_layout()  # Ensures everything fits in the figure area
-                plt.savefig(os.path.join(plot_dir, f"confusion_matrix_fold_{fold}.png"))
-                plt.close()
-                file = os.path.join(plot_dir, f"classification_report_fold_{fold}.txt")
-
-                print('Best Report')
-                print(best_report)
-
-                with open(file, "w") as f:
-                    f.write(f"Final Classification Report for Fold {fold}:\n")
-                    f.write(best_report)
-                return model, train_losses, val_losses
-
-
-    #model.load_state_dict(best_model_wts)
-    return model, train_losses, val_losses
+    return model, train_losses
 
 def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
     print(f'feature shape {train.shape}')
@@ -433,12 +285,6 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
 
     # Map labels back to names (optional)
     idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
-
-
-    label_names_train = [idx_to_tumor[i] for i in y_train]
-
-    # combined_umap = np.vstack([train_umap, val_umap])
-
 
     # all_subtypes= np.concatenate([y_train, y_val])
     unique_subtypes = sorted(set(y_train))
@@ -498,7 +344,7 @@ def intra_class_distance(X_train, y_train):
 
     return intra_class_dists_maha, intra_class_dists_euc, std_maha, std_euc
 
-def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, std_maha, std_euc,plot_dir):
+def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, std_maha, std_euc,plot_dir, tag):
     subtypes = list(intra_class_dists_maha.keys())
     maha_values = [intra_class_dists_maha[sub] for sub in subtypes]
     euc_values = [intra_class_dists_euc[sub] for sub in subtypes]
@@ -523,7 +369,7 @@ def plot_intra_class_distances(intra_class_dists_maha, intra_class_dists_euc, st
     ax.grid(True, axis='y', linestyle='--', alpha=0.5)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'intra_class_distances.png'))
+    plt.savefig(os.path.join(plot_dir, f'{tag}_intra_class_distances.png'))
     plt.close()
 
 def compute_mmd(x, y, gamma=None):
@@ -546,7 +392,7 @@ def compute_mmd(x, y, gamma=None):
     mmd = Kxx.mean() + Kyy.mean() - 2 * Kxy.mean()
     return mmd
 
-def inter_class_distance(X_train, y_train, plot_dir):
+def inter_class_distance(X_train, y_train, plot_dir, tag):
     """
       Compute the Maximum Mean Discrepancy (MMD) between two samples x and y using RBF kernel.
       Args:
@@ -587,63 +433,41 @@ def inter_class_distance(X_train, y_train, plot_dir):
     plt.xticks(rotation=45, ha="right")
     plt.yticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'MMD_distance.png'))
+    plt.savefig(os.path.join(plot_dir, f'{tag}_MMD_distance.png'))
     plt.close()
 
     return mmd_matrix
 
 
-def plot_mmd_diag_vs_offdiag(mmd_matrix, y_train, plot_dir):
-    mmd_matrix = np.array(mmd_matrix)
-
-    unique_subtypes = np.unique(y_train)
-    # Diagonal values: intra-class distances (ideally close to 0)
-    diag_values = np.diag(mmd_matrix)
-
-    # Off-diagonal values: inter-class distances
-    off_diag_values = mmd_matrix[~np.eye(mmd_matrix.shape[0], dtype=bool)]
-
-    # Create boxplot data
-    data = [
-        diag_values,  # intra-class
-        off_diag_values  # inter-class
-    ]
-
-    plt.figure(figsize=(8, 6))
-    sns.boxplot(data=data, palette=["#66c2a5", "#fc8d62"])
-    plt.xticks([0, 1], ['Intra-Class (Diagonal)', 'Inter-Class (Off-Diagonal)'])
-    plt.ylabel('MMD Distance')
-    plt.title('Intra- vs Inter-Class MMD Comparison')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.5)
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'MMD_diag_vs_offdiag.png'))
-    plt.close()
-
-
 def main(preprocessed_dir, plot_dir, fold_paths, device):
-    for fold in range(1):
-        model = TumorClassifier(...)
-        model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
-        #criterion = nn.CrossEntropyLoss()
-
-
-        best_model, train_losses, val_losses= train_one_fold(model, preprocessed_dir, plot_dir,fold_paths,optimizer, scheduler,
-                                    num_epochs=100, patience=20, device=device, fold=fold)
-
-        plt.plot(train_losses, label='Train Loss')
-        plt.plot(val_losses, label='Validation Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.title('Loss Curves')
-        plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
-
-def extract_features(train_dir, fold_paths, device, plot_dir):
     model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
-    model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
+    model.to(device)
+
+    # Combine training folds datasets
+    train_fold_ids = [f"fold_{i}" for i in range(5)]
+    train_datasets = []
+    for train_fold in train_fold_ids:
+        ds = QADataset(
+            fold=train_fold,
+            preprocessed_dir=preprocessed_dir,
+            fold_paths=fold_paths,
+            transform=train_transforms
+
+        )
+        train_datasets.append(ds)
+    train_dataset = ConcatDataset(train_datasets)
+    del train_datasets
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
+
+    best_model, train_losses = train(model, train_dataset, plot_dir,optimizer, scheduler,
+                                num_epochs=100,device=device)
+
+
+def extract_features(train_dir, fold_paths, device, plot_dir, trained = False):
+    model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
+    #model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
     model.to(device)
     model.eval()
     # Combine training folds datasets
@@ -662,31 +486,10 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
 
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=False, num_workers=4)
 
-    # val_dataset = QADataset(
-    #     fold='ood_val',
-    #     preprocessed_dir=val_dir,
-    #     fold_paths=fold_paths
-    # )
-    # val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=4)
-
-    # all_features_val = []
-    # all_labels_val = []
 
     all_features_train = []
     all_labels_train = []
 
-    # with torch.no_grad():
-    #     for batch in val_loader:
-    #         inputs = batch['input'].to(device)  # (B, C, D, H, W)
-    #         labels = batch['label'].cpu().numpy()  # class indices
-    #
-    #         features = model.extract_features(inputs).cpu().numpy()  # (B, 512)
-    #         all_features_val.append(features)
-    #         all_labels_val.extend(labels)
-    #
-    # # Combine into arrays
-    # X_val = np.concatenate(all_features_val, axis=0)
-    # y_val = np.array(all_labels_val)
 
     with torch.no_grad():
         for batch in train_loader:
@@ -704,21 +507,84 @@ def extract_features(train_dir, fold_paths, device, plot_dir):
     from sklearn.preprocessing import StandardScaler
     X_scaled = StandardScaler().fit_transform(X_train)
 
-    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name='UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
-    #plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+    if trained == True:
+        tag = 'AFTER'
+    else:
+        tag = 'BEFORE'
+
+    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name=f'{tag}_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name=f'{tag}_UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
+    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name=f'{tag}_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
 
 
-    plot_UMAP(X_scaled, y_train, neighbours=5, m='manhattan', name='UMAP_manh_5n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
-    #plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
+    # plot_UMAP(X_scaled, y_train, neighbours=5, m='manhattan', name='UMAP_manh_5n_fold0.png', image_dir=plot_dir)
+    # plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
+    # #plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
 
     maha, euc, std_maha, std_euc = intra_class_distance(X_scaled, y_train)
-    plot_intra_class_distances(maha,euc, std_maha, std_euc,plot_dir)
-    mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir)
-    plot_mmd_diag_vs_offdiag(mmd_matrix,y_train, plot_dir)
+    plot_intra_class_distances(maha,euc, std_maha, std_euc,plot_dir, tag)
+    mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir, tag)
 
 
+def extract_latent_features(train_dir, fold_paths, device, plot_dir, trained = False):
+    model = TumorClassifier(model_depth=18, in_channels=1, num_classes=5)
+    #model.load_state_dict(torch.load("best_model_fold_0.pth", map_location=device))
+    model.to(device)
+    model.eval()
+    # Combine training folds datasets
+    train_fold_ids = [f"fold_{i}" for i in range(5)]
+    train_datasets = []
+    for train_fold in train_fold_ids:
+        ds = QADataset(
+            fold=train_fold,
+            preprocessed_dir=train_dir,
+            fold_paths=fold_paths,
+        )
+        train_datasets.append(ds)
+    train_dataset = ConcatDataset(train_datasets)
+    del train_datasets
+
+
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=False, num_workers=4)
+
+
+    all_features_train = []
+    all_labels_train = []
+
+
+    with torch.no_grad():
+        for batch in train_loader:
+            inputs = batch['input'].to(device)  # (B, C, D, H, W)
+            labels = batch['label'].cpu().numpy()  # class indices
+
+            features = model.forwad(inputs).cpu().numpy()  # (B, 512)
+            all_features_train.append(features)
+            all_labels_train.extend(labels)
+
+    # Combine into arrays
+    X_train = np.concatenate(all_features_train, axis=0)
+    y_train = np.array(all_labels_train)
+
+    from sklearn.preprocessing import StandardScaler
+    X_scaled = StandardScaler().fit_transform(X_train)
+
+    if trained == True:
+        tag = 'AFTER'
+    else:
+        tag = 'BEFORE'
+
+    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name=f'{tag}Latent_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train,y_train,neighbours=10, m='cosine', name=f'{tag}_Latent_UMAP_cosine_10n_fold0.png', image_dir =plot_dir)
+    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name=f'{tag}_Latent_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+
+
+    # plot_UMAP(X_scaled, y_train, neighbours=5, m='manhattan', name='UMAP_manh_5n_fold0.png', image_dir=plot_dir)
+    # plot_UMAP(X_scaled,y_train,neighbours=10, m='manhattan', name='UMAP_manh_10n_fold0.png', image_dir =plot_dir)
+    # #plot_UMAP(X_scaled, y_train, neighbours=15, m='manhattan', name='UMAP_manh_15n_fold0.png', image_dir=plot_dir)
+
+    maha, euc, std_maha, std_euc = intra_class_distance(X_scaled, y_train)
+    plot_intra_class_distances(maha,euc, std_maha, std_euc,plot_dir, tag)
+    mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir, tag)
 
 
 
@@ -734,6 +600,9 @@ if __name__ == '__main__':
     plot_dir = sys.argv[2]
 
 
+
+    extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = False)
     main(preprocessed, plot_dir, fold_paths, device = 'cuda')
-    #extract_features(preprocessed,fold_paths, device = 'cuda', plot_dir = plot_dir)
+    extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = True)
+
 
