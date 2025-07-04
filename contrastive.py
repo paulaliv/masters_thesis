@@ -23,6 +23,7 @@ from monai.data import Dataset, DataLoader
 from scipy.spatial import distance
 import seaborn as sns
 from monai.losses import FocalLoss
+import torch.distributed as dist
 
 from monai.networks.nets import DenseNet121, DenseNet169
 
@@ -181,6 +182,21 @@ class QADataset(Dataset):
 
 
 
+def gather_embeddings_labels(embeddings, labels):
+    # Create tensors to hold gathered embeddings and labels
+    embeddings_gathered = [torch.zeros_like(embeddings) for _ in range(dist.get_world_size())]
+    labels_gathered = [torch.zeros_like(labels) for _ in range(dist.get_world_size())]
+
+    # All gather embeddings and labels from all GPUs
+    dist.all_gather(embeddings_gathered, embeddings)
+    dist.all_gather(labels_gathered, labels)
+
+    # Concatenate along batch dimension
+    embeddings_cat = torch.cat(embeddings_gathered, dim=0)
+    labels_cat = torch.cat(labels_gathered, dim=0)
+
+    return embeddings_cat, labels_cat
+
 def supervised_contrastive_loss(embeddings, labels, temperature):
     """
        embeddings: (batch_size, embedding_dim)
@@ -254,8 +270,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
         shuffle = True
 
 
-
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate)
+    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate, drop_last=True)
 
     #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
@@ -276,7 +291,8 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
 
             with autocast():
                 embeddings = model(inputs)
-                loss = supervised_contrastive_loss(embeddings, labels, temperature=0.1)
+                combined_embeddings, combined_labels = gather_embeddings_labels(embeddings, labels)
+                loss = supervised_contrastive_loss(combined_embeddings, combined_labels, temperature=0.1)
                 loss = loss / accum_steps  # Scale loss for accumulation
 
             scaler.scale(loss).backward()
