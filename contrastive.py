@@ -216,7 +216,7 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
 
     return loss
 
-def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, device, rank, world_size):
+def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, rank, world_size, device,):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     patience_counter = 0
@@ -473,8 +473,17 @@ def main(preprocessed_dir, plot_dir, fold_paths, world_size, rank, device):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5,min_lr=1e-6)
 
-    best_model, train_losses = train(model, train_dataset, plot_dir,optimizer, scheduler, rank, world_size,
-                                num_epochs=50,device=device)
+    best_model, train_losses = train(
+        model=model,
+        train_dataset=train_dataset,
+        plot_dir=plot_dir,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        num_epochs=50,
+        rank=rank,
+        world_size=world_size,
+        device=device
+    )
 
 
 def extract_features(train_dir, fold_paths, device, plot_dir, trained = False):
