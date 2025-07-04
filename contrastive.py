@@ -292,6 +292,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
             with autocast():
                 embeddings = model(inputs)
                 combined_embeddings, combined_labels = gather_embeddings_labels(embeddings, labels)
+                print(combined_embeddings.requires_grad)
                 loss = supervised_contrastive_loss(combined_embeddings, combined_labels, temperature=0.1)
                 loss = loss / accum_steps  # Scale loss for accumulation
 
@@ -305,7 +306,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
             running_loss += loss.item() * inputs.size(0) * accum_steps
             total += labels.size(0)
 
-            if loss < best_loss:
+            if loss.item() < best_loss:
                 best_loss = loss
                 best_model_wts = copy.deepcopy(model.state_dict())
 
