@@ -586,6 +586,23 @@ def extract_latent_features(train_dir, fold_paths, device, plot_dir, trained = F
     plot_intra_class_distances(maha,euc, std_maha, std_euc,plot_dir, tag)
     mmd_matrix = inter_class_distance(X_scaled, y_train, plot_dir, tag)
 
+import torch.distributed as dist
+
+def setup_device_and_dist():
+    if "LOCAL_RANK" in os.environ:
+        # Multi-GPU (torchrun)
+        local_rank = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(local_rank)
+        dist.init_process_group(backend='nccl')
+        print(f"Running distributed on GPU {local_rank}")
+        return local_rank
+    else:
+        # Single GPU or CPU
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        torch.cuda.set_device(device)
+        print(f"Running on device: {device}")
+        return 0
+
 
 
 if __name__ == '__main__':
@@ -599,12 +616,16 @@ if __name__ == '__main__':
     preprocessed= sys.argv[1]
     plot_dir = sys.argv[2]
 
+    local_rank = setup_device_and_dist()
+    device = torch.device(f'cuda:{local_rank}' if torch.cuda.is_available() else 'cpu')
 
 
-    extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = False)
-    extract_latent_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = False)
-    main(preprocessed, plot_dir, fold_paths, device = 'cuda')
-    extract_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained = True)
-    extract_latent_features(preprocessed, fold_paths, device='cuda', plot_dir=plot_dir, trained=True)
+
+
+    extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
+    extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = False)
+    main(preprocessed, plot_dir, fold_paths, device = device)
+    extract_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained = True)
+    extract_latent_features(preprocessed, fold_paths, device=device, plot_dir=plot_dir, trained=True)
 
 
