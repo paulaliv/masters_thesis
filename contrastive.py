@@ -189,14 +189,19 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     device = embeddings.device
     batch_size = embeddings.shape[0]
     labels = labels.contiguous().view(-1, 1)  # (B,1)
+    print(f'Label shape: {labels.shape}')
+    print(f'Unique values: {labels.unique()}')
 
     with torch.no_grad():
         mask = torch.eq(labels, labels.T).float().to(device)  # (B, B)
 
     embeddings = F.normalize(embeddings, dim=1)
+    print(f'embeddings shape: {embeddings.shape}')
 
     similarity_matrix = torch.matmul(embeddings, embeddings.T)  # (B, B)
     logits = similarity_matrix / temperature
+
+    print(f'Logits min: {logits.min().item()}, max: {logits.max().item()}')
 
     # For numerical stability
     logits_max, _ = torch.max(logits, dim=1, keepdim=True)
@@ -206,10 +211,11 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     if torch.isnan(logits).any() or torch.isinf(logits).any():
         print("Nan/inf detected in logits!")
 
+
     # Mask self-contrast cases
     mask_self = torch.eye(batch_size, dtype=torch.bool).to(device)
     mask = mask * (~mask_self).float()
-    mask = mask_self.float()  # convert boolean mask to float (1.0 or 0.0)
+    #mask = mask_self.float()  # convert boolean mask to float (1.0 or 0.0)
 
     # To mask self-similarities, you want to add -inf where mask is zero (False)
     neg_inf = -1e9  # or torch.finfo(logits.dtype).min for float precision
