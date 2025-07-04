@@ -222,7 +222,7 @@ def train(model, train_dataset,plot_dir, optimizer, scheduler, num_epochs, devic
     patience_counter = 0
 
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
+    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
     train_losses = []  # <-- add here, before the epoch loop
 
