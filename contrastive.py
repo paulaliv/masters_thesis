@@ -496,7 +496,7 @@ def extract_features(train_dir, fold_paths, device, plot_dir, trained = False):
             inputs = batch['input'].to(device)  # (B, C, D, H, W)
             labels = batch['label'].cpu().numpy()  # class indices
 
-            features = model.extract_features(inputs).cpu().numpy()  # (B, 512)
+            features = model.extract_encoder_features(inputs).cpu().numpy()  # (B, 512)
             all_features_train.append(features)
             all_labels_train.extend(labels)
 
