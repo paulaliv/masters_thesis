@@ -100,7 +100,7 @@ class TumorClassifier(nn.Module):
 
     def extract_encoder_features(self, x):
         x = self.encoder(x)
-        print(f'shape encoder output: {x.shape}')
+        #print(f'shape encoder output: {x.shape}')
 
         #embeddings = self.embedding_head(x)
         return x
@@ -202,6 +202,10 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     logits_max, _ = torch.max(logits, dim=1, keepdim=True)
     logits = logits - logits_max.detach()
 
+    # Check for nan/inf
+    if torch.isnan(logits).any() or torch.isinf(logits).any():
+        print("Nan/inf detected in logits!")
+
     # Mask self-contrast cases
     mask_self = torch.eye(batch_size, dtype=torch.bool).to(device)
     mask = mask * (~mask_self).float()
@@ -210,6 +214,8 @@ def supervised_contrastive_loss(embeddings, labels, temperature):
     # exp_logits = torch.exp(logits) * (~mask_self).float()
     # log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-12)
     log_prob = logits - torch.logsumexp(logits + (~mask_self).log(), dim=1, keepdim=True)
+    if torch.isnan(log_prob).any() or torch.isinf(log_prob).any():
+        print("Nan/inf detected in log_prob!")
 
     mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-12)
 
@@ -242,15 +248,13 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
     train_losses = []  # <-- add here, before the epoch loop
     accum_steps = 2
 
-
+    scaler = GradScaler()
     for epoch in range(num_epochs):
         model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
 
         running_loss, total = 0.0, 0
         optimizer.zero_grad()
-
-        scaler = GradScaler()
 
         for i, batch in enumerate(train_loader):
             inputs = batch['input'].to(device)
@@ -268,7 +272,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
                 scaler.update()
                 optimizer.zero_grad()
 
-            running_loss += loss.item() * inputs.size(0)
+            running_loss += loss.item() * inputs.size(0) * accum_steps
             total += labels.size(0)
 
             if loss < best_loss:
@@ -292,7 +296,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
     return model, train_losses
 
 def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
-    print(f'feature shape {train.shape}')
+    #print(f'feature shape {train.shape}')
 
     reducer = umap.UMAP(
         n_components=2,
