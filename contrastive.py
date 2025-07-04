@@ -235,7 +235,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
 
 
 
-    train_loader = DataLoader(train_dataset, batch_size=12, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate)
+    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate)
 
     #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
