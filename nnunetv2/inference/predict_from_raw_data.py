@@ -791,6 +791,9 @@ class nnUNetPredictor(object):
                         tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
 
 
+                    confidence_map = confidence_map[None] if confidence_map.ndim == 3 else confidence_map
+                    entropy_map = entropy_map[None] if entropy_map.ndim == 3 else entropy_map
+                    mutual_info = mutual_info[None] if mutual_info.ndim == 3 else mutual_info
 
 
                     # # Resample logits to original image shape
@@ -798,6 +801,7 @@ class nnUNetPredictor(object):
                         len(self.configuration_manager.spacing) == \
                         len(properties['shape_after_cropping_and_before_resampling']) else \
                         [properties['spacing'][0], *self.configuration_manager.spacing]
+
 
                     confidence_reshaped = self.configuration_manager.resampling_fn_probabilities(
                         confidence_map,
@@ -820,7 +824,6 @@ class nnUNetPredictor(object):
 
                     # Save resampled logits AFTER resampling
                     resampled_confidence_file = ofile + "_resampled_confidence.npz"
-                    reference_nii = nib.l
                     np.savez_compressed(resampled_confidence_file, confidence_reshaped)
                     print(f"Saved resampled confidence to {resampled_confidence_file}")
                     # Save resampled logits AFTER resampling
