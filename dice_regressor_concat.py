@@ -344,8 +344,8 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
         all_preds = []
         all_labels = []
         torch.cuda.empty_cache()
-        print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-        print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+        # print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+        # print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
         with torch.no_grad():
             for image, uncertainty, label, subtype in val_loader:

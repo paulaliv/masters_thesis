@@ -455,7 +455,7 @@ class nnUNetPredictor(object):
             If True prints crop indices and tumour stats.
         """
         # --- shapes ---
-        C, Z, Y, X = volume.shape
+        Z, Y, X = volume.shape
         dz, dy, dx = target_shape
 
         # --- bounding box of tumour ---
@@ -484,7 +484,7 @@ class nnUNetPredictor(object):
         s_x = get_start(x_min, x_max, dx, X)
 
         # --- crop ---
-        vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+        vol_crop = volume[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
         mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
 
         # --- safety fallback: if tumour lost, recrop around bbox front edge ---
@@ -494,7 +494,7 @@ class nnUNetPredictor(object):
             s_y = int(np.clip(y_min, 0, Y - dy))
             s_x = int(np.clip(x_min, 0, X - dx))
 
-            vol_crop = volume[:, s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+            vol_crop = volume[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
             mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
 
         if debug:
