@@ -167,15 +167,10 @@ class QADataset(Dataset):
         file = f'{case_id}_resized.pt'
         image = torch.load(os.path.join(self.preprocessed_dir, file))
 
-        # Load preprocessed image (.npz)
-        #Check if its not case_id_0000
+
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
-        # Should be: <class 'numpy.ndarray'>
-
-        # Load predicted mask (.nii.gz)
-
-        logits_path = os.path.join(self.logits_dir, f"{case_id}_uncertainty_metrics.npz")
+        logits_path = os.path.join(self.logits_dir, f"{case_id}_uncertainty_maps.npz")
         data = np.load(logits_path)  # shape (H, W, D)
         uncertainty = data[self.uncertainty_metric]
         print(f'Uncertainty map shape: {uncertainty.shape}')
@@ -207,7 +202,7 @@ class QADataset(Dataset):
 
         print('Image tensor shape : ', image_tensor.shape)
 
-        print('Logits tensor shape : ', uncertainty_tensor.shape)
+        print('Uncertainty tensor shape : ', uncertainty_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
 
 
@@ -261,7 +256,7 @@ def pad_collate_fn(batch):
     return images, uncertainties, labels, subtypes
 
 
-def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
+def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, uncertainty_metric, device):
     print(f"Training fold {fold} ...")
 
     # Initialize datasets for this fold
@@ -276,7 +271,9 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
             preprocessed_dir=preprocessed_dir,
             logits_dir=logits_dir,
             fold_paths=fold_paths,
-            transform=train_transforms
+            uncertainty_metric=uncertainty_metric,
+            num_bins=num_bins,
+            transform=train_transforms,
 
         )
         train_datasets.append(ds)
@@ -421,11 +418,11 @@ def main(preprocessed_dir, logits_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
     #for fold in range(5):
-    train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
+    train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, uncertainty_metric='confidence',num_bins=5, device=device)
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-
+#metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
     fold_paths = {
