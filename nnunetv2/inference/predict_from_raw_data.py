@@ -724,7 +724,9 @@ class nnUNetPredictor(object):
 
                 else:
                     #currently ensemble predictions
-                    prediction, ensemble_predictions = self.predict_logits_from_preprocessed_data(data).cpu()
+                    prediction, ensemble_predictions = self.predict_logits_from_preprocessed_data(data)
+                    prediction = prediction.cpu()
+                    ensemble_predictions = ensemble_predictions.cpu()
                 # saving the raw logits as numpy arrays
 
                     logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
