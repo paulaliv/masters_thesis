@@ -45,6 +45,8 @@ import torch.optim as optim
 class QAHead(nn.Module):
     def __init__(self, input_channels):
         super().__init__()
+        self.encoder_1 = ResidualEncoder(input_channels)
+        self.encoder_2 = ResidualEncoder(input_channels)
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Sequential(
             nn.Flatten(),
@@ -53,9 +55,12 @@ class QAHead(nn.Module):
             nn.Linear(64, 3)  # Output = predicted Dice class
         )
 
-    def forward(self, x):
-        x = self.pool(x)
-        return self.fc(x)
+    def forward(self, image, uncertainty):
+        x1 = self.encoder_1(image)
+        x2 = self.pool(uncertainty)
+        merged = torch.cat((x1, x2), dim=1)
+
+        return self.fc(merged)
 
 class QA_Model(nn.Module):
     def __init__(self, encoder):
@@ -103,7 +108,7 @@ encoder = ResidualEncoder(
 )
 
 class QADataset(Dataset):
-    def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, transform=None):
+    def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric,transform=None):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
@@ -114,6 +119,7 @@ class QADataset(Dataset):
         self.preprocessed_dir = preprocessed_dir
         self.logits_dir = logits_dir
         self.fold_dir = fold_paths[fold]
+        self.uncertainty_metric = uncertainty_metric
 
 
         # Load Dice scores & case IDs from a CSV or JSON
@@ -138,25 +144,22 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
 
         print(f'Extracting image, logits and label for case {case_id}')
-
+        file = f'{case_id}_resized.pt'
+        image = torch.load(os.path.join(self.preprocessed_dir, file))
 
         # Load preprocessed image (.npz)
         #Check if its not case_id_0000
-        data, seg, seg_prev, properties = self.ds.load_case(case_id)
-        #print("Data shape:", data.shape)
-
-        image = data
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
-        image = np.asarray(image)
-        #print(f'Image Shape {image.shape}')
-        print(type(image))
+
         # Should be: <class 'numpy.ndarray'>
 
         # Load predicted mask (.nii.gz)
-        logits_path = os.path.join(self.logits_dir, f"{case_id}_raw_logits.npy")
-        logits = np.load(logits_path)  # shape (H, W, D)
-        #print(f'Logits shape: {logits.shape}')
-        logits = np.expand_dims(logits, axis=0)  # to shape: (1, H, W, D)
+
+        logits_path = os.path.join(self.logits_dir, f"{case_id}_uncertainty_metrics.npz")
+        data = np.load(logits_path)  # shape (H, W, D)
+        uncertainty = data[self.uncertainty_metric]
+        print(f'Uncertainty map shape: {uncertainty.shape}')
+        #logits = np.expand_dims(logits, axis=0)  # to shape: (1, H, W, D)
         #print(f'Logits shape after expansion: {logits.shape}') #(B, num_classes, D, H, W)
 
         # nnU-Net raw images usually have multiple channels; choose accordingly:
@@ -174,29 +177,31 @@ class QADataset(Dataset):
         print(f'Gets label {label}')
 
         image_tensor = torch.from_numpy(image).float()
-        logits_tensor = torch.from_numpy(logits).float()
+        uncertainty_tensor = torch.from_numpy(uncertainty).float()
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
             image_tensor = self.transform(image_tensor)
+            uncertainty_tensor = self.transform(uncertainty_tensor)
 
-        if logits_tensor.ndim == 5:
-            logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
+        # if logits_tensor.ndim == 5:
+        #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
 
         print('Image tensor shape : ', image_tensor.shape)
-        print('Logits tensor shape : ', logits_tensor.shape)
+        print('Logits tensor shape : ', uncertainty_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
 
 
-        assert image_tensor.shape[2:] == logits_tensor.shape[2:], \
-            f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {logits_tensor.shape}"
+        assert image_tensor.shape[2:] == uncertainty_tensor.shape[2:], \
+            f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {uncertainty_tensor.shape}"
 
-        x = torch.cat([image_tensor, logits_tensor], dim=0)
-        print(f'Shape after concatenating: {x.shape}')
+        # x = torch.cat([image_tensor, logits_tensor], dim=0)
+        # print(f'Shape after concatenating: {x.shape}')
 
 
         return {
-            'input': x,  # shape (C_total, D, H, W)
+            'image': image_tensor,  # shape (C_total, D, H, W)
+            'uncertainty':uncertainty_tensor,
             'label': label_tensor,  # scalar tensor
             'subtype': subtype
         }

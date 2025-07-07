@@ -11,6 +11,8 @@ import SimpleITK as sitk
 import nnunetv2
 import sys
 
+sys.path.insert(0, '/gpfs/home6/palfken/masters_thesis')
+
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
 
