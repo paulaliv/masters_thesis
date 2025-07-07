@@ -31,6 +31,27 @@ random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+from monai.transforms import (
+    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd,
+    ToTensord
+)
+train_transforms = Compose([
+    # Don't use LoadImaged since data is already loaded
+    EnsureChannelFirstd(keys=["image"],channel_dim=0),
+    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
+    RandRotate90d(keys=["image"], prob=0.5, max_k=3),
+    RandGaussianNoised(keys="image", prob=0.2),
+    ToTensord(keys=["image"]),
+])
+
+val_transforms = Compose([
+    EnsureChannelFirstd(keys=['image'],channel_dim=0),
+    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    ToTensord(keys=['image'])
+])
+
+
 
 # gt_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
 # logits_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
@@ -73,7 +94,7 @@ class Light3DEncoder(nn.Module):
 
 
 class QAModel(nn.Module):
-    def __init__(self):
+    def __init__(self,num_classes):
         super().__init__()
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
@@ -82,7 +103,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 3)  # Output = predicted Dice class
+            nn.Linear(64, num_classes)  # Output = predicted Dice class
         )
 
     def forward(self, image, uncertainty):
@@ -159,13 +180,6 @@ class QADataset(Dataset):
         # Map dice score to category
         print(f'Dice score: {dice_score}')
         label = bin_dice_score(dice_score, num_bins=self.num_bins)
-        # if dice_score < 0.4:
-        #     label = 0  # low
-        # elif dice_score < 0.7:
-        #     label = 1  # medium
-        # else:
-        #     label = 2  # high
-        # # Convert to torch tensor
         print(f'Gets label {label}')
 
         image_tensor = torch.from_numpy(image).float()
@@ -251,7 +265,9 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
             fold=train_fold,
             preprocessed_dir=preprocessed_dir,
             logits_dir=logits_dir,
-            fold_paths=fold_paths
+            fold_paths=fold_paths,
+            transform=train_transforms
+
         )
         train_datasets.append(ds)
     train_dataset = ConcatDataset(train_datasets)
@@ -260,7 +276,8 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
         fold=val_fold_id,
         preprocessed_dir=preprocessed_dir,
         logits_dir=logits_dir,
-        fold_paths=fold_paths
+        fold_paths=fold_paths,
+        transform=val_transforms
     )
 
     train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True,pin_memory=True,
@@ -272,7 +289,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel().to(device)
+    model = QAModel(num_classes=5).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.CrossEntropyLoss()
 

@@ -630,7 +630,7 @@ class nnUNetPredictor(object):
 
             assert cropped_mask.sum() > 0, "ERROR: Tumor lost after final cropping!"
 
-            assert cropped_features.shape[1:] == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {cropped_features.shape}"
+            assert cropped_features.shape == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {cropped_features.shape}"
             assert cropped_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {cropped_mask.shape}"
             # if np.sum(padded_mask) == 0:
             #     print("Warning: padded mask is empty — tumor might have been cropped out")
