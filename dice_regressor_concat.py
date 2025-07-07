@@ -21,10 +21,16 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
 
 from torch.amp import GradScaler, autocast
-
+import random
 import torch.optim as optim
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 
 # gt_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
 # logits_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
@@ -86,9 +92,13 @@ class QAModel(nn.Module):
 
         return self.fc(merged)
 
+def bin_dice_score(dice, num_bins=5):
+    bin_edges = np.linspace(0, 1, num_bins + 1)
+    label = np.digitize(dice, bin_edges, right=False) - 1
+    return min(label, num_bins - 1)
 
 class QADataset(Dataset):
-    def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric,transform=None):
+    def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric, num_bins = 5,transform=None):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
@@ -96,6 +106,7 @@ class QADataset(Dataset):
         fold_paths: dict with fold folder paths containing Dice scores & case IDs
         """
         self.fold = fold
+        self.num_bins = num_bins
         self.preprocessed_dir = preprocessed_dir
         self.logits_dir = logits_dir
         self.fold_dir = fold_paths[fold]
@@ -147,13 +158,14 @@ class QADataset(Dataset):
         #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
         # Map dice score to category
         print(f'Dice score: {dice_score}')
-        if dice_score < 0.4:
-            label = 0  # low
-        elif dice_score < 0.7:
-            label = 1  # medium
-        else:
-            label = 2  # high
-        # Convert to torch tensor
+        label = bin_dice_score(dice_score, num_bins=self.num_bins)
+        # if dice_score < 0.4:
+        #     label = 0  # low
+        # elif dice_score < 0.7:
+        #     label = 1  # medium
+        # else:
+        #     label = 2  # high
+        # # Convert to torch tensor
         print(f'Gets label {label}')
 
         image_tensor = torch.from_numpy(image).float()
@@ -211,24 +223,21 @@ def pad_tensor(t, target_shape):
     t = F.pad(t, pad)  # Now shape is (1, C, D', H', W')
     return t.squeeze(0)  # Return (C, D', H', W')
 
-
 def pad_collate_fn(batch):
-    # batch is a list of dicts from __getitem__
-    # find max D,H,W in this batch
-    max_d = max(item['input'].shape[1] for item in batch)
-    max_h = max(item['input'].shape[2] for item in batch)
-    max_w = max(item['input'].shape[3] for item in batch)
-    target_shape = max_d, max_h, max_w
-    tgt_shape = get_padded_shape(target_shape)
-    print(f'Target shape for padidng: {tgt_shape}')
+    max_d = max(item['image'].shape[1] for item in batch)
+    max_h = max(item['image'].shape[2] for item in batch)
+    max_w = max(item['image'].shape[3] for item in batch)
+    target_shape = get_padded_shape((max_d, max_h, max_w))
 
-    inputs  = torch.stack([pad_tensor(item['input'], tgt_shape)  for item in batch])
-    labels  = torch.stack([item['label'] for item in batch])
+    images = torch.stack([pad_tensor(item['image'], target_shape) for item in batch])
+    uncertainties = torch.stack([pad_tensor(item['uncertainty'], target_shape) for item in batch])
+    labels = torch.stack([item['label'] for item in batch])
     subtypes = [item['subtype'] for item in batch]
 
-    return inputs, labels, subtypes
+    return images, uncertainties, labels, subtypes
 
-def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, device):
+
+def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, device):
     print(f"Training fold {fold} ...")
 
     # Initialize datasets for this fold
@@ -254,16 +263,16 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         fold_paths=fold_paths
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=20, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QA_Model(encoder).to(device)
+    model = QAModel().to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     criterion = nn.CrossEntropyLoss()
 
@@ -272,7 +281,7 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
-    scaler = GradScaler('cuda')
+    scaler = GradScaler()
     for epoch in range(20):
         print(f'Epoch {epoch}')
         model.train()
@@ -281,15 +290,15 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
         print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
-        for input, label, subtype in train_loader:
-            input, label = input.to(device), label.to(device)
-            print('After loading input and moving to device')
-            print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-            print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+        for image, uncertainty, label, _ in train_loader:
+            image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
+            # print('After loading input and moving to device')
+            # print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
+            # print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
             optimizer.zero_grad()
             with autocast():
-                preds = model(input)  # shape: [B, 3]
+                preds = model(image, uncertainty)  # shape: [B, 3]
                 loss = criterion(preds, label)
                 print('after computing loss')
                 print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
@@ -315,9 +324,9 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
         print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
         with torch.no_grad():
-            for input, label, subtype in val_loader:
-                input, label = input.to(device), label.to(device).long()
-                preds = model(input)
+            for image, uncertainty, label, subtype in val_loader:
+                image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
+                preds = model(image, uncertainty)
                 #print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
                 val_loss = criterion(preds, label)
                 val_losses.append(val_loss.item())
@@ -342,6 +351,8 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
 
         print("Validation loss per subtype:")
         for subtype, vals in metrics_per_subtype.items():
+            if len(vals['preds']) == 0:
+                continue
             preds_tensor = torch.tensor(np.stack(vals['preds']))  # shape [N, num_classes]
             labels_tensor = torch.tensor(vals['labels']).long()  # shape [N]
             # Compute loss for this subtype batch
@@ -356,7 +367,12 @@ def train_one_fold(fold,encoder, preprocessed_dir, logits_dir, fold_paths, devic
             best_val_loss = avg_val_loss
             patience_counter = 0
             # Save best model weights
-            torch.save(model.state_dict(), f"best_qa_model_fold{fold}.pt")
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'epoch': epoch,
+                'val_loss': avg_val_loss
+            }, f"best_qa_model_fold{fold}.pt")
         else:
             patience_counter += 1
             if patience_counter >= patience:
@@ -378,7 +394,7 @@ def main(preprocessed_dir, logits_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
     #for fold in range(5):
-    train_one_fold(0,encoder, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
+    train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, device=device)
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
@@ -393,6 +409,6 @@ if __name__ == '__main__':
         'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
     }
     preprocessed= sys.argv[1]
-    logits = sys.argv[2]
+    uncertainty = sys.argv[2]
 
-    main(preprocessed,logits)
+    main(preprocessed,uncertainty)
