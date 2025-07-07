@@ -639,7 +639,7 @@ class nnUNetPredictor(object):
                     "Aborting: Padded tumor mask is empty — tumor may have been cropped out or not predicted.")
 
             # returns cropped and padded feature volume, and spatial info
-            return cropped_features, cropped_mask
+            return cropped_features
 
     def kl_divergence(self,p, q):
         return torch.sum(p * (torch.log(p + 1e-8) - torch.log(q + 1e-8)), dim=0)  # [H, W, D]

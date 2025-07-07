@@ -32,19 +32,27 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd, RandRotate90d, RandGaussianNoised, NormalizeIntensityd,
+    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
     ToTensord
 )
+
 train_transforms = Compose([
-    # Don't use LoadImaged since data is already loaded
-    EnsureChannelFirstd(keys=["image"],channel_dim=0),
+    EnsureChannelFirstd(keys=["image"], channel_dim=0),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-    RandRotate90d(keys=["image"], prob=0.5, max_k=3),
-    RandGaussianNoised(keys="image", prob=0.2),
+
+    RandAffined(
+        keys=["image"],
+        prob=1.0,
+        rotate_range=[np.pi / 9],  # ~20 degrees
+        translate_range=[0.1, 0.1],  # 10% shift in x, y
+        scale_range=[0.1, 0.1],  # 10% zoom in/out
+        mode='bilinear'
+    ),
+
+    RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),  # horizontal flip (axis 1 = left-right in 2D)
+
     ToTensord(keys=["image"]),
 ])
-
 val_transforms = Compose([
     EnsureChannelFirstd(keys=['image'],channel_dim=0),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
