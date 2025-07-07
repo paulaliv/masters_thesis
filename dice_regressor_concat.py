@@ -41,71 +41,51 @@ import torch.optim as optim
 # }
 
 
-
-class QAHead(nn.Module):
-    def __init__(self, input_channels):
+class Light3DEncoder(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.encoder_1 = ResidualEncoder(input_channels)
-        self.encoder_2 = ResidualEncoder(input_channels)
+        self.encoder = nn.Sequential(
+            nn.Conv3d(1, 16, kernel_size=3, padding=1),
+            nn.BatchNorm3d(16),
+            nn.ReLU(),
+            nn.MaxPool3d(2),  # halves each dimension
+
+            nn.Conv3d(16, 32, kernel_size=3, padding=1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm3d(64),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        return x.view(x.size(0), -1)  # Flatten to [B, 64]
+
+
+class QAModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder_img = Light3DEncoder()
+        self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(input_channels, 64),
+            nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 3)  # Output = predicted Dice class
         )
 
     def forward(self, image, uncertainty):
-        x1 = self.encoder_1(image)
-        x2 = self.pool(uncertainty)
-        merged = torch.cat((x1, x2), dim=1)
+        x1 = self.encoder_img(image)
+        x2 = self.encoder_unc(uncertainty)
+        merged = torch.cat((x1, x2), dim=1) #[B,128]
 
         return self.fc(merged)
 
-class QA_Model(nn.Module):
-    def __init__(self, encoder):
-        super().__init__()
-        self.encoder = encoder
-        encoder_out_channels = encoder.output_channels[-1]
-
-         # Last stage channels
-        self.head = QAHead(input_channels=encoder_out_channels)
-
-    def forward(self, x):
-
-
-        features = self.encoder(x)
-        print(f'Encoder Output Shape {features.shape}')
-        # shape should be (B, 320, D/16, H/16, W/16)
-
-        if isinstance(features, (list, tuple)):
-            #remove skip connections
-            features = features[-1]
-
-        return self.head(features)
-
-
-
-# Instantiate encoder
-
-encoder = ResidualEncoder(
-    input_channels=3,
-    n_stages=5,
-    features_per_stage=[32, 64, 128, 256, 320],
-    conv_op=nn.Conv3d,
-    kernel_sizes=[3, 3, 3, 3, 3],
-    strides=[1, 2, 2, 2, 2],
-    n_blocks_per_stage=2,
-    conv_bias=False,
-    norm_op=nn.InstanceNorm3d,
-    norm_op_kwargs={'eps': 1e-5, 'affine': True},
-    dropout_op=None,
-    dropout_op_kwargs=None,
-    nonlin=nn.LeakyReLU,
-    nonlin_kwargs={'negative_slope': 1e-2, 'inplace': True},
-    block=BasicBlockD,
-    return_skips=False
-)
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric,transform=None):

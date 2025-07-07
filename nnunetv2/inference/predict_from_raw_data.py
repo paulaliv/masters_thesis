@@ -563,7 +563,7 @@ class nnUNetPredictor(object):
             x_slice = slice(x_min_m, x_max_m + 1)
 
             # Crop features
-            cropped_features = full_feature_volume[:, z_slice, y_slice, x_slice]
+            cropped_features = full_feature_volume[ z_slice, y_slice, x_slice]
             cropped_mask = tumor_mask[z_slice, y_slice, x_slice]
 
             print(f'shape of feature map after cropping {cropped_features.shape}')
