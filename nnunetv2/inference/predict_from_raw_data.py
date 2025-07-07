@@ -600,7 +600,7 @@ class nnUNetPredictor(object):
 
 
             # If cropped features are larger than uniform size, do center crop with warning
-            final_c, final_z, final_y, final_x = cropped_features.shape
+            final_z, final_y, final_x = cropped_features.shape
 
             # ---------- final crop if padded volume is still larger ----------
             if any([final_z > desired_z, final_y > desired_y, final_x > desired_x]):
