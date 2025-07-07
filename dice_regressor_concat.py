@@ -191,7 +191,11 @@ class QADataset(Dataset):
         print(f'Gets label {label}')
 
         image_tensor = torch.from_numpy(image).float()
+        image_tensor = image_tensor.unsqueeze(0)  # Add channel dim
+
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
+        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
+
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
@@ -202,23 +206,21 @@ class QADataset(Dataset):
         #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
 
         print('Image tensor shape : ', image_tensor.shape)
+
         print('Logits tensor shape : ', uncertainty_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
 
 
-        assert image_tensor.shape[2:] == uncertainty_tensor.shape[2:], \
-            f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {uncertainty_tensor.shape}"
+
+
+        # assert image_tensor.shape[2:] == uncertainty_tensor.shape[2:], \
+        #     f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {uncertainty_tensor.shape}"
 
         # x = torch.cat([image_tensor, logits_tensor], dim=0)
         # print(f'Shape after concatenating: {x.shape}')
 
 
-        return {
-            'image': image_tensor,  # shape (C_total, D, H, W)
-            'uncertainty':uncertainty_tensor,
-            'label': label_tensor,  # scalar tensor
-            'subtype': subtype
-        }
+        return image_tensor, uncertainty_tensor, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
