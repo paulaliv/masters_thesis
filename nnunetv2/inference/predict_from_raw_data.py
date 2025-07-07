@@ -40,7 +40,10 @@ from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, Config
 from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder
 import matplotlib.pyplot as plt
 from skimage.transform import resize
+
 import sys
+import torch.nn.functional as F
+
 sys.path.append('/gpfs/home6/palfken/masters_thesis/external/dynamic-network-architectures/dynamic_network_architectures')
 
 
@@ -511,8 +514,6 @@ class nnUNetPredictor(object):
                                       tumor_mask,
                                       uniform_size,
                                       context
-
-
                                       ):
         """
            Crops and pads feature map and tumor mask to uniform size centered around tumor.
@@ -640,7 +641,8 @@ class nnUNetPredictor(object):
             # returns cropped and padded feature volume, and spatial info
             return cropped_features, cropped_mask
 
-
+    def kl_divergence(self,p, q):
+        return torch.sum(p * (torch.log(p + 1e-8) - torch.log(q + 1e-8)), dim=0)  # [H, W, D]
 
     def predict_from_data_iterator(self,
                                    data_iterator,
@@ -721,33 +723,119 @@ class nnUNetPredictor(object):
 
 
                 else:
-                    prediction = self.predict_logits_from_preprocessed_data(data).cpu()
+                    #currently ensemble predictions
+                    prediction, ensemble_predictions = self.predict_logits_from_preprocessed_data(data).cpu()
                 # saving the raw logits as numpy arrays
 
-                    raw_logits = prediction
+                    logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
+                    T, C, H, W, D = logits.shape
+                    assert logits.shape == (T, C, H, W, D), "Logits should be [T, C, H, W, D]"
+
+                    probs = F.softmax(logits, dim=1)  # shape: [5, C, H, W, D]
+                    mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+                    assert mean_probs.shape == (C, H, W, D), "Mean probs should be [C, H, W, D]"
+
+                    # Confidence: max probability across classes
+                    confidence_map = torch.max(mean_probs, dim=0).values  # shape: [H, W, D]
+                    assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
+                    entropy_map = -torch.sum(mean_probs * torch.log(mean_probs + 1e-8), dim=0)  # shape: [H, W, D]
+                    assert entropy_map.shape == (H, W, D), "Entropy map should be [H, W, D]"
+
+                    # Entropy of each prediction
+                    entropy_per_model = -torch.sum(probs * torch.log(probs + 1e-8), dim=1)  # shape: [5, H, W, D]
+                    assert entropy_per_model.shape == (T, H, W, D), "Entropy per model should be [T, H, W, D]"
+                    mean_entropy = entropy_per_model.mean(dim=0)  # shape: [H, W, D]
+                    assert mean_entropy.shape == (H, W, D), "Mean entropy should be [H, W, D]"
+
+                    # Mutual information = entropy(mean_probs) - mean(entropy)
+                    mutual_info = entropy_map - mean_entropy  # shape: [H, W, D]
+                    assert mutual_info.shape == (H, W, D), "Mutual information should be [H, W, D]"
+
+                    epkl_map = torch.zeros_like(entropy_map)
+                    T = probs.shape[0]
+
+                    for i in range(T):
+                        for j in range(T):
+                            if i != j:
+                                epkl_map += self.kl_divergence(probs[i], probs[j])
+
+                    epkl_map /= T * (T - 1)
+                    assert epkl_map.shape == (H, W, D), "EPKL should be [H, W, D]"
+
                     # raw_logits_file = ofile + "_raw_logits.npy"
                     # np.save(raw_logits_file, raw_logits)
                     # print(f"Saved raw logits to {raw_logits_file}")
 
-                    # Resample logits to original image shape
+
+                    uniform_size = [48, 272, 256]
+
+                    context = [3, 15, 15]
+                    tumor_mask = prediction.argmax(0).numpy()
+                    cropped_confidence= self.reconstruct_and_crop_features(
+                        full_feature_volume=confidence_map,
+                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    print(f'Cropped Confidence shape {cropped_confidence.shape}')
+
+                    cropped_entropy = self.reconstruct_and_crop_features(
+                        full_feature_volume=entropy_map,
+                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+
+                    cropped_MI = self.reconstruct_and_crop_features(
+                        full_feature_volume=mutual_info,
+                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+
+                    cropped_kl= self.reconstruct_and_crop_features(
+                        full_feature_volume=epkl_map,
+                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+
+
+
+
+                    # # Resample logits to original image shape
                     current_spacing = self.configuration_manager.spacing if \
                         len(self.configuration_manager.spacing) == \
                         len(properties['shape_after_cropping_and_before_resampling']) else \
                         [properties['spacing'][0], *self.configuration_manager.spacing]
 
-                    predicted_logits = self.configuration_manager.resampling_fn_probabilities(
-                        raw_logits,
+                    confidence_reshaped = self.configuration_manager.resampling_fn_probabilities(
+                        confidence_map,
+                        properties['shape_after_cropping_and_before_resampling'],
+                        current_spacing,
+                        properties['spacing']
+                    )
+                    entropy_reshaped = self.configuration_manager.resampling_fn_probabilities(
+                        entropy_map,
+                        properties['shape_after_cropping_and_before_resampling'],
+                        current_spacing,
+                        properties['spacing']
+                    )
+                    mutual_info_reshaped = self.configuration_manager.resampling_fn_probabilities(
+                        mutual_info,
                         properties['shape_after_cropping_and_before_resampling'],
                         current_spacing,
                         properties['spacing']
                     )
 
                     # Save resampled logits AFTER resampling
-                    resampled_logits_file = ofile + "_resampled_logits.npz"
-                    np.savez_compressed(resampled_logits_file, predicted_logits)
-                    print(f"Saved resampled logits to {resampled_logits_file}")
+                    resampled_confidence_file = ofile + "_resampled_confidence.npz"
+                    reference_nii = nib.l
+                    np.savez_compressed(resampled_confidence_file, confidence_reshaped)
+                    print(f"Saved resampled confidence to {resampled_confidence_file}")
+                    # Save resampled logits AFTER resampling
+                    resampled_entropy_file = ofile + "_resampled_entropy.npz"
+                    np.savez_compressed(resampled_entropy_file, entropy_reshaped)
+                    print(f"Saved resampled logits to {resampled_entropy_file}")
+
+                    resampled_mi_file = ofile + "_resampled_mi.npz"
+                    np.savez_compressed(resampled_mi_file, mutual_info_reshaped)
+                    print(f"Saved resampled logits to {resampled_mi_file}")
 
 
+                    np.savez_compressed(ofile + "_uncertainty_maps.npz",
+                                        confidence=cropped_confidence.numpy(),
+                                        entropy=cropped_entropy.numpy(),
+                                        mutual_info=cropped_MI.numpy(),
+                                        epkl=cropped_kl.numpy())
                 if ofile is not None:
                     # this needs to go into background processes
                     # export_prediction_from_logits(prediction, properties, self.configuration_manager, self.plans_manager,
@@ -857,7 +945,9 @@ class nnUNetPredictor(object):
         torch.set_num_threads(default_num_processes if default_num_processes < n_threads else n_threads)
         prediction = None
         features = None
+
         patch_positions = None
+        all_predictions  = []
         all_full_feature_volumes = []
         for params in self.list_of_parameters:
 
@@ -886,6 +976,9 @@ class nnUNetPredictor(object):
 
             else:
                 new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
+            all_predictions.append(new_prediction)
+
+
 
             if prediction is None:
                 prediction = new_prediction
@@ -895,8 +988,6 @@ class nnUNetPredictor(object):
                 #prediction = self.predict_sliding_window_return_logits(data).to('cpu')
             else:
                 prediction += new_prediction
-
-                #prediction += self.predict_sliding_window_return_logits(data).to('cpu')
 
         if len(self.list_of_parameters) > 1:
             prediction /= len(self.list_of_parameters)
@@ -916,7 +1007,7 @@ class nnUNetPredictor(object):
         if self.return_features:
             return ensemble_features, prediction, patch_positions
         else:
-            return prediction
+            return prediction, all_predictions
 
     def _internal_get_sliding_window_slicers(self, image_size: Tuple[int, ...]):
         slicers = []

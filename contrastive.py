@@ -477,7 +477,7 @@ def inter_class_distance(X_train, y_train, plot_dir, tag):
             mmd_matrix[i, j] = compute_mmd(xi, xj)
 
     # Create pretty labels with names and indices
-    pretty_labels = [f"{tumor} ({tumor_to_idx[tumor]})" for tumor in unique_subtypes]#
+    pretty_labels = [f"{tumor} ({tumor_to_idx[tumor]})" for tumor in unique_subtypes]
 
     # Plot heatmap
     plt.figure(figsize=(10, 8))
