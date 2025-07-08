@@ -6,7 +6,7 @@ from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from torch.cpu.amp import autocast
 
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
-
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
@@ -162,6 +162,7 @@ class QADataset(Dataset):
         case_id = self.case_ids[idx]
         dice_score = self.dice_scores[idx]
         subtype = self.subtypes[idx]
+        subtype = subtype.strip()
 
         print(f'Extracting image, logits and label for case {case_id}')
         file = f'{case_id}_resized.pt'
@@ -306,6 +307,9 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
     patience = 10
     patience_counter = 0
     scaler = GradScaler()
+    val_preds_all =[]
+    val_labels_all =[]
+    val_subtypes_all = []
     for epoch in range(20):
         print(f'Epoch {epoch}')
         model.train()
@@ -365,23 +369,11 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
                     subtype_list = subtype  # if it's already a list of strings
 
                 all_subtypes.extend(subtype_list)
+                val_preds_all.extend(preds.cpu().numpy())
+                val_labels_all.extend(label.cpu().numpy())
+                val_subtypes_all.extend(subtype_list)
 
 
-        metrics_per_subtype = defaultdict(lambda: {'preds': [], 'labels': []})
-
-        for p, l, s in zip(all_preds, all_labels, all_subtypes):
-            metrics_per_subtype[s]['preds'].append(p)
-            metrics_per_subtype[s]['labels'].append(l)
-
-        print("Validation loss per subtype:")
-        for subtype, vals in metrics_per_subtype.items():
-            if len(vals['preds']) == 0:
-                continue
-            preds_tensor = torch.tensor(np.stack(vals['preds']))  # shape [N, num_classes]
-            labels_tensor = torch.tensor(vals['labels']).long()  # shape [N]
-            # Compute loss for this subtype batch
-            loss_subtype = F.cross_entropy(preds_tensor, labels_tensor)
-            print(f"Subtype: {subtype}, Validation CrossEntropyLoss: {loss_subtype.item():.4f}")
 
         avg_val_loss = sum(val_losses) / len(val_losses)
         print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
@@ -402,6 +394,9 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
+    return val_preds_all, val_labels_all, val_subtypes_all
+
+
 
 # def compute_dice(pred, gt):
 #     pred = np.asarray(pred == 1, dtype =np.uint8)
@@ -414,13 +409,56 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
 #
 #     return dice
 
-def main(preprocessed_dir, logits_dir):
+def main(preprocessed_dir, logits_dir, plot_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
     #for fold in range(5):
-    train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, uncertainty_metric='confidence',num_bins=5, device=device)
+    val_preds, val_labels, val_subtypes= train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, uncertainty_metric='confidence',num_bins=5, device=device)
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
+
+    # plt.plot(train_losses, label='Train Loss')
+    # plt.plot(val_losses, label='Validation Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    # plt.title('Loss Curves')
+    # plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
+    # val_preds = np.argmax(np.stack(val_preds), axis=1)  # shape [N]
+    # val_labels = np.array(val_labels)
+    # val_subtypes = np.array(val_subtypes)
+
+    # ✅ Overall scatter plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
+    plt.plot([val_labels.min(), val_labels.max()], [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
+    plt.xlabel("Actual Label")
+    plt.ylabel("Predicted Label")
+    plt.title("Overall Predicted vs. Actual Labels")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(plot_dir,'pred_vs_actual.png'))
+
+
+    # ✅ Per-subtype scatter plots
+    unique_subtypes = np.unique(val_subtypes)
+
+    for subtype in unique_subtypes:
+        mask = val_subtypes == subtype
+        preds_sub = val_preds[mask]
+        labels_sub = val_labels[mask]
+
+        plt.figure(figsize=(8, 6))
+        plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
+        plt.plot([labels_sub.min(), labels_sub.max()], [labels_sub.min(), labels_sub.max()], 'r--')
+        plt.xlabel("Actual Label")
+        plt.ylabel("Predicted Label")
+        plt.title(f"Predicted vs Actual for Subtype {subtype}")
+        plt.grid(True)
+
+        plt.savefig(os.path.join(plot_dir, 'pred_vs_actual_type.png'))
+
+
 
 #metrics: confidence, entropy,mutual_info,epkl
 
@@ -434,5 +472,6 @@ if __name__ == '__main__':
     }
     preprocessed= sys.argv[1]
     uncertainty = sys.argv[2]
+    plot_dir = sys.argv[3]
 
-    main(preprocessed,uncertainty)
+    main(preprocessed,uncertainty, plot_dir)
