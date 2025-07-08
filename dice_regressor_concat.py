@@ -246,27 +246,58 @@ def pad_tensor(t, target_shape):
     return t.squeeze(0)  # Return (C, D', H', W')
 
 def pad_collate_fn(batch):
-    # batch[i] = (image, uncertainty, label, case_id)
-    max_d = max(item[0].shape[1] for item in batch)  # item[0] is image
+    max_d = max(item[0].shape[1] for item in batch)
     max_h = max(item[0].shape[2] for item in batch)
     max_w = max(item[0].shape[3] for item in batch)
 
-    padded_batch = []
-    for image, uncertainty, label, case_id in batch:
-        # Pad image
+    images = []
+    uncertainties = []
+    labels = []
+    subtypes = []
+
+    for image, uncertainty, label, subtype in batch:
         pad_dims = (
             0, max_w - image.shape[3],
             0, max_h - image.shape[2],
             0, max_d - image.shape[1]
         )
         image = torch.nn.functional.pad(image, pad_dims)
-
-        # Pad uncertainty the same way
         uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
 
-        padded_batch.append((image, uncertainty, label, case_id))
+        images.append(image)
+        uncertainties.append(uncertainty)
+        labels.append(label)
+        subtypes.append(subtype)
 
-    return padded_batch
+    images_batch = torch.stack(images)
+    uncertainties_batch = torch.stack(uncertainties)
+    labels_batch = torch.stack(labels)  # works even if labels are scalar tensors
+    # case_ids usually strings, so keep as list
+
+    return images_batch, uncertainties_batch, labels_batch, subtypes
+
+# def pad_collate_fn(batch):
+#     # batch[i] = (image, uncertainty, label, case_id)
+#     max_d = max(item[0].shape[1] for item in batch)  # item[0] is image
+#     max_h = max(item[0].shape[2] for item in batch)
+#     max_w = max(item[0].shape[3] for item in batch)
+#
+#     padded_batch = []
+#     for image, uncertainty, label, case_id in batch:
+#         # Pad image
+#         pad_dims = (
+#             0, max_w - image.shape[3],
+#             0, max_h - image.shape[2],
+#             0, max_d - image.shape[1]
+#         )
+#         image = torch.nn.functional.pad(image, pad_dims)
+#
+#         # Pad uncertainty the same way
+#         uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
+#
+#         padded_batch.append((image, uncertainty, label, case_id))
+#
+#     return padded_batch
 
 # def pad_collate_fn(batch):
 #     max_d = max(item['image'].shape[1] for item in batch)
