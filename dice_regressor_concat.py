@@ -186,8 +186,8 @@ class QADataset(Dataset):
         label = bin_dice_score(dice_score, num_bins=self.num_bins)
         print(f'Gets label {label}')
 
-        image_tensor = torch.from_numpy(image).float()
-        image_tensor = image_tensor.unsqueeze(0)  # Add channel dim
+        #image_tensor = torch.from_numpy(image).float()
+        image_tensor = image.unsqueeze(0)  # Add channel dim
 
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
         uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
