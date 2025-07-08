@@ -366,8 +366,8 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
     val_losses = []
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
-    for epoch in range(10):
-        print(f"Epoch {epoch + 1}/{10}")
+    for epoch in range(30):
+        print(f"Epoch {epoch + 1}/{30}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
