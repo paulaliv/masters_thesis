@@ -162,7 +162,6 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
-        print(f'Extracting image, logits and label for case {case_id}')
         file = f'{case_id}_resized.pt'
         image = torch.load(os.path.join(self.preprocessed_dir, file))
 
@@ -172,21 +171,18 @@ class QADataset(Dataset):
         logits_path = os.path.join(self.logits_dir, f"{case_id}_uncertainty_maps.npz")
         data = np.load(logits_path)  # shape (H, W, D)
         uncertainty = data[self.uncertainty_metric]
-        print(f'Uncertainty map shape: {uncertainty.shape}')
-        #logits = np.expand_dims(logits, axis=0)  # to shape: (1, H, W, D)
-        #print(f'Logits shape after expansion: {logits.shape}') #(B, num_classes, D, H, W)
 
         # nnU-Net raw images usually have multiple channels; choose accordingly:
         # Here, just take channel 0 for simplicity:
         #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
         # Map dice score to category
-        print(f'Dice score: {dice_score}')
+        # print(f'Dice score: {dice_score}')
         label = bin_dice_score(dice_score, num_bins=self.num_bins)
-        print(f'Gets label {label}')
+        # print(f'Gets label {label}')
 
         #image_tensor = torch.from_numpy(image).float()
         #image_tensor = image.unsqueeze(0)  # Add channel dim
-        print(f'Image shape {image.shape}')
+        # print(f'Image shape {image.shape}')
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
         uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
@@ -202,11 +198,11 @@ class QADataset(Dataset):
 
         # if logits_tensor.ndim == 5:
         #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
-
-        print('Image tensor shape : ', image.shape)
-
-        print('Uncertainty tensor shape : ', uncertainty_tensor.shape)
-        print('Label tensor shape : ', label_tensor.shape)
+        #
+        # print('Image tensor shape : ', image.shape)
+        #
+        # print('Uncertainty tensor shape : ', uncertainty_tensor.shape)
+        # print('Label tensor shape : ', label_tensor.shape)
 
 
 
@@ -371,9 +367,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
         print(f'Epoch {epoch}')
         model.train()
         train_losses = []
-        print(f'before train loader')
-        print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-        print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+
 
         for image, uncertainty, label, _ in train_loader:
             image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
@@ -385,9 +379,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
             with autocast(device_type='cuda'):
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 loss = criterion(preds, label)
-                print('after computing loss')
-                print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-                print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
