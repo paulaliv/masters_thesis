@@ -419,11 +419,11 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
                 all_preds.extend(preds.cpu().numpy())
                 all_labels.extend(label.cpu().numpy())
 
-                # # Convert subtype tensor(s) to Python list of strings or ints (depending on how subtype is stored)
-                # if isinstance(subtype, torch.Tensor):
-                #     subtype_list = [s.item() for s in subtype]  # convert tensor values to Python ints
-                # else:
-                #     subtype_list = subtype  # if it's already a list of strings
+                # Convert subtype tensor(s) to Python list of strings or ints (depending on how subtype is stored)
+                if isinstance(subtype, torch.Tensor):
+                    subtype_list = [s.item() for s in subtype]  # convert tensor values to Python ints
+                else:
+                    subtype_list = subtype  # if it's already a list of strings
 
                 all_subtypes.extend(subtype_list)
                 val_preds_all.extend(preds.cpu().numpy())
