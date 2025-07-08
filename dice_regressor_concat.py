@@ -218,7 +218,7 @@ class QADataset(Dataset):
         # print(f'Shape after concatenating: {x.shape}')
 
 
-        return image_tensor, uncertainty_tensor, label_tensor, subtype
+        return image, uncertainty_tensor, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
