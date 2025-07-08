@@ -22,7 +22,7 @@ from monai.data import Dataset, DataLoader
 from scipy.spatial import distance
 import seaborn as sns
 from monai.losses import FocalLoss
-
+from MedicalNet.models import resnet18
 
 from monai.networks.nets import DenseNet121, DenseNet169
 
@@ -280,7 +280,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
 
 
         epoch_train_loss = running_loss / total
-        epoch_train_acc = correct / total
+        epoch_train_acc = correct.double() / total
         print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
 
         train_losses.append(epoch_train_loss)
@@ -316,7 +316,7 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
                 val_labels_list.extend(labels_cpu.numpy())
 
         epoch_val_loss = val_loss / val_total
-        epoch_val_acc = val_correct / val_total
+        epoch_val_acc = val_correct.double() / val_total
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
 

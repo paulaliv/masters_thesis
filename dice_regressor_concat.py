@@ -434,7 +434,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
 
 
         epoch_val_loss = val_running_loss / val_total
-        epoch_val_acc = val_correct.double() / val_total
+        epoch_val_acc = val_correct / val_total
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
