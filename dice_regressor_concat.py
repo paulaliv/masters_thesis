@@ -35,29 +35,27 @@ from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
     ToTensord
 )
-
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image"], channel_dim=0),
+    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-
     RandAffined(
-        keys=["image"],
+        keys=["image", "uncertainty"],  # apply same affine to both
         prob=1.0,
-        rotate_range=[np.pi / 9],  # ~20 degrees
-        translate_range=[0.1, 0.1],  # 10% shift in x, y
-        scale_range=[0.1, 0.1],  # 10% zoom in/out
-        mode='bilinear'
+        rotate_range=[np.pi / 9],
+        translate_range=[0.1, 0.1],
+        scale_range=[0.1, 0.1],
+        mode=('bilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
-
-    RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),  # horizontal flip (axis 1 = left-right in 2D)
-
-    ToTensord(keys=["image"]),
+    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
+    ToTensord(keys=["image", "uncertainty"])
 ])
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=['image'],channel_dim=0),
+    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
     NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    ToTensord(keys=['image'])
+    ToTensord(keys=["image", "uncertainty"])
 ])
+
+
 
 
 
@@ -195,10 +193,12 @@ class QADataset(Dataset):
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
-            image = self.transform({"image": image})["image"]
-            uncertainty_tensor = self.transform({"uncertainty": uncertainty_tensor})["uncertainty"]
-
-
+            data = self.transform({
+                "image": image,
+                "uncertainty": uncertainty_tensor
+            })
+            image = data["image"]
+            uncertainty_tensor = data["uncertainty"]
 
         # if logits_tensor.ndim == 5:
         #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
