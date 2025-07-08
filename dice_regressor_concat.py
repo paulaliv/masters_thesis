@@ -195,8 +195,10 @@ class QADataset(Dataset):
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
-            image_tensor = self.transform(image_tensor)
-            uncertainty_tensor = self.transform(uncertainty_tensor)
+            image_tensor = self.transform({"image": image_tensor})["image"]
+            uncertainty_tensor = self.transform({"uncertainty": uncertainty_tensor})["uncertainty"]
+
+
 
         # if logits_tensor.ndim == 5:
         #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
