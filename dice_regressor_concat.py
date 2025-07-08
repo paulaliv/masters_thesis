@@ -382,7 +382,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
             # print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
             optimizer.zero_grad()
-            with autocast():
+            with autocast(device_type='cuda'):
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 loss = criterion(preds, label)
                 print('after computing loss')
