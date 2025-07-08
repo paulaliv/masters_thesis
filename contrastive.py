@@ -180,9 +180,65 @@ class QADataset(Dataset):
             'label': label_tensor,  # scalar tensor
         }
 
+from torch.utils.data import Sampler
+import random
+import numpy as np
+from collections import defaultdict
+class BalancedContrastiveSampler(Sampler):
+    def __init__(self, labels, batch_size, samples_per_class, rank=0, world_size=1):
+        self.labels = np.array(labels)
+        self.batch_size = batch_size
+        self.samples_per_class = samples_per_class
+        self.rank = rank
+        self.world_size = world_size
+
+        self.class_to_indices = defaultdict(list)
+        for idx, label in enumerate(labels):
+            self.class_to_indices[label].append(idx)
+
+        self.classes = list(self.class_to_indices.keys())
+        self.num_classes_per_batch = batch_size // samples_per_class
+
+        self.all_batches = self.create_batches()
+        self.batches = self.shard_batches()
+
+    def create_batches(self):
+        batches = []
+        total_samples = sum(len(v) for v in self.class_to_indices.values())
+        num_batches = total_samples // self.batch_size
+
+        for _ in range(num_batches * self.world_size):  # total across all GPUs
+            selected_classes = random.sample(self.classes, self.num_classes_per_batch)
+            batch = []
+            for cls in selected_classes:
+                indices_pool = self.class_to_indices[cls]
+                if len(indices_pool) >= self.samples_per_class:
+                    indices = random.sample(indices_pool, self.samples_per_class)
+                else:
+                    # Sample with replacement if not enough samples
+                    indices = random.choices(indices_pool, k=self.samples_per_class)
+                batch.extend(indices)
+            random.shuffle(batch)
+            batches.append(batch)
+        return batches
+
+    def shard_batches(self):
+        # Evenly split batches among processes
+        return self.all_batches[self.rank::self.world_size]
+
+    def __iter__(self):
+        random.shuffle(self.batches)
+        for batch in self.batches:
+            yield batch
+
+    def __len__(self):
+        return len(self.batches)
+
 
 
 def gather_embeddings_labels(embeddings, labels):
+    if not dist.is_available() or not dist.is_initialized():
+        return embeddings, labels
     # Create tensors to hold gathered embeddings and labels
     embeddings_gathered = [torch.zeros_like(embeddings) for _ in range(dist.get_world_size())]
     labels_gathered = [torch.zeros_like(labels) for _ in range(dist.get_world_size())]
@@ -263,14 +319,22 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
 
     from torch.utils.data.distributed import DistributedSampler
     if world_size > 1:
-        train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
+        train_sampler = BalancedContrastiveSampler(
+            labels=[sample['label'] for sample in train_dataset],
+            batch_size=16,
+            samples_per_class=2,
+            rank=rank,
+            world_size=world_size,
+        )
+        shuffle = False
+        #train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         shuffle = False  # sampler handles shuffling
     else:
         train_sampler = None
         shuffle = True
 
 
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=16, sampler=train_sampler, num_workers=4,shuffle=shuffle,pin_memory=True,collate_fn=pad_list_data_collate, drop_last=True)
 
     #train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, pin_memory=True, num_workers=4, collate_fn=pad_list_data_collate)
 
@@ -522,7 +586,7 @@ def main(preprocessed_dir, plot_dir, fold_paths, world_size, rank, device):
         train_dataset=train_dataset,
         plot_dir=plot_dir,
         optimizer=optimizer,
-        num_epochs=50,
+        num_epochs=100,
         rank=rank,
         world_size=world_size,
         device=device
