@@ -359,21 +359,21 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
-    scaler = GradScaler()
-    val_preds_all =[]
-    val_labels_all =[]
-    val_subtypes_all = []
-    for epoch in range(20):
-        print(f'Epoch {epoch}')
-        model.train()
-        train_losses = []
 
+    scaler = GradScaler()
+
+    train_losses = []
+    val_losses = []
+
+    val_preds_list, val_labels_list, val_subtypes_list = [], [], []
+    for epoch in range(10):
+        print(f"Epoch {epoch + 1}/{10}")
+        running_loss, correct, total = 0.0, 0, 0
+
+        model.train()
 
         for image, uncertainty, label, _ in train_loader:
             image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
-            # print('After loading input and moving to device')
-            # print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-            # print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
@@ -384,67 +384,82 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            train_losses.append(loss.item())
+
+            running_loss += loss.item() * image.size(0)
+            _, predicted = torch.max(preds, 1)
+            correct += (predicted == label).sum().item()
+            total += label.size(0)
 
 
-        avg_train_loss = sum(train_losses) / len(train_losses)
+        epoch_train_loss = running_loss / total
+        epoch_train_acc = correct / total
+        print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
+
+        train_losses.append(epoch_train_loss)
+
 
 
         # Validation step
         model.eval()
-        val_losses = []
-        all_subtypes = []
-        all_preds = []
-        all_labels = []
-        torch.cuda.empty_cache()
-        # print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB")
-        # print(f"Max allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
+        val_running_loss, val_correct, val_total = 0.0, 0, 0
+        val_preds_list.clear()
+        val_labels_list.clear()
+        val_subtypes_list.clear()
+
 
         with torch.no_grad():
             for image, uncertainty, label, subtype in val_loader:
                 image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
+
                 preds = model(image, uncertainty)
                 #print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
-                val_loss = criterion(preds, label)
-                val_losses.append(val_loss.item())
+                loss = criterion(preds, label)
+                val_running_loss += loss.item() * image.size(0)
 
-                all_preds.extend(preds.cpu().numpy())
-                all_labels.extend(label.cpu().numpy())
 
-                # Convert subtype tensor(s) to Python list of strings or ints (depending on how subtype is stored)
+                _, predicted = torch.max(preds, 1)
+                val_correct += (predicted == label).sum().item()
+                val_total += label.size(0)
+
+                val_preds_list.extend(predicted.cpu().numpy())
+                val_labels_list.extend(label.cpu().numpy())
+
+                # Convert subtype to list
                 if isinstance(subtype, torch.Tensor):
-                    subtype_list = [s.item() for s in subtype]  # convert tensor values to Python ints
+                    subtype_list = subtype.cpu().numpy().tolist()
                 else:
-                    subtype_list = subtype  # if it's already a list of strings
+                    subtype_list = subtype
 
-                all_subtypes.extend(subtype_list)
-                val_preds_all.extend(preds.cpu().numpy())
-                val_labels_all.extend(label.cpu().numpy())
-                val_subtypes_all.extend(subtype_list)
+                val_subtypes_list.extend(subtype_list)
 
 
+        epoch_val_loss = val_running_loss / val_total
+        epoch_val_acc = val_correct.double() / val_total
 
-        avg_val_loss = sum(val_losses) / len(val_losses)
-        print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+        print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+        val_losses.append(epoch_val_loss)
+        # avg_val_loss = sum(val_losses) / len(val_losses)
+
+        #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
 
         # Early stopping check
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
+        if epoch_val_loss < best_val_loss:
+            best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch': epoch,
-                'val_loss': avg_val_loss
+                'val_loss': epoch_val_loss
             }, f"best_qa_model_fold{fold}.pt")
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
-    return val_preds_all, val_labels_all, val_subtypes_all
 
+    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list
 
 
 # def compute_dice(pred, gt):
@@ -462,32 +477,51 @@ def main(preprocessed_dir, logits_dir, plot_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
     #for fold in range(5):
-    val_preds, val_labels, val_subtypes= train_one_fold(0, preprocessed_dir, logits_dir, fold_paths=fold_paths, uncertainty_metric='confidence',num_bins=5, device=device)
+    # Train the model and retrieve losses + predictions
+    train_losses, val_losses, val_preds, val_labels, val_subtypes = train_one_fold(
+        0,
+        preprocessed_dir,
+        logits_dir,
+        fold_paths=fold_paths,
+        uncertainty_metric='confidence',
+        num_bins=5,
+        device=device
+    )
+
     end = time.time()
     print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-    # plt.plot(train_losses, label='Train Loss')
-    # plt.plot(val_losses, label='Validation Loss')
-    # plt.xlabel('Epoch')
-    # plt.ylabel('Loss')
-    # plt.legend()
-    # plt.title('Loss Curves')
-    # plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
-    # val_preds = np.argmax(np.stack(val_preds), axis=1)  # shape [N]
-    # val_labels = np.array(val_labels)
-    # val_subtypes = np.array(val_subtypes)
+    # Convert prediction outputs to numpy arrays for plotting
+    val_preds = np.array(val_preds)
+    val_labels = np.array(val_labels)
+    val_subtypes = np.array(val_subtypes)
+
+    # ✅ Plot loss curves
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_losses, label='Train Loss', marker='o')
+    plt.plot(val_losses, label='Validation Loss', marker='x')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Training and Validation Loss Curves')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
+    plt.close()
 
     # ✅ Overall scatter plot
     plt.figure(figsize=(8, 6))
     plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-    plt.plot([val_labels.min(), val_labels.max()], [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
+    plt.plot([val_labels.min(), val_labels.max()],
+             [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
     plt.xlabel("Actual Label")
     plt.ylabel("Predicted Label")
     plt.title("Overall Predicted vs. Actual Labels")
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(plot_dir,'pred_vs_actual.png'))
-
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, 'pred_vs_actual.png'))
+    plt.close()
 
     # ✅ Per-subtype scatter plots
     unique_subtypes = np.unique(val_subtypes)
@@ -499,13 +533,17 @@ def main(preprocessed_dir, logits_dir, plot_dir):
 
         plt.figure(figsize=(8, 6))
         plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
-        plt.plot([labels_sub.min(), labels_sub.max()], [labels_sub.min(), labels_sub.max()], 'r--')
+        plt.plot([labels_sub.min(), labels_sub.max()],
+                 [labels_sub.min(), labels_sub.max()], 'r--')
         plt.xlabel("Actual Label")
         plt.ylabel("Predicted Label")
-        plt.title(f"Predicted vs Actual for Subtype {subtype}")
+        plt.title(f"Predicted vs Actual for Subtype: {subtype}")
         plt.grid(True)
+        plt.tight_layout()
 
-        plt.savefig(os.path.join(plot_dir, 'pred_vs_actual_type.png'))
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
+        plt.close()
+
 
 
 

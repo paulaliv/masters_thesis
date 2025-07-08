@@ -241,13 +241,15 @@ def train_one_fold(model, preprocessed_dir, plot_dir, fold_paths, optimizer, sch
     )
     train_losses = []  # <-- add here, before the epoch loop
     val_losses = []
+    scaler = GradScaler()
+
     for epoch in range(num_epochs):
         model.train()
         print(f"Epoch {epoch+1}/{num_epochs}")
         running_loss, correct, total = 0.0, 0, 0
         preds_list, labels_list = [], []
 
-        scaler = GradScaler()
+
 
         for batch in train_loader:
             inputs = batch['input'].to(device)
