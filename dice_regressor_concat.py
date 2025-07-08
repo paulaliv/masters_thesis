@@ -246,17 +246,40 @@ def pad_tensor(t, target_shape):
     return t.squeeze(0)  # Return (C, D', H', W')
 
 def pad_collate_fn(batch):
-    max_d = max(item['image'].shape[1] for item in batch)
-    max_h = max(item['image'].shape[2] for item in batch)
-    max_w = max(item['image'].shape[3] for item in batch)
-    target_shape = get_padded_shape((max_d, max_h, max_w))
+    # batch[i] = (image, uncertainty, label, case_id)
+    max_d = max(item[0].shape[1] for item in batch)  # item[0] is image
+    max_h = max(item[0].shape[2] for item in batch)
+    max_w = max(item[0].shape[3] for item in batch)
 
-    images = torch.stack([pad_tensor(item['image'], target_shape) for item in batch])
-    uncertainties = torch.stack([pad_tensor(item['uncertainty'], target_shape) for item in batch])
-    labels = torch.stack([item['label'] for item in batch])
-    subtypes = [item['subtype'] for item in batch]
+    padded_batch = []
+    for image, uncertainty, label, case_id in batch:
+        # Pad image
+        pad_dims = (
+            0, max_w - image.shape[3],
+            0, max_h - image.shape[2],
+            0, max_d - image.shape[1]
+        )
+        image = torch.nn.functional.pad(image, pad_dims)
 
-    return images, uncertainties, labels, subtypes
+        # Pad uncertainty the same way
+        uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
+
+        padded_batch.append((image, uncertainty, label, case_id))
+
+    return padded_batch
+
+# def pad_collate_fn(batch):
+#     max_d = max(item['image'].shape[1] for item in batch)
+#     max_h = max(item['image'].shape[2] for item in batch)
+#     max_w = max(item['image'].shape[3] for item in batch)
+#     target_shape = get_padded_shape((max_d, max_h, max_w))
+#
+#     images = torch.stack([pad_tensor(item['image'], target_shape) for item in batch])
+#     uncertainties = torch.stack([pad_tensor(item['uncertainty'], target_shape) for item in batch])
+#     labels = torch.stack([item['label'] for item in batch])
+#     subtypes = [item['subtype'] for item in batch]
+#
+#     return images, uncertainties, labels, subtypes
 
 
 def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, uncertainty_metric, device):
@@ -365,11 +388,11 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
                 all_preds.extend(preds.cpu().numpy())
                 all_labels.extend(label.cpu().numpy())
 
-                # Convert subtype tensor(s) to Python list of strings or ints (depending on how subtype is stored)
-                if isinstance(subtype, torch.Tensor):
-                    subtype_list = [s.item() for s in subtype]  # convert tensor values to Python ints
-                else:
-                    subtype_list = subtype  # if it's already a list of strings
+                # # Convert subtype tensor(s) to Python list of strings or ints (depending on how subtype is stored)
+                # if isinstance(subtype, torch.Tensor):
+                #     subtype_list = [s.item() for s in subtype]  # convert tensor values to Python ints
+                # else:
+                #     subtype_list = subtype  # if it's already a list of strings
 
                 all_subtypes.extend(subtype_list)
                 val_preds_all.extend(preds.cpu().numpy())
