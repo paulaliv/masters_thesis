@@ -274,7 +274,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
             fold_paths=fold_paths,
             uncertainty_metric=uncertainty_metric,
             num_bins=num_bins,
-            transform=train_transforms,
+            transform=train_transforms
 
         )
         train_datasets.append(ds)
@@ -285,7 +285,8 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
         preprocessed_dir=preprocessed_dir,
         logits_dir=logits_dir,
         fold_paths=fold_paths,
-        transform=val_transforms
+        uncertainty_metric=uncertainty_metric,
+        transform=val_transforms,
     )
 
     train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True,pin_memory=True,
