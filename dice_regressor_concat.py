@@ -187,15 +187,15 @@ class QADataset(Dataset):
         print(f'Gets label {label}')
 
         #image_tensor = torch.from_numpy(image).float()
-        image_tensor = image.unsqueeze(0)  # Add channel dim
-
+        #image_tensor = image.unsqueeze(0)  # Add channel dim
+        print(f'Image shape {image.shape}')
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
         uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
-            image_tensor = self.transform({"image": image_tensor})["image"]
+            image = self.transform({"image": image})["image"]
             uncertainty_tensor = self.transform({"uncertainty": uncertainty_tensor})["uncertainty"]
 
 
@@ -203,7 +203,7 @@ class QADataset(Dataset):
         # if logits_tensor.ndim == 5:
         #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
 
-        print('Image tensor shape : ', image_tensor.shape)
+        print('Image tensor shape : ', image.shape)
 
         print('Uncertainty tensor shape : ', uncertainty_tensor.shape)
         print('Label tensor shape : ', label_tensor.shape)
