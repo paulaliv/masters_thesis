@@ -195,11 +195,21 @@ class BalancedContrastiveSampler(Sampler):
         self.class_to_indices = defaultdict(list)
         for idx, label in enumerate(labels):
             self.class_to_indices[label].append(idx)
+        from collections import Counter
+
+        label_counts = {label: len(indices) for label, indices in self.class_to_indices.items()}
+        print(f"[Rank {self.rank}] Label distribution in sampler: {label_counts}")
+
+        too_small = {label: count for label, count in label_counts.items() if count < self.samples_per_class}
+        if too_small:
+            print(f"[Rank {self.rank}] WARNING: Classes with too few samples (will be skipped): {too_small}")
 
         self.classes = list(self.class_to_indices.keys())
         self.num_classes_per_batch = batch_size // samples_per_class
 
         self.all_batches = self.create_batches()
+        print(f"[Rank {self.rank}] Total batches created: {len(self.all_batches)}")
+
         self.batches = self.shard_batches()
 
     def create_batches(self):
@@ -350,6 +360,7 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
         optimizer.zero_grad()
 
         for i, batch in enumerate(train_loader):
+            print(f'Processing batch {i}')
             inputs = batch['input'].to(device)
             labels = batch['label'].to(device)
 
@@ -368,6 +379,9 @@ def train(model, train_dataset,plot_dir, optimizer, num_epochs, rank, world_size
 
             running_loss += loss.item() * inputs.size(0) * accum_steps
             total += labels.size(0)
+            if total == 0:
+                raise RuntimeError(
+                    "No training samples processed in this epoch. Check your DataLoader or batch filtering.")
 
             if loss.item() < best_loss:
                 best_loss = loss
