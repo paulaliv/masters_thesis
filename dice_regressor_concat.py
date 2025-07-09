@@ -371,6 +371,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
 
     # Step 3 (optional but recommended): Normalize weights to sum to 1
     weights = weights / weights.sum()
+    weights = weights.to(device)
 
     # Step 4: Create the weighted loss
     criterion = nn.CrossEntropyLoss(weight=weights)

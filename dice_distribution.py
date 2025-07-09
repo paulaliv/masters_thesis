@@ -46,12 +46,12 @@ bin_counts = np.bincount(bin_indices, minlength=len(bin_edges)-1)
 
 # Print counts with bin labels
 bin_labels = [
-    'Fail: Dice < 0.1',
-    'Poor: 0.1 ≤ Dice < 0.70',
-    'Moderate: 0.70 ≤ Dice < 0.8',
-    'Good: 0.8≤ Dice < 0.90',
-    'Very Good: 0.90≤ Dice < 0.95',
-    'Excellent: Dice ≥ 0.95'
+    '< 0.1',
+    '[0.1, 0.70)',
+    '[0.70, 0.8)',
+    '[0.8, 0.90)',
+    '[0.9, 0.95)',
+    '≥ 0.95'
 ]
 
 for label, count in zip(bin_labels, bin_counts):
