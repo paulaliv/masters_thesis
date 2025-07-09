@@ -4,6 +4,7 @@ from dynamic_network_architectures.building_blocks.residual import BasicBlockD
 from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from torch.cpu.amp import autocast
+from sklearn.metrics import classification_report
 
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 import matplotlib.pyplot as plt
@@ -119,10 +120,11 @@ class QAModel(nn.Module):
 
         return self.fc(merged)
 
-def bin_dice_score(dice, num_bins=5):
-    bin_edges = np.linspace(0, 1, num_bins + 1)
+def bin_dice_score(dice):
+    bin_edges = [0.0, 0.1, 0.7, 0.8, 0.90, 0.95, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
-    return min(label, num_bins - 1)
+    return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
+
 
 class QADataset(Dataset):
     def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric, num_bins = 5,transform=None):
@@ -177,7 +179,7 @@ class QADataset(Dataset):
         #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
         # Map dice score to category
         # print(f'Dice score: {dice_score}')
-        label = bin_dice_score(dice_score, num_bins=self.num_bins)
+        label = bin_dice_score(dice_score)
         # print(f'Gets label {label}')
 
         #image_tensor = torch.from_numpy(image).float()
@@ -350,9 +352,29 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=5).to(device)
+    model = QAModel(num_classes=6).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    criterion = nn.CrossEntropyLoss()
+    Counts = {
+        0: 49,  # Fail (0-0.1)
+        1: 19,  # Poor (0.1-0.7)
+        2: 24,  # Moderate (0.7-0.8)
+        3: 62,  # Good (0.8-0.9)
+        4: 56,  # Very Good (0.9- 0.95)
+        5: 35  # Excellent (>0.95)
+    }
+
+    # Step 1: Define class counts
+    class_counts = torch.tensor([49, 19, 24, 62, 56, 35], dtype=torch.float)
+
+    # Step 2: Inverse frequency
+    weights = 1.0 / torch.sqrt(class_counts)
+
+    # Step 3 (optional but recommended): Normalize weights to sum to 1
+    weights = weights / weights.sum()
+
+    # Step 4: Create the weighted loss
+    criterion = nn.CrossEntropyLoss(weight=weights)
+
 
     # Early stopping variables
     #DOUBLE CHECK THIS
@@ -366,6 +388,7 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
     val_losses = []
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
+    val_per_class_acc = defaultdict(list)
     for epoch in range(30):
         print(f"Epoch {epoch + 1}/{30}")
         running_loss, correct, total = 0.0, 0, 0
@@ -439,6 +462,16 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
         # avg_val_loss = sum(val_losses) / len(val_losses)
+
+        val_preds_np = np.array(val_preds_list)
+        val_labels_np = np.array(val_labels_list)
+
+        # Optional: define class names for nicer output
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.7)", "Moderate(0.7-0.8)", "Good (0.8-0.9)", "Very Good (0.9-0.95)", "Excellent(>0.95)"]
+
+        report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4)
+        print("Validation classification report:\n", report)
+
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
 
