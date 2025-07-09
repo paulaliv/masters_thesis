@@ -5,7 +5,7 @@ from dynamic_network_architectures.building_blocks.residual_encoders import Resi
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
-
+import collections
 from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -470,8 +470,10 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
         # Optional: define class names for nicer output
         class_names = ["Fail (0-0.1)", "Poor (0.1-0.7)", "Moderate(0.7-0.8)", "Good (0.8-0.9)", "Very Good (0.9-0.95)", "Excellent(>0.95)"]
 
-        report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4)
+        report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
+        print("Predicted label counts:", collections.Counter(val_preds_list))
+        print("True label counts:", collections.Counter(val_labels_list))
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
