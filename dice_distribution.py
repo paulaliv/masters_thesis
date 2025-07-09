@@ -33,6 +33,7 @@ bin_indices = np.clip(bin_indices, 0, 9)
 
 # Count the number of scores per bin
 bin_counts = pd.Series(bin_indices).value_counts().sort_index()
+print(bin_counts)
 
 
 # Define bin edges for the 5 bins (Fail, Poor, Moderate, Good, Excellent)
