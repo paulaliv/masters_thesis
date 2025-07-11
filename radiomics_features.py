@@ -20,7 +20,7 @@ for filename in os.listdir(data_dir):
         continue
 
     # Find corresponding mask
-    base_id = filename.replace('resized_ROI_image.nii.gz', '')
+    base_id = filename.replace('_resized_ROI_image.nii.gz', '')
     print(f'Processing {base_id}')
     image_path = os.path.join(data_dir, f'{base_id}_resized_ROI_image.nii.gz')
     mask_path = os.path.join(data_dir, f'{base_id}_resized_ROI_mask.nii.gz')
