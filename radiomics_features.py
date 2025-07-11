@@ -43,6 +43,7 @@ for filename in os.listdir(data_dir):
 
 
         image = sitk.Extract(image, size=size, index=index)
+        print(f'Resized image: {image.GetSize()}')
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')
