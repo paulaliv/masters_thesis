@@ -39,6 +39,7 @@ for filename in os.listdir(data_dir):
             features['subtype'] = subtype_row.iloc[0]['subtype']
         else:
             features['subtype'] = 'Unknown'
+            print(f'Case id {base_id}: no subtype in csv file!')
 
         all_features.append(features)
     except Exception as e:
