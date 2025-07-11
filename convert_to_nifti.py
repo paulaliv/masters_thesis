@@ -49,4 +49,6 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
 
 
 data_dir = '/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Classification_Tr/'
-convert_npz_to_nii(data_dir, overwrite=True)
+out_dir = '/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/'
+nifti_folder =  '/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr'
+convert_npz_to_nii(data_dir, nifti_folder, out_dir,overwrite=True)
