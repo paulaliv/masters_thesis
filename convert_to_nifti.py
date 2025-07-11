@@ -43,7 +43,7 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
 
         nii_path = os.path.join(input_nifti_dir, base + '_0000.nii.gz')  # adjust if necessary
         #spacing = (3.6, 0.6944, 0.6944)
-        spacing =[1,1,1]
+        spacing =(1,1,1)
         # tensor shape: [C, Z, Y, X] or [Z, Y, X]
         if image.ndim == 4:
             tensor = image[0]  # take first channel
