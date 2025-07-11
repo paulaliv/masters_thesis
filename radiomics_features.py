@@ -34,11 +34,10 @@ for filename in os.listdir(data_dir):
     mask = sitk.ReadImage(mask_path)
 
     # Check and fix image dimensionality
-    if image.GetDimension() == 4:
-        size = list(image.GetSize())
-        if size[0] == 1:
-            # Extract the 3D volume from the 4D image (remove channel dimension)
-            image = sitk.Extract(image, size[1:] + [0])
+    if image.GetDimension() == 4 and image.GetSize()[0] == 1:
+        # Extract the first channel: size[1:] keeps the rest
+        image = sitk.Extract(image, size=image.GetSize()[1:], index=[0, 0, 0])
+
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')
