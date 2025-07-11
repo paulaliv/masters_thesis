@@ -6,7 +6,13 @@ import nibabel as nib
 
 import SimpleITK as sitk
 
-extractor = featureextractor.RadiomicsFeatureExtractor()
+settings = {
+    'geometryTolerance': 2  # try small values like 1 or 2 (units = mm)
+}
+
+extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
+
+
 
 
 # === Paths ===
