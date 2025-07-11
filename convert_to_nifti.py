@@ -23,6 +23,17 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
             mask = (mask == 1).astype(np.uint8)
             print(f'Unique values: {np.unique(mask)}')
 
+        # Assuming image is a PyTorch tensor, convert it:
+        if isinstance(image, torch.Tensor):
+            image = image.cpu().numpy()
+
+        if isinstance(mask, torch.Tensor):
+            image = image.cpu().numpy()
+
+
+        # Make sure dtype is compatible
+        image = image.astype(np.float32)  # or np.uint8 for masks
+
 
         # Save as .nii.gz
 
