@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import nibabel as nib
 
+import SimpleITK as sitk
+
 extractor = featureextractor.RadiomicsFeatureExtractor()
 
 
@@ -26,8 +28,17 @@ for filename in os.listdir(data_dir):
     image_path = os.path.join(data_dir, f'{base_id}_resized_ROI_image.nii.gz')
     mask_path = os.path.join(data_dir, f'{base_id}_resized_ROI_mask.nii.gz')
 
-    print(f'Image shape is {nib.load(image_path).shape}')
-    print(f'Mask shape is {nib.load(mask_path).shape}')
+
+    # Read image and mask
+    image = sitk.ReadImage(image_path)
+    mask = sitk.ReadImage(mask_path)
+
+    # Check and fix image dimensionality
+    if image.GetDimension() == 4:
+        size = list(image.GetSize())
+        if size[0] == 1:
+            # Extract the 3D volume from the 4D image (remove channel dimension)
+            image = sitk.Extract(image, size[1:] + [0])
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')
