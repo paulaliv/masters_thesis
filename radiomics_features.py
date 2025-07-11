@@ -2,6 +2,7 @@ from radiomics import featureextractor
 import logging
 import os
 import pandas as pd
+import nibabel as nib
 
 extractor = featureextractor.RadiomicsFeatureExtractor()
 
@@ -24,6 +25,9 @@ for filename in os.listdir(data_dir):
     print(f'Processing {base_id}')
     image_path = os.path.join(data_dir, f'{base_id}_resized_ROI_image.nii.gz')
     mask_path = os.path.join(data_dir, f'{base_id}_resized_ROI_mask.nii.gz')
+
+    print(f'Image shape is {nib.load(image_path).shape}')
+    print(f'Mask shape is {nib.load(mask_path).shape}')
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')
