@@ -13,6 +13,13 @@ settings = {
 extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
 
 
+def resample_mask_to_image(mask, image):
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(image)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)  # keep mask labels intact
+    resampler.SetDefaultPixelValue(0)
+    resampled_mask = resampler.Execute(mask)
+    return resampled_mask
 
 
 # === Paths ===
@@ -50,6 +57,8 @@ for filename in os.listdir(data_dir):
 
         image = sitk.Extract(image, size=size, index=index)
         print(f'Resized image: {image.GetSize()}')
+
+    mask = resample_mask_to_image(mask, image)
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')

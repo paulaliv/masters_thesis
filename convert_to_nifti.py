@@ -5,6 +5,8 @@ import os
 import torch
 
 
+
+
 def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False):
     # os.makedirs(out_folder, exist_ok=True)
     npz_files = [f for f in os.listdir(npz_folder) if f.endswith('.pt')]
@@ -39,9 +41,12 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
 
         nii_path = os.path.join(input_nifti_dir, base + '_0000.nii.gz')  # adjust if necessary
 
-        # Load original image for affine
-        orig_nii = nib.load(nii_path)
-        affine = orig_nii.affine
+        spacing = (3.6, 0.6944, 0.6944)
+
+        # Create a simple diagonal affine using spacing
+        affine = np.diag(spacing + (1.0,))
+
+
 
 
         patient_id = os.path.splitext(file)[0]
