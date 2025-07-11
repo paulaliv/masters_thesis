@@ -33,12 +33,14 @@ for filename in os.listdir(data_dir):
     image = sitk.ReadImage(image_path)
     mask = sitk.ReadImage(mask_path)
 
+
     # Check if image has a channel dimension and squeeze it
     if image.GetDimension() == 4 and image.GetSize()[0] == 1:
         # Remove the first dimension (channel = 1)
         size = list(image.GetSize())  # e.g., [1, 48, 272, 256]
-        size[0] = 0  # we want to discard channel dim
         index = [0, 0, 0, 0]  # start from the beginning in all dims
+        size[0] = 0  # we want to discard channel dim
+
 
         image = sitk.Extract(image, size=size, index=index)
 
