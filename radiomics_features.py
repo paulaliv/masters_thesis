@@ -50,7 +50,7 @@ for filename in os.listdir(data_dir):
         continue
 
     try:
-        features = extractor.execute(image_path, mask_path)
+        features = extractor.execute(image, mask)
         features['case_id'] = base_id
 
         # Add subtype if it exists
