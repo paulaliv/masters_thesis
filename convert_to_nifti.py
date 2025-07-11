@@ -50,7 +50,8 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
         if hasattr(image, "numpy"):
             nib_img = nib.Nifti1Image(image.numpy().astype(np.float32), affine)
         else:
-            nib_img = image.astype(np.float32)
+            nib_img = nib.Nifti1Image(image.astype(np.float32), affine)
+
 
 
 
