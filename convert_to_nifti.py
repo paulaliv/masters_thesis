@@ -12,7 +12,7 @@ def convert_npz_to_nii(npz_folder, overwrite=False):
     for file in npz_files:
         base = file.replace('_resized.pt', '')
         image = torch.load(os.path.join(npz_folder, file))
-        mask = torch.load(os.path.join(npz_folder, base + '_mask_resized'))
+        mask = torch.load(os.path.join(npz_folder, base + '_mask_resized'), weights_only=True)
 
 
         # Check mask values
