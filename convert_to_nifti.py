@@ -28,9 +28,11 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
         # Assuming image is a PyTorch tensor, convert it:
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy()
+            print(f'Image shape: {image.shape}')
 
         if isinstance(mask, torch.Tensor):
-            image = image.cpu().numpy()
+            mask = image.cpu().numpy()
+            print(f'Mask shape: {mask.shape}')
 
 
         # Make sure dtype is compatible
@@ -40,11 +42,22 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
         # Save as .nii.gz
 
         nii_path = os.path.join(input_nifti_dir, base + '_0000.nii.gz')  # adjust if necessary
-
         spacing = (3.6, 0.6944, 0.6944)
+        # tensor shape: [C, Z, Y, X] or [Z, Y, X]
+        if image.ndim == 4:
+            tensor = image[0]  # take first channel
+        affine = np.diag(spacing + (1,))
+        if hasattr(image, "numpy"):
+            nib_img = nib.Nifti1Image(image.numpy().astype(np.float32), affine)
+        else:
+            nib_img = image.astype(np.float32)
+
+
+
+
 
         # Create a simple diagonal affine using spacing
-        affine = np.diag(spacing + (1.0,))
+        #affine = np.diag(spacing + (1.0,))
 
 
 
@@ -57,7 +70,7 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
             print(f"Skipping {patient_id} (already exists)")
             continue
 
-        nib.save(nib.Nifti1Image(image, affine), image_out)
+        nib.save(nib_img, image_out)
         nib.save(nib.Nifti1Image(mask, affine), mask_out)
 
         print(f"✔ Converted: {patient_id}")
