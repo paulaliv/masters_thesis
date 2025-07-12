@@ -189,8 +189,10 @@ class ROIPreprocessor:
 
 
         if self.save_as_nifti:
+            print(f'Original Image size: {original_size}')
             full_size_img = np.zeros(original_size[::-1], dtype=np.float32)
             full_size_mask = np.zeros(original_size[::-1], dtype=np.uint8) # Note: z, y, x ordering
+            print(f'Reverted for z,y,x ordering {full_size_mask.shape}')
             # Paste reverted crop into its position
             z1, z2 = slices_orig[0].start, slices_orig[0].stop
             y1, y2 = slices_orig[1].start, slices_orig[1].stop
@@ -201,9 +203,10 @@ class ROIPreprocessor:
             reverted_crop_mask = self.apply_reverse_resampling(resized_mask, original_spacing,original_size, is_label = True)
 
             assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape}"
+            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
             assert sitk.GetArrayFromImage(reverted_crop_mask).shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {sitk.GetArrayFromImage(reverted_crop_mask).shape}"
+            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {sitk.GetArrayFromImage(reverted_crop_mask).shape}and {(
+            z2 - z1, y2 - y1, x2 - x1)}"
 
             full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
             full_size_mask[z1:z2, y1:y2, x1:x2] = reverted_crop_mask
