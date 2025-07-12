@@ -200,9 +200,9 @@ class ROIPreprocessor:
             reverted_crop_img = self.apply_reverse_resampling(resized_img, original_spacing, original_size, is_label=False)
             reverted_crop_mask = self.apply_reverse_resampling(resized_mask, original_spacing,original_size, is_label = True)
 
-            assert reverted_crop_img.shape == (
+            assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
             z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {reverted_crop_img.shape}"
-            assert reverted_crop_mask.shape == (
+            assert sitk.GetArrayFromImage(reverted_crop_mask).shape == (
             z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {reverted_crop_mask.shape}"
 
             full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
