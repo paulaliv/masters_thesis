@@ -51,7 +51,7 @@ class ROIPreprocessor:
         original_spacing = np.array(original_spacing)  # e.g. (3.5, 1.2, 0.9)
 
         new_size = np.round(target_shape * (target_spacing / original_spacing)).astype(int)
-
+        new_size = [int(x) for x in new_size]
         resample = sitk.ResampleImageFilter()
         resample.SetOutputSpacing(original_spacing)
         resample.SetSize(new_size)
