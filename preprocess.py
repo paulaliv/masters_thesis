@@ -17,11 +17,12 @@ class ROIPreprocessor:
     def __init__(self,
                  roi_context: Tuple[int, int, int] = (3, 10, 10),
                  target_spacing: Tuple[int, int, int] = (3, 1, 1),
+                 safe_as_nifti = False,
                  target_shape: Tuple[int, int, int] = (48,272,256),):
         self.roi_context = roi_context
         self.target_shape = target_shape
         self.target_spacing = target_spacing
-        self.save_as_nifti = False
+        self.save_as_nifti = safe_as_nifti
 
     def load_nifti(self, filepath: str):
         nii = nib.load(filepath)
@@ -247,7 +248,7 @@ def main():
     input_folder_mask ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr/"
     output_folder = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/"
 
-    preprocessor = ROIPreprocessor()
+    preprocessor = ROIPreprocessor(safe_as_nifti=True)
     preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
 
 if __name__ == '__main__':
