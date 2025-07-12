@@ -205,8 +205,7 @@ class ROIPreprocessor:
             assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
             z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
             assert sitk.GetArrayFromImage(reverted_crop_mask).shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {sitk.GetArrayFromImage(reverted_crop_mask).shape}and {(
-            z2 - z1, y2 - y1, x2 - x1)}"
+            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {sitk.GetArrayFromImage(reverted_crop_mask).shape}and {(z2 - z1, y2 - y1, x2 - x1)}"
 
             full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
             full_size_mask[z1:z2, y1:y2, x1:x2] = reverted_crop_mask
