@@ -11,7 +11,8 @@ from scipy.ndimage import label, find_objects
 import glob
 
 
-
+261.8
+250.6
 
 class ROIPreprocessor:
     def __init__(self,
@@ -44,9 +45,16 @@ class ROIPreprocessor:
         return affine
 
     def revert_resampling(self, image: sitk.Image, original_spacing, original_size, is_label=False):
+
+        target_shape = np.array(self.target_shape)  # e.g. (38, 272, 256)
+        target_spacing = np.array(self.target_spacing)  # e.g. (3.0, 1.0, 1.0)
+        original_spacing = np.array(original_spacing)  # e.g. (3.5, 1.2, 0.9)
+
+        new_size = np.round(target_shape * (target_spacing / original_spacing)).astype(int)
+
         resample = sitk.ResampleImageFilter()
         resample.SetOutputSpacing(original_spacing)
-        resample.SetSize(original_size)
+        resample.SetSize(new_size)
         resample.SetOutputDirection(image.GetDirection())
         resample.SetOutputOrigin(image.GetOrigin())
         resample.SetTransform(sitk.Transform())
@@ -186,6 +194,7 @@ class ROIPreprocessor:
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         img_pp = self.normalize(cropped_img)
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
+        print(f'Resized image shape {resized_img.shape}')
 
 
         if self.save_as_nifti:
