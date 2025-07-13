@@ -7,12 +7,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import SimpleITK as sitk
+from numpy import ndarray
 from scipy.ndimage import label, find_objects
 import glob
-
-
-261.8
-250.6
+from scipy.ndimage import zoom
+import pandas as pd
 
 class ROIPreprocessor:
     def __init__(self,
@@ -44,17 +43,28 @@ class ROIPreprocessor:
         affine[:3, 3] = origin
         return affine
 
+    def compute_affine_with_origin_shift(self,original_spacing, original_origin, original_direction, crop_start_index):
+        original_spacing = np.array(original_spacing)
+        original_origin = np.array(original_origin)
+        original_direction = np.array(original_direction).reshape(3, 3)
+        crop_start_index = np.array(crop_start_index)
+
+        new_origin = original_origin + original_direction @ (original_spacing * crop_start_index)
+
+        affine = np.eye(4)
+        affine[:3, :3] = original_direction * original_spacing[np.newaxis, :]
+        affine[:3, 3] = new_origin
+        return affine
+
     def revert_resampling(self, image: sitk.Image, original_spacing, original_size, is_label=False):
 
         target_shape = np.array(self.target_shape)  # e.g. (38, 272, 256)
         target_spacing = np.array(self.target_spacing)  # e.g. (3.0, 1.0, 1.0)
         original_spacing = np.array(original_spacing)  # e.g. (3.5, 1.2, 0.9)
 
-        new_size = np.round(target_shape * (target_spacing / original_spacing)).astype(int)
-        new_size = [int(x) for x in new_size]
         resample = sitk.ResampleImageFilter()
         resample.SetOutputSpacing(original_spacing)
-        resample.SetSize(new_size)
+        resample.SetSize(original_size)
         resample.SetOutputDirection(image.GetDirection())
         resample.SetOutputOrigin(image.GetOrigin())
         resample.SetTransform(sitk.Transform())
@@ -66,6 +76,19 @@ class ROIPreprocessor:
             resample.SetInterpolator(sitk.sitkLinear)
 
         return resample.Execute(image)
+
+    def resample_to_spacing(self,image, current_spacing, target_spacing, is_mask=False):
+        # Calculate zoom factors: (old_spacing / new_spacing)
+        zoom_factors = [cs / ts for cs, ts in zip(current_spacing, target_spacing)]
+
+        # For interpolation order:
+        # - Use order=1 (linear) for images
+        # - Use order=0 (nearest) for masks to preserve label integrity
+        order = 0 if is_mask else 1
+
+        # Apply zoom
+        resampled = zoom(image, zoom=zoom_factors, order=order)
+        return resampled
 
 
     def resample_image(self, image: sitk.Image, is_label=False):
@@ -92,17 +115,10 @@ class ROIPreprocessor:
     def apply_resampling(self, img_path, is_label=False):
         img_sitk = sitk.ReadImage(img_path)
         return self.resample_image(img_sitk, is_label)
+
     def apply_reverse_resampling(self, img:np.ndarray, original_spacing, original_size, is_label=False):
         img_sitk = sitk.GetImageFromArray(img)
         return self.revert_resampling(img_sitk, original_spacing, original_size,is_label)
-
-
-    # def normalize(self, image: np.ndarray):
-    #     non_zero = image != 0
-    #     if np.sum(non_zero) == 0:
-    #         return image
-    #     image[non_zero] = (image[non_zero] - np.mean(image[non_zero])) / (np.std(image[non_zero]) + 1e-8)
-    #     return image
 
     def get_roi_bbox(self, mask: np.ndarray):
         labeled, _ = label(mask > 0)
@@ -126,6 +142,12 @@ class ROIPreprocessor:
 
     def crop_to_roi(self,image, mask, bbox: Tuple[slice, slice, slice]):
         return image[bbox], mask [bbox]
+
+    def compute_bbox_size_mm(self, bbox: Tuple[slice, slice, slice], spacing: np.ndarray):
+        size_voxels = np.array([s.stop - s.start for s in bbox])
+        size_mm = size_voxels * spacing  # spacing = [z, y, x]
+        return size_mm
+
 
     def adjust_to_shape(self, img, mask, shape):
         pad_width = []
@@ -180,18 +202,31 @@ class ROIPreprocessor:
         orig_mask = sitk.ReadImage(mask_path)
         original_spacing = orig_img.GetSpacing()
         original_size = orig_img.GetSize()
+        original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
+        original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
+
         #orig_img = sitk.GetArrayFromImage(orig_sitk)
         orig_mask = sitk.GetArrayFromImage(orig_mask)
 
 
         # Get bounding box in original mask
         slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
+        bbox_shape = (
+            slices_orig[0].stop - slices_orig[0].start,
+            slices_orig[1].stop - slices_orig[1].start,
+            slices_orig[2].stop - slices_orig[2].start
+        )
+        crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
 
         resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)
+        resampled_affine = self.compute_affine_with_origin_shift(
+    original_spacing, original_origin, original_direction, crop_start_index
+)
         resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
 
         slices = self.get_roi_bbox(resampled_mask)
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
+        bbox_stats = self.compute_bbox_size_mm(slices,np.array(self.target_spacing))
         img_pp = self.normalize(cropped_img)
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
         print(f'Resized image shape {resized_img.shape}')
@@ -208,8 +243,8 @@ class ROIPreprocessor:
             x1, x2 = slices_orig[2].start, slices_orig[2].stop
 
 
-            reverted_crop_img = self.apply_reverse_resampling(resized_img, original_spacing, original_size, is_label=False)
-            reverted_crop_mask = self.apply_reverse_resampling(resized_mask, original_spacing,original_size, is_label = True)
+            reverted_crop_img = self.apply_reverse_resampling(cropped_img, original_spacing, bbox_shape, is_label=False)
+            reverted_crop_mask = self.apply_reverse_resampling(cropped_mask, original_spacing,bbox_shape, is_label = True)
 
             assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
             z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
@@ -219,23 +254,54 @@ class ROIPreprocessor:
             full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
             full_size_mask[z1:z2, y1:y2, x1:x2] = reverted_crop_mask
 
+            reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing, is_mask=False)
+            reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,is_mask=True)
+
             affine = original_affine  # Neutral affine, as physical space is lost in cropping and resizing
             self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{case_id}_CROPPED_img.nii.gz"))
             self.save_nifti(full_size_mask.astype(np.uint8), affine, os.path.join(output_dir, f"{case_id}_CROPPED_mask.nii.gz"))
+
+            self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
+                            os.path.join(output_dir, f"{case_id}_PADDED_img.nii.gz"))
+            self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
+                            os.path.join(output_dir, f"{case_id}_PADDED_mask.nii.gz"))
+
+
         else:
             np.save( os.path.join(output_dir, f"{case_id}_img.npy"), resized_img.astype(np.float32))
             np.save( os.path.join(output_dir, f"{case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {case_id}')
+        return bbox_stats
 
     def preprocess_folder(self, image_dir, mask_dir, output_dir):
+        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds.csv"
+        subtypes_df = pd.read_csv(subtypes_csv)
+
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
+        bbox_stats = []
 
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            subtype_row = subtypes_df[subtypes_df['case_id'] == case_id]
+            if not subtype_row.empty:
+                tumor_class = subtype_row.iloc[0]['subtype']
+                tumor_class.strip()
+            else:
+                tumor_class = 'Unknown'
+                print(f'Case id {case_id}: no subtype in csv file!')
             if os.path.exists(mask_path):
-                self.preprocess_case(img_path, mask_path, output_dir)
+                bbox_size_mm= self.preprocess_case(img_path, mask_path, output_dir)
+                bbox_stats.append({
+                    "case_id": case_id,
+                    "tumor_class": tumor_class,
+                    "bbox_mm_z": bbox_size_mm[0],
+                    "bbox_mm_y": bbox_size_mm[1],
+                    "bbox_mm_x": bbox_size_mm[2],
+                })
+        df = pd.DataFrame(bbox_stats)
+        df.to_csv("/gpfs/home6/palfken/masters_thesis/tumor_bounding_box_sizes.csv", index=False)
 
     def preprocess_uncertainty_map(self, umap_path, mask_path, output_path):
         umap_sitk = self.apply_resampling(umap_path, is_label=False)
