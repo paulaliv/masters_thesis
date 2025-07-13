@@ -246,6 +246,9 @@ class ROIPreprocessor:
             reverted_crop_img = self.apply_reverse_resampling(cropped_img, original_spacing, bbox_shape, is_label=False)
             reverted_crop_mask = self.apply_reverse_resampling(cropped_mask, original_spacing,bbox_shape, is_label = True)
 
+            reverted_crop_mask = reverted_crop_mask.transpose(2, 1, 0)
+            reverted_crop_img = reverted_crop_img.transpose(2, 1, 0)
+
             assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
             z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
             assert sitk.GetArrayFromImage(reverted_crop_mask).shape == (
@@ -256,6 +259,9 @@ class ROIPreprocessor:
 
             reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing, is_mask=False)
             reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,is_mask=True)
+
+            print(f'Reverted adjusted image shape {full_size_img.shape}')
+
 
             affine = original_affine  # Neutral affine, as physical space is lost in cropping and resizing
             self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{case_id}_CROPPED_img.nii.gz"))
