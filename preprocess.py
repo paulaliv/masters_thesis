@@ -275,9 +275,9 @@ class ROIPreprocessor:
         return bbox_stats
 
     def preprocess_folder(self, image_dir, mask_dir, output_dir):
-        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds.csv"
+        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_df = pd.read_csv(subtypes_csv)
-        print(subtypes_df.columns)
+
 
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
         bbox_stats = []
