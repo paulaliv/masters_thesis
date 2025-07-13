@@ -240,6 +240,7 @@ class ROIPreprocessor:
         )
         print(f'Dimensions of bbox: {bbox_shape1}')
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
+        print(f'Cropped ROI image shape: {cropped_img.shape}')
         bbox_stats = self.compute_bbox_size_mm(slices,np.array(self.target_spacing))
         img_pp = self.normalize(cropped_img)
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
