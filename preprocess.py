@@ -222,10 +222,8 @@ class ROIPreprocessor:
 
 
         orig_img = sitk.ReadImage(img_path)
-        original_affine = self.sitk_to_affine(orig_img)
         orig_mask = sitk.ReadImage(mask_path)
         original_spacing = orig_img.GetSpacing()
-        original_size = orig_img.GetSize()
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
@@ -259,39 +257,13 @@ class ROIPreprocessor:
 
 
         if self.save_as_nifti:
-            # print(f'Original Image size: {original_size}')
-            full_size_img = np.zeros(original_size[::-1], dtype=np.float32)
-            full_size_mask = np.zeros(original_size[::-1], dtype=np.uint8) # Note: z, y, x ordering
-            print(f'Reverted for z,y,x ordering {full_size_mask.shape}')
-            # Paste reverted crop into its position
-            z1, z2 = slices_orig[0].start, slices_orig[0].stop
-            y1, y2 = slices_orig[1].start, slices_orig[1].stop
-            x1, x2 = slices_orig[2].start, slices_orig[2].stop
-
-
-            reverted_crop_img = self.apply_reverse_resampling(cropped_img, original_spacing, bbox_shape, is_label=False)
-            reverted_crop_mask = self.apply_reverse_resampling(cropped_mask, original_spacing,bbox_shape, is_label = True)
-
-            reverted_crop_mask = sitk.GetArrayFromImage(reverted_crop_mask).transpose(2, 1, 0)
-            reverted_crop_img = sitk.GetArrayFromImage(reverted_crop_img).transpose(2, 1, 0)
-
-            assert reverted_crop_img.shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {reverted_crop_img.shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
-            assert reverted_crop_mask.shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {reverted_crop_mask.shape}and {(z2 - z1, y2 - y1, x2 - x1)}"
-
-            full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
-            full_size_mask[z1:z2, y1:y2, x1:x2] = reverted_crop_mask
 
             reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing, is_mask=False)
             reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,is_mask=True)
 
-            print(f'Reverted adjusted image shape {full_size_img.shape}')
-
-
-            affine = original_affine  # Neutral affine, as physical space is lost in cropping and resizing
-            self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_img.nii.gz"))
-            self.save_nifti(full_size_mask.astype(np.uint8), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_mask.nii.gz"))
+            # affine = original_affine  # Neutral affine, as physical space is lost in cropping and resizing
+            # self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_img.nii.gz"))
+            # self.save_nifti(full_size_mask.astype(np.uint8), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_mask.nii.gz"))
 
             self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
                             os.path.join(output_dir, f"{self.case_id}_PADDED_img.nii.gz"))
