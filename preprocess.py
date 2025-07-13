@@ -246,13 +246,13 @@ class ROIPreprocessor:
             reverted_crop_img = self.apply_reverse_resampling(cropped_img, original_spacing, bbox_shape, is_label=False)
             reverted_crop_mask = self.apply_reverse_resampling(cropped_mask, original_spacing,bbox_shape, is_label = True)
 
-            reverted_crop_mask = reverted_crop_mask.transpose(2, 1, 0)
-            reverted_crop_img = reverted_crop_img.transpose(2, 1, 0)
+            reverted_crop_mask = sitk.GetArrayFromImage(reverted_crop_mask).transpose(2, 1, 0)
+            reverted_crop_img = sitk.GetArrayFromImage(reverted_crop_img).transpose(2, 1, 0)
 
-            assert sitk.GetArrayFromImage(reverted_crop_img).shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {sitk.GetArrayFromImage(reverted_crop_img).shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
-            assert sitk.GetArrayFromImage(reverted_crop_mask).shape == (
-            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {sitk.GetArrayFromImage(reverted_crop_mask).shape}and {(z2 - z1, y2 - y1, x2 - x1)}"
+            assert reverted_crop_img.shape == (
+            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in image: {reverted_crop_img.shape} and {(z2 - z1, y2 - y1, x2 - x1)}"
+            assert reverted_crop_mask.shape == (
+            z2 - z1, y2 - y1, x2 - x1), f"Shape mismatch in mask: {reverted_crop_mask.shape}and {(z2 - z1, y2 - y1, x2 - x1)}"
 
             full_size_img[z1:z2, y1:y2, x1:x2] = reverted_crop_img
             full_size_mask[z1:z2, y1:y2, x1:x2] = reverted_crop_mask
