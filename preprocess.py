@@ -197,6 +197,11 @@ class ROIPreprocessor:
         resampled_img_sitk = self.apply_resampling(img_path, is_label=False)
         resampled_mask_sitk = self.apply_resampling(mask_path, is_label=True)
 
+
+        resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)  # [Z, Y, X]
+        resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
+
+
         orig_img = sitk.ReadImage(img_path)
         original_affine = self.sitk_to_affine(orig_img)
         orig_mask = sitk.ReadImage(mask_path)
@@ -207,6 +212,8 @@ class ROIPreprocessor:
 
         #orig_img = sitk.GetArrayFromImage(orig_sitk)
         orig_mask = sitk.GetArrayFromImage(orig_mask)
+        print(f'Original shape :{orig_mask.shape}')
+        print(f'Shape after reshaping to target spacing: {resampled_img.shape}')
 
 
         # Get bounding box in original mask
@@ -218,11 +225,9 @@ class ROIPreprocessor:
         )
         crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
 
-        resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)
         resampled_affine = self.compute_affine_with_origin_shift(
     original_spacing, original_origin, original_direction, crop_start_index
 )
-        resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
 
         slices = self.get_roi_bbox(resampled_mask)
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
@@ -233,7 +238,7 @@ class ROIPreprocessor:
 
 
         if self.save_as_nifti:
-            print(f'Original Image size: {original_size}')
+            # print(f'Original Image size: {original_size}')
             full_size_img = np.zeros(original_size[::-1], dtype=np.float32)
             full_size_mask = np.zeros(original_size[::-1], dtype=np.uint8) # Note: z, y, x ordering
             print(f'Reverted for z,y,x ordering {full_size_mask.shape}')
