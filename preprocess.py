@@ -18,11 +18,14 @@ class ROIPreprocessor:
                  roi_context: Tuple[int, int, int] = (3, 10, 10),
                  target_spacing: Tuple[int, int, int] = (1,1,3),
                  safe_as_nifti = False,
-                 target_shape: Tuple[int, int, int] = (48,272,256),):
+                 target_shape: Tuple[int, int, int] = (48,256,256),):
+        self.case_id = None
         self.roi_context = roi_context
         self.target_shape = target_shape
         self.target_spacing = target_spacing
         self.save_as_nifti = safe_as_nifti
+        self.cropped_cases = []
+
 
     def load_nifti(self, filepath: str):
         nii = nib.load(filepath)
@@ -140,7 +143,7 @@ class ROIPreprocessor:
 
         bbox = (slice(zmin, zmax), slice(ymin, ymax), slice(xmin, xmax))
         dims = (zmax - zmin, ymax - ymin, xmax - xmin)
-        print(f"Final bbox dims: {dims}")
+
         return bbox
 
 
@@ -160,10 +163,9 @@ class ROIPreprocessor:
         print(f'Tumor region: {np.sum(mask > 0)}')
 
         for i in range(3):
-            print(f'Image shape {img.shape}')
-            print(f'Target shape {shape}')
+
             diff = shape[i] - img.shape[i]
-            print(f'Difference: {diff}')
+
 
             if diff > 0:
                 # Padding needed
@@ -174,6 +176,8 @@ class ROIPreprocessor:
 
             elif diff < 0:
                 print(f'ROI is larger that target shape, cropping')
+                if self.case_id not in self.cropped_cases:
+                    self.cropped_cases.append(self.case_id)
                 # Cropping needed
                 crop_before = (-diff) // 2
                 crop_after = (-diff) - crop_before
@@ -207,7 +211,7 @@ class ROIPreprocessor:
 
     def preprocess_case(self, img_path, mask_path, output_dir):
         os.makedirs(output_dir, exist_ok=True)
-        case_id = os.path.basename(img_path).replace('.nii.gz', '')
+        self.case_id = os.path.basename(img_path).replace('.nii.gz', '')
 
         resampled_img_sitk = self.apply_resampling(img_path, is_label=False)
         resampled_mask_sitk = self.apply_resampling(mask_path, is_label=True)
@@ -286,20 +290,20 @@ class ROIPreprocessor:
 
 
             affine = original_affine  # Neutral affine, as physical space is lost in cropping and resizing
-            self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{case_id}_CROPPED_img.nii.gz"))
-            self.save_nifti(full_size_mask.astype(np.uint8), affine, os.path.join(output_dir, f"{case_id}_CROPPED_mask.nii.gz"))
+            self.save_nifti(full_size_img.astype(np.float32), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_img.nii.gz"))
+            self.save_nifti(full_size_mask.astype(np.uint8), affine, os.path.join(output_dir, f"{self.case_id}_CROPPED_mask.nii.gz"))
 
             self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
-                            os.path.join(output_dir, f"{case_id}_PADDED_img.nii.gz"))
+                            os.path.join(output_dir, f"{self.case_id}_PADDED_img.nii.gz"))
             self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
-                            os.path.join(output_dir, f"{case_id}_PADDED_mask.nii.gz"))
+                            os.path.join(output_dir, f"{self.case_id}_PADDED_mask.nii.gz"))
 
 
         else:
-            np.save( os.path.join(output_dir, f"{case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save( os.path.join(output_dir, f"{case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
-        print(f'Processed {case_id}')
+        print(f'Processed {self.case_id}')
         return bbox_stats
 
     def preprocess_folder(self, image_dir, mask_dir, output_dir):
@@ -330,6 +334,9 @@ class ROIPreprocessor:
                     "bbox_mm_x": bbox_size_mm[2],
                 })
         df = pd.DataFrame(bbox_stats)
+        print(f'Cases that were cropped: {self.cropped_cases}')
+        print(f'Total cropped images: {len(self.cropped_cases)}')
+
         df.to_csv("/gpfs/home6/palfken/masters_thesis/tumor_bounding_box_sizes.csv", index=False)
 
     def preprocess_uncertainty_map(self, umap_path, mask_path, output_path):
