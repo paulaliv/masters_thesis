@@ -138,7 +138,11 @@ class ROIPreprocessor:
         ymax = min(mask.shape[1], ymax + self.roi_context[1])
         xmax = min(mask.shape[2], xmax + self.roi_context[2])
 
-        return (slice(zmin, zmax), slice(ymin, ymax), slice(xmin, xmax))
+        bbox = (slice(zmin, zmax), slice(ymin, ymax), slice(xmin, xmax))
+        dims = (zmax - zmin, ymax - ymin, xmax - xmin)
+        print(f"Final bbox dims: {dims}")
+        return bbox
+
 
     def crop_to_roi(self,image, mask, bbox: Tuple[slice, slice, slice]):
         return image[bbox[0], bbox[1], bbox[2]], mask[bbox[0], bbox[1], bbox[2]]
@@ -240,7 +244,7 @@ class ROIPreprocessor:
             slices_orig[2].stop - slices_orig[2].start
         )
         print(f'Dimensions of bbox: {bbox_shape1}')
-        cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, bbox_shape1)
+        cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         print(f'Cropped ROI image shape: {cropped_img.shape}')
         bbox_stats = self.compute_bbox_size_mm(slices,np.array(self.target_spacing))
         img_pp = self.normalize(cropped_img)
