@@ -155,7 +155,10 @@ class ROIPreprocessor:
         print(f'Tumor region: {np.sum(mask > 0)}')
 
         for i in range(3):
+            print(f'Image shape {img.shape}')
+            print(f'Target shape {shape}')
             diff = shape[i] - img.shape[i]
+            print(f'Difference: {diff}')
 
             if diff > 0:
                 # Padding needed
