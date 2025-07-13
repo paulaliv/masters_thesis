@@ -141,7 +141,8 @@ class ROIPreprocessor:
         return (slice(zmin, zmax), slice(ymin, ymax), slice(xmin, xmax))
 
     def crop_to_roi(self,image, mask, bbox: Tuple[slice, slice, slice]):
-        return image[bbox], mask [bbox]
+        return image[bbox[0], bbox[1], bbox[2]], mask[bbox[0], bbox[1], bbox[2]]
+
 
     def compute_bbox_size_mm(self, bbox: Tuple[slice, slice, slice], spacing: np.ndarray):
         size_voxels = np.array([s.stop - s.start for s in bbox])
