@@ -152,6 +152,7 @@ class ROIPreprocessor:
     def adjust_to_shape(self, img, mask, shape):
         pad_width = []
         slices = []
+        print(f'Tumor region: {np.sum(mask > 0)}')
 
         for i in range(3):
             diff = shape[i] - img.shape[i]
@@ -164,7 +165,6 @@ class ROIPreprocessor:
                 slices.append(slice(0, img.shape[i]))
             elif diff < 0:
                 print(f'ROI is larger that target shape, cropping')
-                print(f'Tumor region: {np.sum(mask > 0)}')
                 # Cropping needed
                 crop_before = (-diff) // 2
                 crop_after = (-diff) - crop_before
@@ -177,7 +177,7 @@ class ROIPreprocessor:
         # Crop if needed
         img = img[slices[0], slices[1], slices[2]]
         mask = mask[slices[0], slices[1], slices[2]]
-        print(f'Tumor region after cropping: {np.sum(mask > 0)}')
+        print(f'Tumor region after adjustment: {np.sum(mask > 0)}')
 
         return img, mask
 
@@ -230,6 +230,12 @@ class ROIPreprocessor:
 )
 
         slices = self.get_roi_bbox(resampled_mask)
+        bbox_shape1 = (
+            slices_orig[0].stop - slices_orig[0].start,
+            slices_orig[1].stop - slices_orig[1].start,
+            slices_orig[2].stop - slices_orig[2].start
+        )
+        print(f'Dimensions of bbox: {bbox_shape1}')
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         bbox_stats = self.compute_bbox_size_mm(slices,np.array(self.target_spacing))
         img_pp = self.normalize(cropped_img)
