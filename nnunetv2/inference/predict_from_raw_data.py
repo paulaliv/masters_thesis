@@ -769,31 +769,33 @@ class nnUNetPredictor(object):
                     # print(f"Saved raw logits to {raw_logits_file}")
 
 
-                    uniform_size = [48, 272, 256]
-
-                    context = [3, 15, 15]
-                    tumor_mask = prediction.argmax(0).numpy()
-                    cropped_confidence= self.reconstruct_and_crop_features(
-                        full_feature_volume=confidence_map,
-                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
-                    print(f'Cropped Confidence shape {cropped_confidence.shape}')
-
-                    cropped_entropy = self.reconstruct_and_crop_features(
-                        full_feature_volume=entropy_map,
-                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
-
-                    cropped_MI = self.reconstruct_and_crop_features(
-                        full_feature_volume=mutual_info,
-                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
-
-                    cropped_kl= self.reconstruct_and_crop_features(
-                        full_feature_volume=epkl_map,
-                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    # uniform_size = [48, 272, 256]
+                    #
+                    # context = [3, 15, 15]
+                    # tumor_mask = prediction.argmax(0).numpy()
+                    # cropped_confidence= self.reconstruct_and_crop_features(
+                    #     full_feature_volume=confidence_map,
+                    #     tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    # print(f'Cropped Confidence shape {cropped_confidence.shape}')
+                    #
+                    # cropped_entropy = self.reconstruct_and_crop_features(
+                    #     full_feature_volume=entropy_map,
+                    #     tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    #
+                    # cropped_MI = self.reconstruct_and_crop_features(
+                    #     full_feature_volume=mutual_info,
+                    #     tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
+                    #
+                    # cropped_kl= self.reconstruct_and_crop_features(
+                    #     full_feature_volume=epkl_map,
+                    #     tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
 
 
                     confidence_map = confidence_map[None] if confidence_map.ndim == 3 else confidence_map
                     entropy_map = entropy_map[None] if entropy_map.ndim == 3 else entropy_map
                     mutual_info = mutual_info[None] if mutual_info.ndim == 3 else mutual_info
+                    epkl_map = epkl_map[None] if epkl_map.ndim == 3 else epkl_map
+
 
 
                     # # Resample logits to original image shape
@@ -821,26 +823,36 @@ class nnUNetPredictor(object):
                         current_spacing,
                         properties['spacing']
                     )
+                    epkl_reshaped = self.configuration_manager.resampling_fn_probabilities(
+                        epkl_map,
+                        properties['shape_after_cropping_and_before_resampling'],
+                        current_spacing,
+                        properties['spacing']
+                    )
 
-                    # Save resampled logits AFTER resampling
-                    resampled_confidence_file = ofile + "_resampled_confidence.npz"
-                    np.savez_compressed(resampled_confidence_file, confidence_reshaped)
-                    print(f"Saved resampled confidence to {resampled_confidence_file}")
-                    # Save resampled logits AFTER resampling
-                    resampled_entropy_file = ofile + "_resampled_entropy.npz"
-                    np.savez_compressed(resampled_entropy_file, entropy_reshaped)
-                    print(f"Saved resampled logits to {resampled_entropy_file}")
 
-                    resampled_mi_file = ofile + "_resampled_mi.npz"
-                    np.savez_compressed(resampled_mi_file, mutual_info_reshaped)
-                    print(f"Saved resampled logits to {resampled_mi_file}")
+                    # # Save resampled logits AFTER resampling
+                    # resampled_confidence_file = ofile + "_resampled_confidence.npy"
+                    # np.save(resampled_confidence_file, confidence_reshaped)
+                    # print(f"Saved resampled confidence to {resampled_confidence_file}")
+                    # # Save resampled logits AFTER resampling
+                    # resampled_entropy_file = ofile + "_resampled_entropy.npy"
+                    # np.save(resampled_entropy_file, entropy_reshaped)
+                    # print(f"Saved resampled logits to {resampled_entropy_file}")
+                    #
+                    # resampled_mi_file = ofile + "_resampled_mi.npy"
+                    # np.save(resampled_mi_file, mutual_info_reshaped)
+                    # print(f"Saved resampled logits to {resampled_mi_file}")
+                    #
+                    #
+                    #
 
 
                     np.savez_compressed(ofile + "_uncertainty_maps.npz",
-                                        confidence=cropped_confidence.numpy(),
-                                        entropy=cropped_entropy.numpy(),
-                                        mutual_info=cropped_MI.numpy(),
-                                        epkl=cropped_kl.numpy())
+                                        confidence=confidence_reshaped.cpu().numpy(),
+                                        entropy=entropy_reshaped.cpu().numpy(),
+                                        mutual_info=mutual_info_reshaped.cpu().numpy(),
+                                        epkl=epkl_reshaped.cpu().numpy())
                 if ofile is not None:
                     # this needs to go into background processes
                     # export_prediction_from_logits(prediction, properties, self.configuration_manager, self.plans_manager,
