@@ -283,6 +283,14 @@ class ROIPreprocessor:
         print(f'Processed {self.case_id}')
         return tumor_size
 
+    def compute_dice(self,gt,pred):
+        epsilon = 1e-6
+        pred = pred.astype(bool)
+        gt = gt.astype(bool)
+        intersection = np.logical_and(pred, gt).sum()
+        return (2. * intersection) / (pred.sum() + gt.sum() + epsilon)
+
+
     def preprocess_folder(self, image_dir, mask_dir, output_dir):
         subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_df = pd.read_csv(subtypes_csv)
@@ -335,8 +343,10 @@ class ROIPreprocessor:
         mask = sitk.GetArrayFromImage(mask_sitk)
 
         slices = self.get_roi_bbox(mask)
-        cropped_umap, _= self.crop_to_roi(umap, mask, slices)
-        umap_pp = self.adjust_to_shape(cropped_umap, self.target_shape)
+        cropped_umap, cropped_mask= self.crop_to_roi(umap, mask, slices)
+        umap_pp = self.normalize(cropped_umap)
+        resized_umap,_= self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
+        print(f'Resized UMAP shape {resized_umap.shape}')
 
         affine = np.eye(4)
         os.makedirs(output_path, exist_ok=True)
@@ -344,14 +354,41 @@ class ROIPreprocessor:
         self.save_nifti(umap_pp.astype(np.float32), affine, os.path.join(output_path, f"{case_id}_umap.nii.gz"))
 
 
+
 def main():
-    input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr/"
-    input_folder_mask ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr/"
+    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folder_mask ="/gpfs/home6/palfken/QA_labelsTr/"
+    predicted_mask_folder = "/gpfs/home6/palfken/nnUNetFrame/QA_input_Tr/output"
+    mask_paths = sorted(glob.glob(os.path.join(input_folder_mask, '.nii.gz')))
+
+
+
     output_folder = "/gpfs/home6/palfken/Data_npy/"
     os.makedirs(output_folder, exist_ok=True)
+    dice_scores = []
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False)
-    preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
+    for mask_path in mask_paths:
+        case_id = os.path.basename(mask_path).replace('.nii.gz', '')
+        pred_path = os.path.join(predicted_mask_folder, f"{case_id}.nii.gz")
+        pred = nib.load(pred_path)
+        gt = nib.load(mask_path)
+        dice = preprocessor.compute_dice(gt, pred)
+        dice_scores.append(dice)
+
+    dice_scores = np.array(dice_scores)
+
+    # Define bin edges: [0.0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
+    bin_edges = np.arange(0.0, 1.1, 0.1)  # includes 1.0 as final edge
+
+    # Count values in each bin
+    hist, _ = np.histogram(dice_scores, bins=bin_edges)
+
+    # Print bin ranges and counts
+    for i in range(len(bin_edges) - 1):
+        print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {hist[i]} samples")
+
+    #preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
 
 if __name__ == '__main__':
     main()

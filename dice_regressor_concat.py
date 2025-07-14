@@ -99,6 +99,14 @@ class Light3DEncoder(nn.Module):
         x = self.encoder(x)
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
 
+class OodDetection(nn.Module):
+    def __init__(self,is_train = True):
+        super().__init__()
+        self.train = is_train
+
+    def compute_mahalanobis_distance(self,x):
+
+
 
 class QAModel(nn.Module):
     def __init__(self,num_classes):
