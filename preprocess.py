@@ -285,8 +285,9 @@ class ROIPreprocessor:
 
     def compute_dice(self,gt,pred):
         epsilon = 1e-6
-        pred = pred.astype(bool)
-        gt = gt.astype(bool)
+        pred = pred.get_fdata().astype(bool)
+        gt = gt.get_fdata().astype(bool)
+
         intersection = np.logical_and(pred, gt).sum()
         return (2. * intersection) / (pred.sum() + gt.sum() + epsilon)
 
