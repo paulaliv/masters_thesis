@@ -347,7 +347,7 @@ class ROIPreprocessor:
 def main():
     input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr/"
     input_folder_mask ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr/"
-    output_folder = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/"
+    output_folder = "/gpfs/home6/palfken/Data_npy/"
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False)
     preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
