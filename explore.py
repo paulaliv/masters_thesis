@@ -35,10 +35,18 @@ test_preprocessed = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmenta
 #     print(train_counts)
 #     print('Test Counts')
 #     print(test_counts)
-base_dataset = nnUNetDatasetBlosc2(test_preprocessed)
+import pandas as pd
 
-case_id = 'DES_0002'
-data, seg, seg_prev, properties = base_dataset.load_case(case_id)
-print("Data shape:", data.shape)
-image = data[0]
-print(f'image shape {image.shape}')
+# Load your CSV
+df = pd.read_csv("/gpfs/home6/palfken/masters_thesis/tumor_bounding_box_sizes.csv")
+
+# Compute tumor volume in mm³
+df["volume_mm3"] = df["bbox_mm_x"] * df["bbox_mm_y"] * df["bbox_mm_z"]
+
+# Global stats
+global_stats = df["volume_mm3"].agg(["min", "max", "mean", "std"])
+print("Global Tumor Volume Stats (mm³):\n", global_stats)
+
+# Stats per tumor subtype
+per_subtype_stats = df.groupby("tumor_class")["volume_mm3"].agg(["min", "max", "mean", "std"])
+print("\nPer-Subtype Tumor Volume Stats (mm³):\n", per_subtype_stats)
