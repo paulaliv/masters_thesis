@@ -34,16 +34,60 @@
 #     print(test_counts)
 import pandas as pd
 
-# Load your CSV
-df = pd.read_csv("/gpfs/home6/palfken/masters_thesis/tumor_bounding_box_sizes.csv")
+import os
+import numpy as np
+import pandas as pd
+import nibabel as nib  # or use SimpleITK if you prefer
 
-# Compute tumor volume in mm³
-df["volume_mm3"] = df["bbox_mm_x"] * df["bbox_mm_y"] * df["bbox_mm_z"]
+# Paths
+mask_folder = "/path/to/tumor_masks"
+csv_file = "/path/to/case_metadata.csv"
 
-# Global stats
-global_stats = df["volume_mm3"].agg(["min", "max", "mean", "std"])
-print("Global Tumor Volume Stats (mm³):\n", global_stats)
+# Load metadata CSV (case_id, tumor_class)
+df = pd.read_csv(csv_file)
 
-# Stats per tumor subtype
-per_subtype_stats = df.groupby("tumor_class")["volume_mm3"].agg(["min", "max", "mean", "std"])
-print("\nPer-Subtype Tumor Volume Stats (mm³):\n", per_subtype_stats)
+# Assume all masks have the same spacing (z,y,x) in mm
+# If spacing differs per case, you need to load spacing per mask file
+voxel_spacing = np.array([3.0, 1.0, 1.0])  # example: 1mm x 1mm x 1mm voxel size
+
+volumes = []
+for idx, row in df.iterrows():
+    case_id = row['case_id']
+    tumor_class = row['tumor_class']
+
+    mask_path = os.path.join(mask_folder, f"{case_id}_mask.nii.gz")  # adjust naming if needed
+    if not os.path.exists(mask_path):
+        print(f"Mask not found for {case_id}, skipping")
+        continue
+
+    # Load mask
+    mask_img = nib.load(mask_path)
+    mask = mask_img.get_fdata()
+
+    # If spacing per mask differs, get it here:
+    # voxel_spacing = mask_img.header.get_zooms()[:3]
+
+    # Count tumor voxels
+    tumor_voxels = np.sum(mask > 0)
+
+    # Compute tumor volume in mm³
+    voxel_volume = np.prod(voxel_spacing)
+    tumor_volume_mm3 = tumor_voxels * voxel_volume
+
+    volumes.append({'case_id': case_id, 'tumor_class': tumor_class, 'volume_mm3': tumor_volume_mm3})
+
+# Convert to DataFrame
+vol_df = pd.DataFrame(volumes)
+
+# Compute global stats
+global_stats = vol_df['volume_mm3'].agg(['min', 'max', 'mean', 'std'])
+
+# Compute per-subtype stats (excluding unknown if you want)
+per_subtype_stats = vol_df[vol_df['tumor_class'] != 'Unknown'].groupby('tumor_class')['volume_mm3'].agg(
+    ['min', 'max', 'mean', 'std'])
+
+print("Global tumor volume stats (mm³):")
+print(global_stats.round(4))
+
+print("\nPer-subtype tumor volume stats (mm³):")
+print(per_subtype_stats.round(4))

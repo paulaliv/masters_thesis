@@ -151,10 +151,15 @@ class ROIPreprocessor:
         return image[bbox[0], bbox[1], bbox[2]], mask[bbox[0], bbox[1], bbox[2]]
 
 
-    def compute_bbox_size_mm(self, bbox: Tuple[slice, slice, slice], spacing: np.ndarray):
-        size_voxels = np.array([s.stop - s.start for s in bbox])
-        size_mm = size_voxels * spacing  # spacing = [z, y, x]
-        return size_mm
+
+    def count_tumor_voxels(self, mask):
+        tumor_voxels = np.sum(mask > 0)
+
+        # Compute tumor volume in mm³
+        voxel_volume = np.prod(self.target_spacing)
+        tumor_volume_mm3 = tumor_voxels * voxel_volume
+        return tumor_volume_mm3
+
 
 
     def adjust_to_shape(self, img, mask, shape):
@@ -250,7 +255,7 @@ class ROIPreprocessor:
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         print(f'Cropped ROI image shape: {cropped_img.shape}')
-        bbox_stats = self.compute_bbox_size_mm(slices,np.array(self.target_spacing))
+        tumor_size= self.count_tumor_voxels(resampled_mask)
         img_pp = self.normalize(cropped_img)
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
         print(f'Resized image shape {resized_img.shape}')
@@ -276,7 +281,7 @@ class ROIPreprocessor:
             np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
-        return bbox_stats
+        return tumor_size
 
     def preprocess_folder(self, image_dir, mask_dir, output_dir):
         subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
@@ -301,9 +306,8 @@ class ROIPreprocessor:
                 bbox_stats.append({
                     "case_id": case_id,
                     "tumor_class": tumor_class,
-                    "bbox_mm_z": bbox_size_mm[0],
-                    "bbox_mm_y": bbox_size_mm[1],
-                    "bbox_mm_x": bbox_size_mm[2],
+                    "volume_mm3": bbox_size_mm,
+
                 })
         df = pd.DataFrame(bbox_stats)
         print(f'Cases that were cropped: {self.cropped_cases}')
@@ -333,7 +337,7 @@ def main():
     input_folder_mask ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr/"
     output_folder = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/"
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=True)
+    preprocessor = ROIPreprocessor(safe_as_nifti=False)
     preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
 
 if __name__ == '__main__':
