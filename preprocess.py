@@ -310,6 +310,18 @@ class ROIPreprocessor:
 
                 })
         df = pd.DataFrame(bbox_stats)
+        # Compute global stats
+        global_stats = df['volume_mm3'].agg(['min', 'max', 'mean', 'std'])
+
+        # Compute per-subtype stats (excluding unknown if you want)
+        per_subtype_stats = df[df['tumor_class'] != 'Unknown'].groupby('tumor_class')['volume_mm3'].agg(
+            ['min', 'max', 'mean', 'std'])
+
+        print("Global tumor volume stats (mm³):")
+        print(global_stats.round(4))
+
+        print("\nPer-subtype tumor volume stats (mm³):")
+        print(per_subtype_stats.round(4))
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
