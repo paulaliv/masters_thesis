@@ -849,10 +849,10 @@ class nnUNetPredictor(object):
 
 
                     np.savez_compressed(ofile + "_uncertainty_maps.npz",
-                                        confidence=confidence_reshaped.cpu().numpy(),
-                                        entropy=entropy_reshaped.cpu().numpy(),
-                                        mutual_info=mutual_info_reshaped.cpu().numpy(),
-                                        epkl=epkl_reshaped.cpu().numpy())
+                                        confidence=confidence_reshaped,
+                                        entropy=entropy_reshaped,
+                                        mutual_info=mutual_info_reshaped,
+                                        epkl=epkl_reshaped)
                 if ofile is not None:
                     # this needs to go into background processes
                     # export_prediction_from_logits(prediction, properties, self.configuration_manager, self.plans_manager,
