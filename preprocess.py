@@ -374,6 +374,7 @@ def main():
         pred = nib.load(pred_path)
         gt = nib.load(mask_path)
         dice = preprocessor.compute_dice(gt, pred)
+        print(dice)
         dice_scores.append(dice)
 
     dice_scores = np.array(dice_scores)
