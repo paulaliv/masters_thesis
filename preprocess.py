@@ -276,9 +276,9 @@ class ROIPreprocessor:
                             os.path.join(output_dir, f"{self.case_id}_PADDED_mask.nii.gz"))
 
 
-        else:
-            np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        # else:
+        #     np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #     np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
         return tumor_size
