@@ -1,13 +1,10 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
 
-from nnunetv2.training.dataloading.nnunet_dataset import nnUNetBaseDataset,nnUNetDatasetBlosc2
-tabular_data_all = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv')
-test_data = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_test.csv')
-train_data = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_train.csv')
-test_preprocessed = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres'
-# print(len(train_data))
-# print(len(test_data))
+# tabular_data_all = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv')
+# test_data = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_test.csv')
+# train_data = pd.read_csv('/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_train.csv')
+# test_preprocessed = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue/nnUNetPlans_3d_fullres'
+# # print(len(train_data))
+# # print(len(test_data))
 # print(len(tabular_data_all))
 #
 # print(test_data.columns)
