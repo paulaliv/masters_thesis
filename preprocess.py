@@ -308,7 +308,7 @@ class ROIPreprocessor:
             pred = nib.load(mask_path)
             gt = nib.load(gt_path)
             dice = self.compute_dice(gt, pred)
-            print(dice)
+            print(f'Dice score: {dice}')
 
             if self.save_umaps:
                 umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
@@ -362,7 +362,9 @@ class ROIPreprocessor:
         npz_file = np.load(umap_path)
         umap_array = npz_file[umap_type]
         umap_array = umap_array.astype(np.float32)# or whichever key you want
-
+        print(f'umap dims before squeeze : {umap_array.shape}')
+        umap_array = np.squeeze(umap_array)
+        print(f'umap dims after squeeze: {umap_array.shape}')
         # Convert NumPy array to SimpleITK image
         orig_umap = sitk.GetImageFromArray(umap_array)
 
