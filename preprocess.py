@@ -334,7 +334,7 @@ class ROIPreprocessor:
         intersection = np.logical_and(pred, gt).sum()
         return (2. * intersection) / (pred.sum() + gt.sum() + epsilon)
 
-    def center_pad_to_shape(volume, target_shape):
+    def center_pad_to_shape(self,volume, target_shape):
         """
         Pad a 3D volume to match target_shape, centering the original content.
         """
