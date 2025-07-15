@@ -13,7 +13,6 @@ import glob
 from scipy.ndimage import zoom
 import pandas as pd
 
-from feature_visualization import resized_mask
 
 
 class ROIPreprocessor:
