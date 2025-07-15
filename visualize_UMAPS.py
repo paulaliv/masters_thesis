@@ -25,6 +25,8 @@ def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d, slice_strategy='m
     umap_3d = nib.load(umap_3d)
     mask_3d = nib.load(mask_3d)
     assert image_3d.shape == umap_3d.shape, "Image and UMAP shapes must match"
+    print("Mask shape:", mask_3d.shape)
+    print("Unique values in mask:", np.unique(mask_3d))
 
     # Determine slice index
     def get_middle_tumor_slice(mask):
