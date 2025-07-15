@@ -418,7 +418,7 @@ class ROIPreprocessor:
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
 
-        img_sitk = self.apply_resampling(orig_img, is_label=False)
+        img_sitk = self.resample_image(orig_img, is_label=False)
         mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
 
 
@@ -474,12 +474,17 @@ class ROIPreprocessor:
             self.visualize_umap_and_mask(umap_array, orig_mask, '')
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
+            orig_umap.SetOrigin(img_sitk.GetOrigin())
+            orig_umap.SetSpacing(img_sitk.GetSpacing())
+            orig_umap.SetDirection(img_sitk.GetDirection())
 
 
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
 
+            assert img_sitk.GetSize() == mask_sitk.GetSize() == umap_sitk.GetSize()
 
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+
             nonzero = np.nonzero(resampled_umap)
             if len(nonzero[0]) == 0:
                 return None  # all zero
