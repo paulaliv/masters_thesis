@@ -445,7 +445,7 @@ class ROIPreprocessor:
             orig_umap = sitk.GetImageFromArray(umap_array)
 
 
-            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
+            umap_sitk = self.resample_umap(orig_umap,reference=mask_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
