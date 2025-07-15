@@ -446,7 +446,9 @@ class ROIPreprocessor:
 
             print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
 
-            cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
+            #cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
+            cropped_umap = np.where(resampled_mask > 0, resampled_umap, 0)
+            print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
             print("UMAP min:", cropped_umap.min())
             print("UMAP max:", cropped_umap.max())
             print("UMAP shape:", cropped_umap.shape)
