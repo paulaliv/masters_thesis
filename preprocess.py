@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import SimpleITK as sitk
+from matplotlib import pyplot as plt
 from numpy import ndarray
 from scipy.ndimage import label, find_objects
 import glob
@@ -241,6 +242,23 @@ class ROIPreprocessor:
             img[img == -mean / std] = 0  # Ensure padding stays at 0
         return img
 
+    def visualize_umap_and_mask(self,umap, mask, title_prefix=''):
+        assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
+
+        z_slices = umap.shape[0]
+
+        for i in range(z_slices):
+            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+            axes[0].imshow(umap[i], cmap='viridis')
+            axes[0].set_title(f'{title_prefix}UMAP Slice {i}')
+
+            axes[1].imshow(mask[i], cmap='gray')
+            axes[1].set_title(f'{title_prefix}Mask Slice {i}')
+
+            plt.tight_layout()
+            plt.show()
+
     def preprocess_case(self, img_path, mask_path, output_dir):
         os.makedirs(output_dir, exist_ok=True)
         self.case_id = os.path.basename(img_path).replace('.nii.gz', '')
@@ -389,20 +407,9 @@ class ROIPreprocessor:
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
-        # Get bounding box in original mask
-        slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
-        bbox_shape = (
-            slices_orig[0].stop - slices_orig[0].start,
-            slices_orig[1].stop - slices_orig[1].start,
-            slices_orig[2].stop - slices_orig[2].start
-        )
-        crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
 
-        cropped_img, cropped_mask = self.crop_to_roi(orig_img, orig_mask, slices_orig)
-
-        img_sitk = self.apply_resampling(cropped_img, is_label=False)
-
-        mask_sitk = self.apply_resampling(cropped_mask, is_label=True)
+        img_sitk = self.apply_resampling(orig_img, is_label=False)
+        mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
 
 
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
@@ -413,24 +420,33 @@ class ROIPreprocessor:
         print(f'Original shape :{orig_mask.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
 
+        # Get bounding box in original mask
+        slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
+        bbox_shape = (
+            slices_orig[0].stop - slices_orig[0].start,
+            slices_orig[1].stop - slices_orig[1].start,
+            slices_orig[2].stop - slices_orig[2].start
+        )
+        crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
 
         resampled_affine = self.compute_affine_with_origin_shift(
             original_spacing, original_origin, original_direction, crop_start_index
         )
 
-        # slices = self.get_roi_bbox(resampled_mask)
-        # for s in slices:
-        #     print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
-        # bbox1_shape = (
-        #     slices[0].stop - slices[0].start,
-        #     slices[1].stop - slices[1].start,
-        #     slices[2].stop - slices[2].start
-        # )
-        #
-        # tumor_size = self.count_tumor_voxels(resampled_mask)
-        img_pp = self.normalize(resampled_img)
+        slices = self.get_roi_bbox(resampled_mask)
+        for s in slices:
+            print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
+        bbox1_shape = (
+            slices[0].stop - slices[0].start,
+            slices[1].stop - slices[1].start,
+            slices[2].stop - slices[2].start
+        )
 
-        resized_img, resized_mask = self.adjust_to_shape(img_pp, resampled_mask, self.target_shape)
+        cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
+        tumor_size = self.count_tumor_voxels(resampled_mask)
+        img_pp = self.normalize(cropped_img)
+
+        resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
 
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
         for i, umap_type in enumerate(umap_types):
@@ -446,7 +462,24 @@ class ROIPreprocessor:
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
-            cropped_umap, _ = self.crop_to_roi(orig_umap, orig_mask, slices_orig)
+
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
+
+            resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+            self.visualize_umap_and_mask(resampled_umap, resampled_mask, '')
+            print("Resampled mask shape:", resampled_mask.shape)
+            print("Resampled UMAP shape:", resampled_umap.shape)
+            print("Resampled mask unique:", np.unique(resampled_mask))
+
+
+            print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
+            print(f'Bounding box shape {bbox1_shape}')
+            z_slice, y_slice, x_slice = bbox1_shape
+
+
+            print("Mask inside bbox:", resampled_mask[z_slice, y_slice, x_slice].min(), resampled_mask[z_slice, y_slice, x_slice].max())
+            print("UMAP inside bbox:", resampled_umap[z_slice, y_slice, x_slice].min(), resampled_umap[z_slice, y_slice, x_slice].max())
+            cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
             print("UMAP min:", cropped_umap.min())
@@ -454,22 +487,12 @@ class ROIPreprocessor:
             print("UMAP shape:", cropped_umap.shape)
             print("UMAP dtype:", cropped_umap.dtype)
 
-
-            umap_sitk = self.resample_umap(cropped_umap,reference=cropped_img, is_label=False)
-            resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-            print("Resampled mask shape:", resampled_mask.shape)
-            print("Resampled UMAP shape:", resampled_umap.shape)
-            print("Resampled mask unique:", np.unique(resampled_mask))
-
-
-            #print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
-
             if not (np.isclose(np.min(cropped_umap), 0.0) and np.isclose(np.max(cropped_umap), 1.0)):
                 umap_pp = self.normalize(cropped_umap)
             else:
                 umap_pp = cropped_umap
 
-            resized_umap, _ = self.adjust_to_shape(umap_pp, resampled_mask, self.target_shape)
+            resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
             print(f'Resized UMAP shape {resized_umap.shape}')
             print("UMAP resized min:", resized_umap.min())
             print("UMAP  resized max:", resized_umap.max())
