@@ -769,6 +769,7 @@ class nnUNetPredictor(object):
                     assert not torch.isnan(probs).any(), "NaNs in softmax output"
                     assert (probs >= 0).all(), "Softmax contains negative values"
                     assert torch.allclose(probs.sum(dim=1), torch.ones_like(probs.sum(dim=1)),atol=1e-5), "Softmax probs do not sum to 1"
+                    print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
                     assert not torch.isnan(mean_probs).any(), "NaNs in mean_probs"
@@ -780,7 +781,23 @@ class nnUNetPredictor(object):
                     assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
 
                     clamped_mean_probs = mean_probs.clamp(min=1e-8)
-                    entropy_map = -torch.sum(clamped_mean_probs * torch.log(clamped_mean_probs), dim=0)
+                    print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
+                    print(
+                        f"[DEBUG] clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
+                    print(f"[DEBUG] Any NaNs in mean_probs? {torch.isnan(mean_probs).any()}")
+                    print(f"[DEBUG] Any Infs in mean_probs? {torch.isinf(mean_probs).any()}")
+                    print(f"[DEBUG] Any NaNs in clamped_mean_probs? {torch.isnan(clamped_mean_probs).any()}")
+                    print(f"[DEBUG] Any Infs in clamped_mean_probs? {torch.isinf(clamped_mean_probs).any()}")
+
+                    log_probs = torch.log(clamped_mean_probs)
+                    print(f"[DEBUG] Any NaNs in log_probs? {torch.isnan(log_probs).any()}")
+                    print(f"[DEBUG] log_probs min: {log_probs.min().item()}, max: {log_probs.max().item()}")
+
+                    #entropy_map = -torch.sum(clamped_mean_probs * torch.log(clamped_mean_probs), dim=0)
+                    entropy_map = -torch.sum(clamped_mean_probs * log_probs, dim=0)
+                    print(f"[DEBUG] Any NaNs in entropy_map? {torch.isnan(entropy_map).any()}")
+                    print(f"[DEBUG] entropy_map min: {entropy_map.min().item()}, max: {entropy_map.max().item()}")
+
                     assert not torch.isnan(entropy_map).any(), "NaNs in entropy_map after clamping"
 
                     assert entropy_map.shape == (H, W, D), "Entropy map should be [H, W, D]"
