@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import cv2
 import os
 from glob import glob
-
+import nibabel as nib
 
 def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d=None, slice_strategy='middle', alpha=0.5, cmap=cv2.COLORMAP_JET, title=None):
     """
