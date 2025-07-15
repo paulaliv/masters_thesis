@@ -729,33 +729,16 @@ class nnUNetPredictor(object):
                     assert ensemble_predictions is not None and len(
                         ensemble_predictions) > 0, "Ensemble predictions are empty"
 
-                    for idx, pred in enumerate(ensemble_predictions):
-                        if torch.all(pred == 0):
-                            print(f"[WARNING] Ensemble prediction {idx} is all zeros!")
-                        else:
-                            print(f"[CHECK] Ensemble prediction {idx} contains non-zero values.")
-
-                    for idx, pred in enumerate(ensemble_predictions):
-                        min_val = pred.min().item()
-                        max_val = pred.max().item()
-                        mean_val = pred.float().mean().item()
-                        is_all_zero = torch.all(pred == 0)
-
-                        print(
-                            f"[DEBUG] Ensemble prediction {idx}: min={min_val}, max={max_val}, mean={mean_val}, all_zeros={is_all_zero}")
 
                     prediction = prediction.cpu()
                     #ensemble_predictions = ensemble_predictions.cpu()
-                # saving the raw logits as numpy arrays
 
-                    print(f"[DEBUG] prediction shape: {prediction.shape}")
-                    print(f"[DEBUG] Number of ensemble predictions: {len(ensemble_predictions)}")
+
                     for i, pred in enumerate(ensemble_predictions):
                         assert pred is not None, f"Ensemble prediction {i} is None"
                         assert pred.numel() > 0, f"Ensemble prediction {i} is empty"
                         assert not torch.isnan(pred).any(), f"NaNs in ensemble prediction {i}"
                         assert not torch.isinf(pred).any(), f"Infs in ensemble prediction {i}"
-                        print(f"[DEBUG] ensemble_predictions[{i}] shape: {pred.shape}")
 
                     logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
                     # Step 1: Clamp logits to avoid softmax underflow/overflow
@@ -773,15 +756,11 @@ class nnUNetPredictor(object):
                     assert not torch.isnan(probs).any(), "NaNs in softmax output"
                     assert (probs >= 0).all(), "Softmax contains negative values"
                     assert torch.allclose(probs.sum(dim=1), torch.ones_like(probs.sum(dim=1)),atol=1e-5), "Softmax probs do not sum to 1"
-                    print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
+
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
                     mean_probs = mean_probs.to(torch.float32)
-                    print(f"[DEBUG] mean_probs dtype: {mean_probs.dtype}")
 
-                    print(f"[DEBUG] Num elements < 1e-8: {(mean_probs < 1e-8).sum().item()}")
-                    print(f"[DEBUG] Min value before clamp: {mean_probs.min().item()}")
-                    print(f"[DEBUG] Any exact zeros? {(mean_probs == 0.0).sum().item()}")
 
                     # mean_probs = mean_probs.clone()  # Avoid changing the original tensor
                     # mean_probs[mean_probs < 1e-8] = 1e-8
@@ -800,13 +779,13 @@ class nnUNetPredictor(object):
                     clamped_mean_probs = torch.clamp(mean_probs, min=1e-8)
                     print(f"[DEBUG] Post-clamp min: {clamped_mean_probs.min().item()}")  # Must be ≥ 1e-8 now
 
-                    print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
-                    print(
-                        f"[DEBUG] !!!clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
-                    print(f"[DEBUG] Any NaNs in mean_probs? {torch.isnan(mean_probs).any()}")
-                    print(f"[DEBUG] Any Infs in mean_probs? {torch.isinf(mean_probs).any()}")
-                    print(f"[DEBUG] Any NaNs in clamped_mean_probs? {torch.isnan(clamped_mean_probs).any()}")
-                    print(f"[DEBUG] Any Infs in clamped_mean_probs? {torch.isinf(clamped_mean_probs).any()}")
+                    # print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
+                    # print(
+                    #     f"[DEBUG] !!!clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
+                    # print(f"[DEBUG] Any NaNs in mean_probs? {torch.isnan(mean_probs).any()}")
+                    # print(f"[DEBUG] Any Infs in mean_probs? {torch.isinf(mean_probs).any()}")
+                    # print(f"[DEBUG] Any NaNs in clamped_mean_probs? {torch.isnan(clamped_mean_probs).any()}")
+                    # print(f"[DEBUG] Any Infs in clamped_mean_probs? {torch.isinf(clamped_mean_probs).any()}")
 
                     log_probs = torch.log(clamped_mean_probs)
                     print(f"[DEBUG] Any NaNs in log_probs? {torch.isnan(log_probs).any()}")
@@ -914,6 +893,12 @@ class nnUNetPredictor(object):
 
                     print(
                         f"[RESAMPLING] confidence_reshaped: min={confidence_reshaped.min()}, max={confidence_reshaped.max()}, mean={confidence_reshaped.mean()}")
+                    print(
+                        f"[RESAMPLING] confidence_reshaped: min={entropy_reshaped.min()}, max={entropy_reshaped.max()}, mean={entropy_reshaped.mean()}")
+                    print(
+                        f"[RESAMPLING] confidence_reshaped: min={mutual_info_reshaped.min()}, max={mutual_info_reshaped.max()}, mean={mutual_info_reshaped.mean()}")
+                    print(
+                        f"[RESAMPLING] confidence_reshaped: min={epkl_reshaped.min()}, max={epkl_reshaped.max()}, mean={epkl_reshaped.mean()}")
 
                     # # Save resampled logits AFTER resampling
                     # resampled_confidence_file = ofile + "_resampled_confidence.npy"
@@ -932,11 +917,11 @@ class nnUNetPredictor(object):
                     #
 
 
-                    # np.savez_compressed(ofile + "_uncertainty_maps.npz",
-                    #                     confidence=confidence_reshaped,
-                    #                     entropy=entropy_reshaped,
-                    #                     mutual_info=mutual_info_reshaped,
-                    #                     epkl=epkl_reshaped)
+                    np.savez_compressed(ofile + "_uncertainty_maps.npz",
+                                        confidence=confidence_reshaped,
+                                        entropy=entropy_reshaped,
+                                        mutual_info=mutual_info_reshaped,
+                                        epkl=epkl_reshaped)
                 if ofile is not None:
                     # this needs to go into background processes
                     # export_prediction_from_logits(prediction, properties, self.configuration_manager, self.plans_manager,
