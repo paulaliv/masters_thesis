@@ -77,7 +77,7 @@ def main():
     # predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Ts/output"
 
     Umap_folder = "/gpfs/home6/palfken/Test_umaps/"
-    mask_paths = sorted(glob.glob(os.path.join(Umap_folder, '_PADDED_mask.nii.gz')))
+    mask_paths = sorted(glob(os.path.join(Umap_folder, '_PADDED_mask.nii.gz')))
     for mask in range(2):
         mask_path = mask_paths[mask]
         case_id = os.path.basename(mask_path).replace('_PADDED_mask.nii.gz', '')
