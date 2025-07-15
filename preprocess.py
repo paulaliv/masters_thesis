@@ -18,12 +18,14 @@ class ROIPreprocessor:
                  roi_context: Tuple[int, int, int] = (3, 10, 10),
                  target_spacing: Tuple[int, int, int] = (1,1,3),
                  safe_as_nifti = False,
+                 save_umaps = False,
                  target_shape: Tuple[int, int, int] = (48,256,256),):
         self.case_id = None
         self.roi_context = roi_context
         self.target_shape = target_shape
         self.target_spacing = target_spacing
         self.save_as_nifti = safe_as_nifti
+        self.save_umaps = save_umaps
         self.cropped_cases = []
 
 
@@ -115,8 +117,8 @@ class ROIPreprocessor:
 
         return resample.Execute(image)
 
-    def apply_resampling(self, img_path, is_label=False):
-        img_sitk = sitk.ReadImage(img_path)
+    def apply_resampling(self, img_sitk, is_label=False):
+        #img_sitk = sitk.ReadImage(img_path)
         return self.resample_image(img_sitk, is_label)
 
     def apply_reverse_resampling(self, img:np.ndarray, original_spacing, original_size, is_label=False):
@@ -218,26 +220,25 @@ class ROIPreprocessor:
         os.makedirs(output_dir, exist_ok=True)
         self.case_id = os.path.basename(img_path).replace('.nii.gz', '')
 
-        resampled_img_sitk = self.apply_resampling(img_path, is_label=False)
-        resampled_mask_sitk = self.apply_resampling(mask_path, is_label=True)
-
-
-        resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)  # [Z, Y, X]
-        resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
-
-
         orig_img = sitk.ReadImage(img_path)
         orig_mask = sitk.ReadImage(mask_path)
         original_spacing = orig_img.GetSpacing()
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
-        #orig_img = sitk.GetArrayFromImage(orig_sitk)
+        # orig_img = sitk.GetArrayFromImage(orig_img)
+
+        resampled_img_sitk = self.apply_resampling(orig_img, is_label=False)
+        resampled_mask_sitk = self.apply_resampling(orig_mask, is_label=True)
+
+
+        resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)  # [Z, Y, X]
+        resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
+
+
         orig_mask = sitk.GetArrayFromImage(orig_mask)
         print(f'Original shape :{orig_mask.shape}')
         print(f'Shape after reshaping to target spacing: {resampled_img.shape}')
-
-
         # Get bounding box in original mask
         slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
         bbox_shape = (
@@ -276,9 +277,9 @@ class ROIPreprocessor:
                             os.path.join(output_dir, f"{self.case_id}_PADDED_mask.nii.gz"))
 
 
-        # else:
-        #     np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-        #     np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        else:
+            np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
         return tumor_size
@@ -292,17 +293,26 @@ class ROIPreprocessor:
         return (2. * intersection) / (pred.sum() + gt.sum() + epsilon)
 
 
-    def preprocess_folder(self, image_dir, mask_dir, output_dir):
+    def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir):
         subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_df = pd.read_csv(subtypes_csv)
 
 
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
-        bbox_stats = []
+        case_stats = []
 
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+            pred = nib.load(mask_path)
+            gt = nib.load(gt_path)
+            dice = self.compute_dice(gt, pred)
+            print(dice)
+
+            if self.save_umaps:
+                umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
+
             subtype_row = subtypes_df[subtypes_df['case_id'] == case_id]
             if not subtype_row.empty:
                 tumor_class = subtype_row.iloc[0]['subtype']
@@ -312,85 +322,137 @@ class ROIPreprocessor:
                 print(f'Case id {case_id}: no subtype in csv file!')
             if os.path.exists(mask_path):
                 bbox_size_mm= self.preprocess_case(img_path, mask_path, output_dir)
-                bbox_stats.append({
+                if self.save_umaps:
+                    umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
+                    for umap_type in range(4):
+                        self.preprocess_uncertainty_map(umap_path, mask_path, output_dir,umap_types[umap_type])
+
+                case_stats.append({
                     "case_id": case_id,
                     "tumor_class": tumor_class,
                     "volume_mm3": bbox_size_mm,
+                    "dice_5": dice,
+
+
 
                 })
-        df = pd.DataFrame(bbox_stats)
+        df = pd.DataFrame(case_stats)
+        bin_edges = np.arange(0.0, 1.1, 0.1)
+
+        print("Global Dice Score Distribution:")
+        global_hist, _ = np.histogram(df['dice_5'], bins=bin_edges)
+        for i in range(len(bin_edges) - 1):
+            print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
+
+        print("\nDice Score Distribution by Tumor Class:")
+        for tumor_class, group in df.groupby('tumor_class'):
+            print(f"\nTumor Class: {tumor_class}")
+            class_hist, _ = np.histogram(group['dice_5'], bins=bin_edges)
+            for i in range(len(bin_edges) - 1):
+                print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
+
         # Compute global stats
-        global_stats = df['volume_mm3'].agg(['min', 'max', 'mean', 'std'])
 
-        # Compute per-subtype stats (excluding unknown if you want)
-        per_subtype_stats = df[df['tumor_class'] != 'Unknown'].groupby('tumor_class')['volume_mm3'].agg(
-            ['min', 'max', 'mean', 'std'])
-
-        print("Global tumor volume stats (mm³):")
-        print(global_stats.round(4))
-
-        print("\nPer-subtype tumor volume stats (mm³):")
-        print(per_subtype_stats.round(4))
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        df.to_csv("/gpfs/home6/palfken/masters_thesis/tumor_bounding_box_sizes.csv", index=False)
+        df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
 
-    def preprocess_uncertainty_map(self, umap_path, mask_path, output_path):
-        umap_sitk = self.apply_resampling(umap_path, is_label=False)
-        mask_sitk = self.apply_resampling(mask_path, is_label=True)
+    def preprocess_uncertainty_map(self, umap_path, mask_path, output_path, umap_type):
+        npz_file = np.load(umap_path)
+        umap_array = npz_file[umap_type]  # or whichever key you want
 
-        umap = sitk.GetArrayFromImage(umap_sitk)
-        mask = sitk.GetArrayFromImage(mask_sitk)
+        # Convert NumPy array to SimpleITK image
+        orig_umap = sitk.GetImageFromArray(umap_array)
 
-        slices = self.get_roi_bbox(mask)
-        cropped_umap, cropped_mask= self.crop_to_roi(umap, mask, slices)
+        #orig_umap = sitk.ReadImage(umap_path)
+        orig_mask = sitk.ReadImage(mask_path)
+        original_spacing = orig_umap.GetSpacing()
+        original_origin = orig_umap.GetOrigin()  # tuple (x, y, z)
+        original_direction = np.array(orig_umap.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
+
+
+        umap_sitk = self.apply_resampling(orig_umap, is_label=False)
+        mask_sitk = self.apply_resampling(orig_mask, is_label=True)
+
+        resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+        resampled_mask = sitk.GetArrayFromImage(mask_sitk)
+
+        # orig_img = sitk.GetArrayFromImage(orig_sitk)
+        orig_mask = sitk.GetArrayFromImage(orig_mask)
+        print(f'Original shape :{orig_mask.shape}')
+        print(f'Shape after reshaping to target spacing: {resampled_umap.shape}')
+
+        # Get bounding box in original mask
+        slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
+        bbox_shape = (
+            slices_orig[0].stop - slices_orig[0].start,
+            slices_orig[1].stop - slices_orig[1].start,
+            slices_orig[2].stop - slices_orig[2].start
+        )
+        crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
+
+        resampled_affine = self.compute_affine_with_origin_shift(
+            original_spacing, original_origin, original_direction, crop_start_index
+        )
+
+        slices = self.get_roi_bbox(resampled_mask)
+        cropped_umap, cropped_mask= self.crop_to_roi(resampled_umap, resampled_mask, slices)
         umap_pp = self.normalize(cropped_umap)
         resized_umap,_= self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
         print(f'Resized UMAP shape {resized_umap.shape}')
 
-        affine = np.eye(4)
+
         os.makedirs(output_path, exist_ok=True)
         case_id = os.path.basename(umap_path).replace('.nii.gz', '')
-        self.save_nifti(umap_pp.astype(np.float32), affine, os.path.join(output_path, f"{case_id}_umap.nii.gz"))
+
+        if self.save_as_nifti:
+
+            reverted_adjusted_img = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+                                                         is_mask=False)
+            self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine, os.path.join(output_path, f"{case_id}_{umap_type}.nii.gz"))
+
+
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+
+
 
 
 
 def main():
-    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
-    input_folder_mask ="/gpfs/home6/palfken/QA_labelsTr/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Tr/output"
-    mask_paths = sorted(glob.glob(os.path.join(input_folder_mask, '*.nii.gz')))
+    input_folder_img = "/gpfs/home6/palfken/QA_imagesTs/"
+    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs/"
+    predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Ts/output"
+    #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-
-
-    output_folder = "/gpfs/home6/palfken/Data_npy/"
+    output_folder = "/gpfs/home6/palfken/Test_umaps/"
     os.makedirs(output_folder, exist_ok=True)
-    dice_scores = []
-
-    preprocessor = ROIPreprocessor(safe_as_nifti=False)
-    for mask_path in mask_paths:
-        case_id = os.path.basename(mask_path).replace('.nii.gz', '')
-        pred_path = os.path.join(predicted_mask_folder, f"{case_id}.nii.gz")
-        pred = nib.load(pred_path)
-        gt = nib.load(mask_path)
-        dice = preprocessor.compute_dice(gt, pred)
-        print(dice)
-        dice_scores.append(dice)
-
-    dice_scores = np.array(dice_scores)
-
-    # Define bin edges: [0.0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
-    bin_edges = np.arange(0.0, 1.1, 0.1)  # includes 1.0 as final edge
-
-    # Count values in each bin
-    hist, _ = np.histogram(dice_scores, bins=bin_edges)
-
-    # Print bin ranges and counts
-    for i in range(len(bin_edges) - 1):
-        print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {hist[i]} samples")
-
-    #preprocessor.preprocess_folder(input_folder_img, input_folder_mask, output_folder)
+    # dice_scores = []
+    #
+    preprocessor = ROIPreprocessor(safe_as_nifti=True, save_umaps=True)
+    # for mask_path in mask_paths:
+    #     case_id = os.path.basename(mask_path).replace('.nii.gz', '')
+    #     pred_path = os.path.join(predicted_mask_folder, f"{case_id}.nii.gz")
+    #     pred = nib.load(pred_path)
+    #     gt = nib.load(mask_path)
+    #     dice = preprocessor.compute_dice(gt, pred)
+    #     print(dice)
+    #     dice_scores.append(dice)
+    #
+    # dice_scores = np.array(dice_scores)
+    #
+    # # Define bin edges: [0.0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
+    # bin_edges = np.arange(0.0, 1.1, 0.1)  # includes 1.0 as final edge
+    #
+    # # Count values in each bin
+    # hist, _ = np.histogram(dice_scores, bins=bin_edges)
+    #
+    # # Print bin ranges and counts
+    # for i in range(len(bin_edges) - 1):
+    #     print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {hist[i]} samples")
+    #
+    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder)
 
 if __name__ == '__main__':
     main()
