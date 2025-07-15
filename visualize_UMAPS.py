@@ -84,7 +84,7 @@ def main():
 
     Umap_folder = "/gpfs/home6/palfken/Test_umaps/"
     mask_paths = sorted(glob(os.path.join(Umap_folder, '*_PADDED_mask.nii.gz')))
-    for mask in range(2):
+    for mask in range(5):
         mask_path = mask_paths[mask]
         if mask_path:
             print(mask_path)
