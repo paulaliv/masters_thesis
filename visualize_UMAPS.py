@@ -24,8 +24,10 @@ def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d, slice_strategy='m
     image_3d = nib.load(image_3d).get_fdata()
     umap_3d = nib.load(umap_3d).get_fdata()
     mask_3d = nib.load(mask_3d).get_fdata()
+
     assert image_3d.shape == umap_3d.shape, "Image and UMAP shapes must match"
     print("Mask shape:", mask_3d.shape)
+
     print("Unique values in mask:", np.unique(mask_3d))
 
     # Determine slice index
@@ -55,9 +57,10 @@ def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d, slice_strategy='m
     image_norm = (image_slice - np.min(image_slice)) / (np.max(image_slice) - np.min(image_slice) + 1e-8)
     image_uint8 = np.uint8(255 * image_norm)
 
+    print("UMAP slice min/max:", umap_slice.min(), umap_slice.max())
+
     # Normalize UMAP to [0, 255]
-    umap_norm = (umap_slice - np.min(umap_slice)) / (np.max(umap_slice) - np.min(umap_slice) + 1e-8)
-    umap_uint8 = np.uint8(255 * umap_norm)
+    umap_uint8 = np.uint8(255 * umap_slice)  # because already in [0, 1]
 
     heatmap = cv2.applyColorMap(umap_uint8, cmap)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
