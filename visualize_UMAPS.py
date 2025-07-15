@@ -77,17 +77,17 @@ def main():
     # predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Ts/output"
 
     Umap_folder = "/gpfs/home6/palfken/Test_umaps/"
-    mask_paths = sorted(glob(os.path.join(Umap_folder, '_PADDED_mask.nii.gz')))
-
-    mask_path = mask_paths[0]
-    case_id = os.path.basename(mask_path).replace('_PADDED_mask.nii.gz', '')
-    img_path = os.path.join(Umap_folder, f"{case_id}_PADDED_img.nii.gz")
-    confidence = os.path.join(Umap_folder, f"{case_id}_confidence.nii.gz")
-    entropy = os.path.join(Umap_folder, f"{case_id}_entropy.nii.gz")
-    mutual_info = os.path.join(Umap_folder, f"{case_id}_mutual_info.nii.gz")
-    visualize_umap_gradcam_overlay(img_path, confidence, mask_path)
-    visualize_umap_gradcam_overlay(img_path, entropy, mask_path)
-    visualize_umap_gradcam_overlay(img_path, mutual_info, mask_path)
+    mask_paths = sorted(glob(os.path.join(Umap_folder, '*_PADDED_mask.nii.gz')))
+    for mask in range(2):
+        mask_path = mask_paths[mask]
+        case_id = os.path.basename(mask_path).replace('_PADDED_mask.nii.gz', '')
+        img_path = os.path.join(Umap_folder, f"{case_id}_PADDED_img.nii.gz")
+        confidence = os.path.join(Umap_folder, f"{case_id}_confidence.nii.gz")
+        entropy = os.path.join(Umap_folder, f"{case_id}_entropy.nii.gz")
+        mutual_info = os.path.join(Umap_folder, f"{case_id}_mutual_info.nii.gz")
+        visualize_umap_gradcam_overlay(img_path, confidence, mask_path)
+        visualize_umap_gradcam_overlay(img_path, entropy, mask_path)
+        visualize_umap_gradcam_overlay(img_path, mutual_info, mask_path)
 
 if __name__ == '__main__':
     main()
