@@ -758,6 +758,10 @@ class nnUNetPredictor(object):
                         print(f"[DEBUG] ensemble_predictions[{i}] shape: {pred.shape}")
 
                     logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
+                    # Step 1: Clamp logits to avoid softmax underflow/overflow
+                    logits = logits.to(torch.float32)
+
+                    logits = torch.clamp(logits, min=-50, max=50)
                     assert logits.numel() > 0, "Logits tensor is empty"
                     T, C, H, W, D = logits.shape
 
@@ -772,6 +776,7 @@ class nnUNetPredictor(object):
                     print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+                    mean_probs = mean_probs.to(torch.float32)
                     print(f"[DEBUG] mean_probs dtype: {mean_probs.dtype}")
 
                     print(f"[DEBUG] Num elements < 1e-8: {(mean_probs < 1e-8).sum().item()}")
