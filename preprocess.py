@@ -320,6 +320,7 @@ class ROIPreprocessor:
 
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
+            self.case_id = case_id
             mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
             gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
             pred = nib.load(mask_path)
@@ -443,9 +444,9 @@ class ROIPreprocessor:
                                                               is_mask=False)
 
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{case_id}_{umap_type}.nii.gz"))
+                                os.path.join(output_path, f"{self.case_id}_{umap_types[umap_types]}.nii.gz"))
             else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_types[umap_type]}.npy"), resized_umap.astype(np.float32))
 
 
 
