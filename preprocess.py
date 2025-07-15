@@ -442,41 +442,45 @@ class ROIPreprocessor:
 
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
             print(f'Resized UMAP shape {resized_umap.shape}')
+            print("UMAP resized min:", resized_umap.min())
+            print("UMAP  resized max:", resized_umap.max())
+            print("UMAP resized shape:", resized_umap.shape)
+            print("UMAP resized dtype:", resized_umap.dtype)
 
-        #     if self.save_as_nifti:
-        #         reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-        #                                                       is_mask=False)
-        #
-        #         self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-        #                         os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-        #     else:
-        #         np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-        #
-        #
-        #
-        # if self.save_as_nifti:
-        #
-        #     reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
-        #                                                      is_mask=False)
-        #     reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
-        #                                                       is_mask=True)
-        #
-        #     try:
-        #         self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
-        #                         os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
-        #         self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
-        #                         os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
-        #         print('Saved Image and mask')
-        #     except Exception as e:
-        #         print(f"Error saving image/mask for case {case_id}: {e}")
-        #
-        #
-        #
-        # else:
-        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-        #     np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-        #
-        # print(f'Processed {self.case_id}')
+            if self.save_as_nifti:
+                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+                                                              is_mask=False)
+
+                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+
+
+
+        if self.save_as_nifti:
+
+            reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
+                                                             is_mask=False)
+            reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
+                                                              is_mask=True)
+
+            try:
+                self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
+                self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
+                                os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
+                print('Saved Image and mask')
+            except Exception as e:
+                print(f"Error saving image/mask for case {case_id}: {e}")
+
+
+
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+
+        print(f'Processed {self.case_id}')
 
 
 
@@ -484,7 +488,7 @@ class ROIPreprocessor:
 def main():
     input_folder_img = "/gpfs/home6/palfken/QA_imagesTs/"
     input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Ts/output"
+    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTs/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     output_folder = "/gpfs/home6/palfken/Test_umaps/"
