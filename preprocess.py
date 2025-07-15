@@ -445,7 +445,7 @@ class ROIPreprocessor:
             orig_umap = sitk.GetImageFromArray(umap_array)
 
 
-            umap_sitk = self.resample_umap(orig_umap,reference=mask_sitk, is_label=False)
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
@@ -455,6 +455,9 @@ class ROIPreprocessor:
             print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
             print(f'Bounding box shape {bbox1_shape}')
             z_slice, y_slice, x_slice = bbox1_shape
+            masked_umap = resampled_umap * resampled_mask
+            print("Masked UMAP min/max:", masked_umap.min(), masked_umap.max())
+
             print("Mask inside bbox:", resampled_mask[z_slice, y_slice, x_slice].min(), resampled_mask[z_slice, y_slice, x_slice].max())
             print("UMAP inside bbox:", resampled_umap[z_slice, y_slice, x_slice].min(), resampled_umap[z_slice, y_slice, x_slice].max())
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
