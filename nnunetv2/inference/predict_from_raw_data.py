@@ -731,7 +731,9 @@ class nnUNetPredictor(object):
 
                     logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
                     T, C, H, W, D = logits.shape
+
                     assert logits.shape == (T, C, H, W, D), "Logits should be [T, C, H, W, D]"
+
 
                     probs = F.softmax(logits, dim=1)  # shape: [5, C, H, W, D]
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
@@ -796,7 +798,10 @@ class nnUNetPredictor(object):
                     mutual_info = mutual_info[None] if mutual_info.ndim == 3 else mutual_info
                     epkl_map = epkl_map[None] if epkl_map.ndim == 3 else epkl_map
 
-
+                    assert not torch.isnan(confidence_map).any(), "NaNs found in confidence map"
+                    assert not torch.isnan(entropy_map).any(), "NaNs found in entropy map"
+                    assert not torch.isnan(mutual_info).any(), "NaNs found in mutual info"
+                    assert not torch.isnan(epkl_map).any(), "NaNs found in EPKL map"
 
                     # # Resample logits to original image shape
                     current_spacing = self.configuration_manager.spacing if \
@@ -830,6 +835,8 @@ class nnUNetPredictor(object):
                         properties['spacing']
                     )
 
+                    print(
+                        f"[RESAMPLING] confidence_reshaped: min={confidence_reshaped.min()}, max={confidence_reshaped.max()}, mean={confidence_reshaped.mean()}")
 
                     # # Save resampled logits AFTER resampling
                     # resampled_confidence_file = ofile + "_resampled_confidence.npy"
@@ -848,11 +855,11 @@ class nnUNetPredictor(object):
                     #
 
 
-                    np.savez_compressed(ofile + "_uncertainty_maps.npz",
-                                        confidence=confidence_reshaped,
-                                        entropy=entropy_reshaped,
-                                        mutual_info=mutual_info_reshaped,
-                                        epkl=epkl_reshaped)
+                    # np.savez_compressed(ofile + "_uncertainty_maps.npz",
+                    #                     confidence=confidence_reshaped,
+                    #                     entropy=entropy_reshaped,
+                    #                     mutual_info=mutual_info_reshaped,
+                    #                     epkl=epkl_reshaped)
                 if ofile is not None:
                     # this needs to go into background processes
                     # export_prediction_from_logits(prediction, properties, self.configuration_manager, self.plans_manager,
