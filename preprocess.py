@@ -520,16 +520,17 @@ class ROIPreprocessor:
 
 
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
-            cropped_umap.SetOrigin(mask_sitk.GetOrigin())
-            cropped_umap.SetSpacing(mask_sitk.GetSpacing())
-            cropped_umap.SetDirection(mask_sitk.GetDirection())
+            cropped_sitk = sitk.GetImageFromArray(cropped_umap)
+            cropped_sitk.SetSpacing(original_spacing)
+            cropped_sitk.SetDirection(original_direction)
+
 
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
             print("UMAP min:", cropped_umap.min())
             print("UMAP max:", cropped_umap.max())
             print("UMAP shape:", cropped_umap.shape)
             print("UMAP dtype:", cropped_umap.dtype)
-            self.visualize_umap_and_mask(cropped_umap, cropped_mask, cropped_img)
+            self.visualize_umap_and_mask(cropped_sitk, cropped_mask, cropped_img)
 
 
 
