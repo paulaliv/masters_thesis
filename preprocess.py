@@ -477,7 +477,15 @@ class ROIPreprocessor:
 
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
 
+
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+            nonzero = np.nonzero(resampled_umap)
+            if len(nonzero[0]) == 0:
+                return None  # all zero
+            zmin, zmax = np.min(nonzero[0]), np.max(nonzero[0]) + 1
+            ymin, ymax = np.min(nonzero[1]), np.max(nonzero[1]) + 1
+            xmin, xmax = np.min(nonzero[2]), np.max(nonzero[2]) + 1
+            print('non zero umap region',slice(zmin, zmax), slice(ymin, ymax), slice(xmin, xmax))
             #self.visualize_umap_and_mask(resampled_umap, resampled_mask, '')
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
