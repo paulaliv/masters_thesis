@@ -773,8 +773,8 @@ class nnUNetPredictor(object):
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
 
-                    mean_probs = mean_probs.clone()  # Avoid changing the original tensor
-                    mean_probs[mean_probs < 1e-8] = 1e-8
+                    # mean_probs = mean_probs.clone()  # Avoid changing the original tensor
+                    # mean_probs[mean_probs < 1e-8] = 1e-8
 
 
                     assert not torch.isnan(mean_probs).any(), "NaNs in mean_probs"
@@ -786,7 +786,9 @@ class nnUNetPredictor(object):
                     assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
 
                     #clamped_mean_probs = mean_probs.clamp(min=1e-8)
-                    clamped_mean_probs = mean_probs
+
+                    clamped_mean_probs = torch.clamp(mean_probs, min=1e-8)
+
                     print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
                     print(
                         f"[DEBUG] !!!clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
