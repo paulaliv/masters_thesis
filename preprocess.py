@@ -454,6 +454,9 @@ class ROIPreprocessor:
 
             print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
             print(f'Bounding box shape {bbox1_shape}')
+            z_slice, y_slice, x_slice = bbox1_shape
+            print("Mask inside bbox:", resampled_mask[z_slice, y_slice, x_slice].min(), resampled_mask[z_slice, y_slice, x_slice].max())
+            print("UMAP inside bbox:", resampled_umap[z_slice, y_slice, x_slice].min(), resampled_umap[z_slice, y_slice, x_slice].max())
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
