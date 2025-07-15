@@ -416,6 +416,11 @@ class ROIPreprocessor:
         )
 
         slices = self.get_roi_bbox(resampled_mask)
+        bbox1_shape = (
+            slices[0].stop - slices[0].start,
+            slices[1].stop - slices[1].start,
+            slices[2].stop - slices[2].start
+        )
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         tumor_size = self.count_tumor_voxels(resampled_mask)
@@ -442,10 +447,11 @@ class ROIPreprocessor:
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
+            print("Resampled mask unique:", np.unique(resampled_mask))
 
 
             print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
-
+            print(f'Bounding box shape {bbox1_shape}')
             #cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
             cropped_umap = np.where(resampled_mask > 0, resampled_umap, 0)
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
