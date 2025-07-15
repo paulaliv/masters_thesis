@@ -119,6 +119,17 @@ class ROIPreprocessor:
 
         return resample.Execute(image)
 
+    def resample_umap(self, image: sitk.Image, reference: sitk.Image, is_label=False):
+        resample = sitk.ResampleImageFilter()
+        resample.SetReferenceImage(reference)  # <- Ensures proper alignment
+        resample.SetTransform(sitk.Transform())
+        resample.SetDefaultPixelValue(0)
+        if is_label:
+            resample.SetInterpolator(sitk.sitkNearestNeighbor)
+        else:
+            resample.SetInterpolator(sitk.sitkLinear)
+        return resample.Execute(image)
+
     def apply_resampling(self, img_sitk, is_label=False):
         #img_sitk = sitk.ReadImage(img_path)
         return self.resample_image(img_sitk, is_label)
@@ -413,7 +424,7 @@ class ROIPreprocessor:
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
-            umap_sitk = self.apply_resampling(orig_umap, is_label=False)
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print(f'UMAP {umap_types[umap_type]} resampled shape : {resampled_umap.shape}')
 
