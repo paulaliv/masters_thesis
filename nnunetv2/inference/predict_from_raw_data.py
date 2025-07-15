@@ -772,6 +772,11 @@ class nnUNetPredictor(object):
                     print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+                    print(f"[DEBUG] mean_probs dtype: {mean_probs.dtype}")
+
+                    print(f"[DEBUG] Num elements < 1e-8: {(mean_probs < 1e-8).sum().item()}")
+                    print(f"[DEBUG] Min value before clamp: {mean_probs.min().item()}")
+                    print(f"[DEBUG] Any exact zeros? {(mean_probs == 0.0).sum().item()}")
 
                     # mean_probs = mean_probs.clone()  # Avoid changing the original tensor
                     # mean_probs[mean_probs < 1e-8] = 1e-8
@@ -786,8 +791,9 @@ class nnUNetPredictor(object):
                     assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
 
                     #clamped_mean_probs = mean_probs.clamp(min=1e-8)
-
+                    mean_probs = mean_probs.clone().contiguous()  # Ensure it’s not a view
                     clamped_mean_probs = torch.clamp(mean_probs, min=1e-8)
+                    print(f"[DEBUG] Post-clamp min: {clamped_mean_probs.min().item()}")  # Must be ≥ 1e-8 now
 
                     print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
                     print(
