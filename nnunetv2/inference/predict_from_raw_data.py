@@ -725,17 +725,34 @@ class nnUNetPredictor(object):
                 else:
                     #currently ensemble predictions
                     prediction, ensemble_predictions = self.predict_logits_from_preprocessed_data(data)
+                    assert prediction is not None, "Prediction is None"
+                    assert ensemble_predictions is not None and len(
+                        ensemble_predictions) > 0, "Ensemble predictions are empty"
+
                     prediction = prediction.cpu()
                     #ensemble_predictions = ensemble_predictions.cpu()
                 # saving the raw logits as numpy arrays
 
+                    print(f"[DEBUG] prediction shape: {prediction.shape}")
+                    print(f"[DEBUG] Number of ensemble predictions: {len(ensemble_predictions)}")
+                    for i, pred in enumerate(ensemble_predictions):
+                        assert pred is not None, f"Ensemble prediction {i} is None"
+                        assert pred.numel() > 0, f"Ensemble prediction {i} is empty"
+                        assert not torch.isnan(pred).any(), f"NaNs in ensemble prediction {i}"
+                        assert not torch.isinf(pred).any(), f"Infs in ensemble prediction {i}"
+                        print(f"[DEBUG] ensemble_predictions[{i}] shape: {pred.shape}")
+
                     logits = torch.stack(ensemble_predictions) # shape: [5, C, H, W, D]
+                    assert logits.numel() > 0, "Logits tensor is empty"
                     T, C, H, W, D = logits.shape
 
                     assert logits.shape == (T, C, H, W, D), "Logits should be [T, C, H, W, D]"
+                    print(f"[DEBUG] logits shape: {logits.shape}")
 
 
                     probs = F.softmax(logits, dim=1)  # shape: [5, C, H, W, D]
+                    assert not torch.isnan(probs).any(), "NaNs in softmax output"
+
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
                     assert mean_probs.shape == (C, H, W, D), "Mean probs should be [C, H, W, D]"
 
