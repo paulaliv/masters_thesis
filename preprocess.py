@@ -409,12 +409,13 @@ class ROIPreprocessor:
             umap_array = npz_file[umap_types[umap_type]]
             umap_array = umap_array.astype(np.float32)  # or whichever key you want
             umap_array = np.squeeze(umap_array)
-            print(f'UMAP {umap_type} original shape : {umap_array.shape}')
+            print(f'UMAP {umap_types[umap_type]} original shape : {umap_array.shape}')
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
             umap_sitk = self.apply_resampling(orig_umap, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+            print(f'UMAP {umap_types[umap_type]} resampled shape : {resampled_umap.shape}')
 
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
