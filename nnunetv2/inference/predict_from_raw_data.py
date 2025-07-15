@@ -729,6 +729,21 @@ class nnUNetPredictor(object):
                     assert ensemble_predictions is not None and len(
                         ensemble_predictions) > 0, "Ensemble predictions are empty"
 
+                    for idx, pred in enumerate(ensemble_predictions):
+                        if torch.all(pred == 0):
+                            print(f"[WARNING] Ensemble prediction {idx} is all zeros!")
+                        else:
+                            print(f"[CHECK] Ensemble prediction {idx} contains non-zero values.")
+
+                    for idx, pred in enumerate(ensemble_predictions):
+                        min_val = pred.min().item()
+                        max_val = pred.max().item()
+                        mean_val = pred.float().mean().item()
+                        is_all_zero = torch.all(pred == 0)
+
+                        print(
+                            f"[DEBUG] Ensemble prediction {idx}: min={min_val}, max={max_val}, mean={mean_val}, all_zeros={is_all_zero}")
+
                     prediction = prediction.cpu()
                     #ensemble_predictions = ensemble_predictions.cpu()
                 # saving the raw logits as numpy arrays
