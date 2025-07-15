@@ -471,6 +471,7 @@ class ROIPreprocessor:
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
+            self.visualize_umap_and_mask(umap_array, orig_mask, '')
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
@@ -486,7 +487,7 @@ class ROIPreprocessor:
             ymin, ymax = np.min(nonzero[1]), np.max(nonzero[1]) + 1
             xmin, xmax = np.min(nonzero[2]), np.max(nonzero[2]) + 1
             print('non zero umap region',zmax-zmin, ymax-ymin, xmax-xmin)
-            #self.visualize_umap_and_mask(resampled_umap, resampled_mask, '')
+
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
             print("Resampled mask unique:", np.unique(resampled_mask))
