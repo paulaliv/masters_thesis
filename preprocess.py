@@ -334,6 +334,16 @@ class ROIPreprocessor:
         intersection = np.logical_and(pred, gt).sum()
         return (2. * intersection) / (pred.sum() + gt.sum() + epsilon)
 
+    def center_pad_to_shape(volume, target_shape):
+        """
+        Pad a 3D volume to match target_shape, centering the original content.
+        """
+        pad_total = [t - v for v, t in zip(volume.shape, target_shape)]
+        pad_before = [p // 2 for p in pad_total]
+        pad_after = [p - b for p, b in zip(pad_total, pad_before)]
+        pad_width = list(zip(pad_before, pad_after))
+        return np.pad(volume, pad_width, mode='constant')
+
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir):
         subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
@@ -415,7 +425,7 @@ class ROIPreprocessor:
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
         resampled_mask = sitk.GetArrayFromImage(mask_sitk)
 
-        # orig_img = sitk.GetArrayFromImage(orig_sitk)
+        orig_img = sitk.GetArrayFromImage(orig_img)
         orig_mask = sitk.GetArrayFromImage(orig_mask)
         print(f'Original shape :{orig_mask.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
@@ -459,6 +469,8 @@ class ROIPreprocessor:
             print("INITIAL UMAP max:", umap_array.max())
 
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
+            umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
+            print(f'Padded UMAP shape : {umap_array.shape}')
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
