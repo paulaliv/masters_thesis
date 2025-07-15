@@ -360,7 +360,8 @@ class ROIPreprocessor:
 
     def preprocess_uncertainty_map(self, umap_path, mask_path, output_path, umap_type):
         npz_file = np.load(umap_path)
-        umap_array = npz_file[umap_type]  # or whichever key you want
+        umap_array = npz_file[umap_type]
+        umap_array = umap_array.astype(np.float32)# or whichever key you want
 
         # Convert NumPy array to SimpleITK image
         orig_umap = sitk.GetImageFromArray(umap_array)
