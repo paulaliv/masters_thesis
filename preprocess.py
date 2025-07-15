@@ -406,7 +406,7 @@ class ROIPreprocessor:
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
         for umap_type in range(len(umap_types)):
             npz_file = np.load(umap_path)
-            umap_array = npz_file[umap_type]
+            umap_array = npz_file[umap_types[umap_type]]
             umap_array = umap_array.astype(np.float32)  # or whichever key you want
             umap_array = np.squeeze(umap_array)
             print(f'UMAP {umap_type} original shape : {umap_array.shape}')
