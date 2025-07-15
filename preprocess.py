@@ -471,7 +471,7 @@ class ROIPreprocessor:
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
-            #self.visualize_umap_and_mask(umap_array, orig_mask, '')
+
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
             orig_umap.SetOrigin(img_sitk.GetOrigin())
@@ -503,8 +503,6 @@ class ROIPreprocessor:
             z_slice, y_slice, x_slice = bbox1_shape
 
 
-            print("Mask inside bbox:", resampled_mask[z_slice, y_slice, x_slice].min(), resampled_mask[z_slice, y_slice, x_slice].max())
-            print("UMAP inside bbox:", resampled_umap[z_slice, y_slice, x_slice].min(), resampled_umap[z_slice, y_slice, x_slice].max())
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
@@ -519,6 +517,7 @@ class ROIPreprocessor:
                 umap_pp = cropped_umap
 
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
+            self.visualize_umap_and_mask(resized_umap, resized_mask, '')
             print(f'Resized UMAP shape {resized_umap.shape}')
             print("UMAP resized min:", resized_umap.min())
             print("UMAP  resized max:", resized_umap.max())
