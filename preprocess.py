@@ -429,6 +429,7 @@ class ROIPreprocessor:
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
+            print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print(f'UMAP {umap_type} resampled shape : {resampled_umap.shape}')
