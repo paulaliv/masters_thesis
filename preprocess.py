@@ -471,7 +471,7 @@ class ROIPreprocessor:
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
-            self.visualize_umap_and_mask(umap_array, orig_mask, '')
+            #self.visualize_umap_and_mask(umap_array, orig_mask, '')
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
             orig_umap.SetOrigin(img_sitk.GetOrigin())
