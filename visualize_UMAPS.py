@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import os
+from glob import glob
+
 
 def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d=None, slice_strategy='middle', alpha=0.5, cmap=cv2.COLORMAP_JET, title=None):
     """
@@ -18,6 +21,9 @@ def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d=None, slice_strate
     Returns:
     - None (displays plot)
     """
+    image_3d = nib.load(image_3d)
+    umap_3d = nib.load(umap_3d)
+    mask_3d = nib.load(mask_3d)
     assert image_3d.shape == umap_3d.shape, "Image and UMAP shapes must match"
 
     # Determine slice index
@@ -43,17 +49,17 @@ def visualize_umap_gradcam_overlay(image_3d, umap_3d, mask_3d=None, slice_strate
     mask_slice = mask_3d[slice_idx] if mask_3d is not None else None
 
     # Normalize image
-    image_norm = (image_slice - np.min(image_slice)) / (np.max(image_slice) - np.min(image_slice) + 1e-8)
-    image_rgb = np.stack([image_norm]*3, axis=-1)
+    #image_norm = (image_slice - np.min(image_slice)) / (np.max(image_slice) - np.min(image_slice) + 1e-8)
+    #image_rgb = np.stack([image_norm]*3, axis=-1)
 
     # Normalize umap and convert to heatmap
-    umap_norm = (umap_slice - np.min(umap_slice)) / (np.max(umap_slice) - np.min(umap_slice) + 1e-8)
-    umap_uint8 = np.uint8(255 * umap_norm)
-    heatmap = cv2.applyColorMap(umap_uint8, cmap)
+    #umap_norm = (umap_slice - np.min(umap_slice)) / (np.max(umap_slice) - np.min(umap_slice) + 1e-8)
+    #umap_uint8 = np.uint8(255 * umap_norm)
+    heatmap = cv2.applyColorMap(umap_slice, cmap)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
 
     # Overlay
-    overlay = cv2.addWeighted(heatmap, alpha, (image_rgb * 255).astype(np.uint8), 1 - alpha, 0)
+    overlay = cv2.addWeighted(heatmap, alpha, (image_slice * 255).astype(np.uint8), 1 - alpha, 0)
 
     # Plot
     plt.figure(figsize=(6, 6))
@@ -71,4 +77,18 @@ def main():
     # predicted_mask_folder = "/gpfs/home6/palfken/QA_input_Ts/output"
 
     Umap_folder = "/gpfs/home6/palfken/Test_umaps/"
-    mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
+    mask_paths = sorted(glob.glob(os.path.join(Umap_folder, '_PADDED_mask.nii.gz')))
+    for mask in range(2):
+        mask_path = mask_paths[mask]
+        case_id = os.path.basename(mask_path).replace('_PADDED_mask.nii.gz', '')
+        img_path = os.path.join(Umap_folder, f"{case_id}_PADDED_img.nii.gz")
+        confidence = os.path.join(Umap_folder, f"{case_id}_confidence.nii.gz")
+        entropy = os.path.join(Umap_folder, f"{case_id}_entropy.nii.gz")
+        mutual_info = os.path.join(Umap_folder, f"{case_id}_mutual_info.nii.gz")
+        visualize_umap_gradcam_overlay(img_path, confidence, mask_path)
+        visualize_umap_gradcam_overlay(img_path, entropy, mask_path)
+        visualize_umap_gradcam_overlay(img_path, mutual_info, mask_path)
+
+
+
+

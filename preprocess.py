@@ -486,7 +486,7 @@ def main():
     output_folder = "/gpfs/home6/palfken/Test_umaps/"
     os.makedirs(output_folder, exist_ok=True)
     # dice_scores = []
-    #
+
     preprocessor = ROIPreprocessor(safe_as_nifti=True, save_umaps=True)
     preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder)
 
