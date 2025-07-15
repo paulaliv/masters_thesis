@@ -389,12 +389,13 @@ class ROIPreprocessor:
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
-        mask_sitk = self.apply_resampling(orig_mask, is_label=True)
+
         img_sitk = self.apply_resampling(orig_img, is_label=False)
+        mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
 
-        resampled_mask = sitk.GetArrayFromImage(mask_sitk)
+
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
-
+        resampled_mask = sitk.GetArrayFromImage(mask_sitk)
 
         # orig_img = sitk.GetArrayFromImage(orig_sitk)
         orig_mask = sitk.GetArrayFromImage(orig_mask)
@@ -437,7 +438,7 @@ class ROIPreprocessor:
             orig_umap = sitk.GetImageFromArray(umap_array)
 
 
-            umap_sitk = self.resample_umap(orig_umap,reference=mask_sitk, is_label=False)
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
