@@ -485,7 +485,7 @@ class ROIPreprocessor:
             zmin, zmax = np.min(nonzero[0]), np.max(nonzero[0]) + 1
             ymin, ymax = np.min(nonzero[1]), np.max(nonzero[1]) + 1
             xmin, xmax = np.min(nonzero[2]), np.max(nonzero[2]) + 1
-            print('non zero umap region',zmin- zmax, ymin -  ymax, xmin- xmax)
+            print('non zero umap region',zmax-zmin, ymax-ymin, xmax-xmin)
             #self.visualize_umap_and_mask(resampled_umap, resampled_mask, '')
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
