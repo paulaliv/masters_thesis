@@ -371,7 +371,7 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
+        #df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path):
 
@@ -430,6 +430,10 @@ class ROIPreprocessor:
             print(f'UMAP {umap_type} resampled shape : {resampled_umap.shape}')
 
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
+            print("UMAP min:", cropped_umap.min())
+            print("UMAP max:", cropped_umap.max())
+            print("UMAP shape:", cropped_umap.shape)
+            print("UMAP dtype:", cropped_umap.dtype)
 
             if not (np.isclose(np.min(cropped_umap), 0.0) and np.isclose(np.max(cropped_umap), 1.0)):
                 umap_pp = self.normalize(cropped_umap)
@@ -439,40 +443,40 @@ class ROIPreprocessor:
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
             print(f'Resized UMAP shape {resized_umap.shape}')
 
-            if self.save_as_nifti:
-                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-                                                              is_mask=False)
-
-                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-
-
-
-        if self.save_as_nifti:
-
-            reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
-                                                             is_mask=False)
-            reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
-                                                              is_mask=True)
-
-            try:
-                self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
-                self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
-                                os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
-                print('Saved Image and mask')
-            except Exception as e:
-                print(f"Error saving image/mask for case {case_id}: {e}")
-
-
-
-        else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-
-        print(f'Processed {self.case_id}')
+        #     if self.save_as_nifti:
+        #         reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+        #                                                       is_mask=False)
+        #
+        #         self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+        #                         os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+        #     else:
+        #         np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+        #
+        #
+        #
+        # if self.save_as_nifti:
+        #
+        #     reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
+        #                                                      is_mask=False)
+        #     reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
+        #                                                       is_mask=True)
+        #
+        #     try:
+        #         self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
+        #                         os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
+        #         self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
+        #                         os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
+        #         print('Saved Image and mask')
+        #     except Exception as e:
+        #         print(f"Error saving image/mask for case {case_id}: {e}")
+        #
+        #
+        #
+        # else:
+        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #     np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        #
+        # print(f'Processed {self.case_id}')
 
 
 
