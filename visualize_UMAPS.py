@@ -89,6 +89,7 @@ def main():
         visualize_umap_gradcam_overlay(img_path, entropy, mask_path)
         visualize_umap_gradcam_overlay(img_path, mutual_info, mask_path)
 
-
+if __name__ == '__main__':
+    main()
 
 
