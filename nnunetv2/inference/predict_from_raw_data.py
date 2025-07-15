@@ -772,6 +772,10 @@ class nnUNetPredictor(object):
                     print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+                    mean_probs = mean_probs.clone()  # Avoid changing the original tensor
+                    mean_probs[mean_probs < 1e-8] = 1e-8
+
+
                     assert not torch.isnan(mean_probs).any(), "NaNs in mean_probs"
                     assert (mean_probs >= 0).all(), "mean_probs contains negative values"
                     assert mean_probs.shape == (C, H, W, D), "Mean probs should be [C, H, W, D]"
@@ -780,10 +784,11 @@ class nnUNetPredictor(object):
                     confidence_map = torch.max(mean_probs, dim=0).values  # shape: [H, W, D]
                     assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
 
-                    clamped_mean_probs = mean_probs.clamp(min=1e-8)
+                    #clamped_mean_probs = mean_probs.clamp(min=1e-8)
+                    clamped_mean_probs = mean_probs
                     print(f"[DEBUG] mean_probs min: {mean_probs.min().item()}, max: {mean_probs.max().item()}")
                     print(
-                        f"[DEBUG] clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
+                        f"[DEBUG] !!!clamped_mean_probs min: {clamped_mean_probs.min().item()}, max: {clamped_mean_probs.max().item()}")
                     print(f"[DEBUG] Any NaNs in mean_probs? {torch.isnan(mean_probs).any()}")
                     print(f"[DEBUG] Any Infs in mean_probs? {torch.isinf(mean_probs).any()}")
                     print(f"[DEBUG] Any NaNs in clamped_mean_probs? {torch.isnan(clamped_mean_probs).any()}")
