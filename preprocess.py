@@ -505,7 +505,7 @@ class ROIPreprocessor:
             assert img_sitk.GetSize() == mask_sitk.GetSize() == umap_sitk.GetSize()
 
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-            self.visualize_umap_and_mask(resampled_umap, resampled_mask, resampled_img)
+
 
 
 
@@ -526,6 +526,9 @@ class ROIPreprocessor:
             print("UMAP max:", cropped_umap.max())
             print("UMAP shape:", cropped_umap.shape)
             print("UMAP dtype:", cropped_umap.dtype)
+            self.visualize_umap_and_mask(cropped_umap, cropped_mask, cropped_img)
+            self.visualize_umap_and_mask(cropped_umap, cropped_mask, cropped_img)
+
 
             if not (np.isclose(np.min(cropped_umap), 0.0) and np.isclose(np.max(cropped_umap), 1.0)):
                 umap_pp = self.normalize(cropped_umap)
