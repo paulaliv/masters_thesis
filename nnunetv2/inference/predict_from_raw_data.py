@@ -763,22 +763,31 @@ class nnUNetPredictor(object):
 
                     assert logits.shape == (T, C, H, W, D), "Logits should be [T, C, H, W, D]"
                     print(f"[DEBUG] logits shape: {logits.shape}")
-
+                    assert not torch.isnan(logits).any(), "NaNs in logits!"
 
                     probs = F.softmax(logits, dim=1)  # shape: [5, C, H, W, D]
                     assert not torch.isnan(probs).any(), "NaNs in softmax output"
+                    assert (probs >= 0).all(), "Softmax contains negative values"
+                    assert torch.allclose(probs.sum(dim=1), torch.ones_like(probs.sum(dim=1)),atol=1e-5), "Softmax probs do not sum to 1"
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+                    assert not torch.isnan(mean_probs).any(), "NaNs in mean_probs"
+                    assert (mean_probs >= 0).all(), "mean_probs contains negative values"
                     assert mean_probs.shape == (C, H, W, D), "Mean probs should be [C, H, W, D]"
 
                     # Confidence: max probability across classes
                     confidence_map = torch.max(mean_probs, dim=0).values  # shape: [H, W, D]
                     assert confidence_map.shape == (H, W, D), "Confidence map should be [H, W, D]"
-                    entropy_map = -torch.sum(mean_probs * torch.log(mean_probs + 1e-8), dim=0)  # shape: [H, W, D]
+
+                    clamped_mean_probs = mean_probs.clamp(min=1e-8)
+                    entropy_map = -torch.sum(clamped_mean_probs * torch.log(clamped_mean_probs), dim=0)
+                    assert not torch.isnan(entropy_map).any(), "NaNs in entropy_map after clamping"
+
                     assert entropy_map.shape == (H, W, D), "Entropy map should be [H, W, D]"
 
                     # Entropy of each prediction
-                    entropy_per_model = -torch.sum(probs * torch.log(probs + 1e-8), dim=1)  # shape: [5, H, W, D]
+                    clamped_probs = probs.clamp(min=1e-8)
+                    entropy_per_model = -torch.sum(clamped_probs * torch.log(clamped_probs), dim=1)
                     assert entropy_per_model.shape == (T, H, W, D), "Entropy per model should be [T, H, W, D]"
                     mean_entropy = entropy_per_model.mean(dim=0)  # shape: [H, W, D]
                     assert mean_entropy.shape == (H, W, D), "Mean entropy should be [H, W, D]"
