@@ -119,16 +119,23 @@ class ROIPreprocessor:
 
         return resample.Execute(image)
 
-    def resample_umap(self, image: sitk.Image, reference: sitk.Image, is_label=False):
-        resample = sitk.ResampleImageFilter()
-        resample.SetReferenceImage(reference)  # <- Ensures proper alignment
-        resample.SetTransform(sitk.Transform())
-        resample.SetDefaultPixelValue(0)
-        if is_label:
-            resample.SetInterpolator(sitk.sitkNearestNeighbor)
-        else:
-            resample.SetInterpolator(sitk.sitkLinear)
-        return resample.Execute(image)
+    def resample_umap(self, image: sitk.Image, reference: sitk.Image, is_label=False) -> sitk.Image:
+        resampler = sitk.ResampleImageFilter()
+        resampler.SetReferenceImage(reference)
+        resampler.SetInterpolator(sitk.sitkNearestNeighbor if is_label else sitk.sitkLinear)
+        resampler.SetTransform(sitk.Transform())
+        resampler.SetOutputSpacing(reference.GetSpacing())
+        resampler.SetOutputOrigin(reference.GetOrigin())
+        resampler.SetOutputDirection(reference.GetDirection())
+        resampler.SetSize(reference.GetSize())
+
+        try:
+            resampled = resampler.Execute(image)
+        except Exception as e:
+            print(f"[ERROR] Resampling failed: {str(e)}")
+            return None
+
+        return resampled
 
     def apply_resampling(self, img_sitk, is_label=False):
         #img_sitk = sitk.ReadImage(img_path)
@@ -429,10 +436,11 @@ class ROIPreprocessor:
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
 
-            print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
+
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
             print(f'UMAP {umap_type} resampled shape : {resampled_umap.shape}')
+            print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
 
             cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
             print("UMAP min:", cropped_umap.min())
