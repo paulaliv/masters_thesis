@@ -772,6 +772,7 @@ class nnUNetPredictor(object):
                     print(f"[DEBUG] probs sum (min, max): {probs.sum(dim=1).min().item()}, {probs.sum(dim=1).max().item()}")
 
                     mean_probs = probs.mean(dim=0)  # shape: [C, H, W, D]
+
                     mean_probs = mean_probs.clone()  # Avoid changing the original tensor
                     mean_probs[mean_probs < 1e-8] = 1e-8
 
