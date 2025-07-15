@@ -242,22 +242,42 @@ class ROIPreprocessor:
             img[img == -mean / std] = 0  # Ensure padding stays at 0
         return img
 
-    def visualize_umap_and_mask(self,umap, mask, title_prefix=''):
+    def visualize_umap_and_mask(self,umap, mask, img,axis =0):
+        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
+        idx = np.argmax(summed)
         assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
+        if axis == 0:
+            img_slice = img[idx]
+            mask_slice = mask[idx]
+            umap_slice = umap[idx]
+        elif axis == 1:
+            img_slice = img[:, idx, :]
+            mask_slice = mask[:, idx, :]
+            umap_slice = umap[:, idx, :]
+        elif axis == 2:
+            img_slice = img[:, :, idx]
+            mask_slice = mask[:, :, idx]
+            umap_slice = umap[:, :, idx]
+        else:
+            raise ValueError("Axis must be 0, 1, or 2.")
 
-        z_slices = umap.shape[0]
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 
-        for i in range(z_slices):
-            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        # Left: UMAP
+        axs[0].imshow(umap_slice, cmap='viridis')
+        axs[0].set_title(f'UMAP Slice {idx}')
+        axs[0].axis('off')
 
-            axes[0].imshow(umap[i], cmap='viridis')
-            axes[0].set_title(f'{title_prefix}UMAP Slice {i}')
+        # Right: Image + Mask
+        axs[1].imshow(img_slice, cmap='gray')
+        axs[1].imshow(mask_slice, cmap='Reds', alpha=0.4)
+        axs[1].set_title(f'Image + Mask Slice {idx}')
+        axs[1].axis('off')
 
-            axes[1].imshow(mask[i], cmap='gray')
-            axes[1].set_title(f'{title_prefix}Mask Slice {i}')
+        plt.tight_layout()
+        plt.show()
 
-            plt.tight_layout()
-            plt.show()
+
 
     def preprocess_case(self, img_path, mask_path, output_dir):
         os.makedirs(output_dir, exist_ok=True)
@@ -471,6 +491,7 @@ class ROIPreprocessor:
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
+            self.visualize_umap_and_mask(umap_array, orig_mask, orig_img)
 
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
@@ -517,7 +538,7 @@ class ROIPreprocessor:
                 umap_pp = cropped_umap
 
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
-            self.visualize_umap_and_mask(resized_umap, resized_mask, '')
+            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img)
             print(f'Resized UMAP shape {resized_umap.shape}')
             print("UMAP resized min:", resized_umap.min())
             print("UMAP  resized max:", resized_umap.max())
