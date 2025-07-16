@@ -594,13 +594,6 @@ def main(preprocessed_dir, logits_dir, plot_dir):
 #metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
-    fold_paths = {
-        'fold_0': '/gpfs/home6/palfken/masters_thesis/fold_0',
-        'fold_1': '/gpfs/home6/palfken/masters_thesis/fold_1',
-        'fold_2': '/gpfs/home6/palfken/masters_thesis/fold_2',
-        'fold_3': '/gpfs/home6/palfken/masters_thesis/fold_3',
-        'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
-    }
     preprocessed= sys.argv[1]
     uncertainty = sys.argv[2]
     plot_dir = sys.argv[3]
