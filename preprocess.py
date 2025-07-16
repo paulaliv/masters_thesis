@@ -279,7 +279,10 @@ class ROIPreprocessor:
         plt.suptitle(name, fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-        plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
+        #plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
+        if 'CROPPED' in umap_type:
+            plt.show()
+
 
 
 
@@ -588,9 +591,9 @@ class ROIPreprocessor:
 
 
 def main():
-    input_folder_img = "/gpfs/home6/palfken/QA_imagesTs/"
-    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTs/output"
+    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTr/"
+    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTr/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     output_folder_data = "/gpfs/home6/palfken/QA_dataTs_final/"
