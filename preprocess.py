@@ -14,6 +14,7 @@ import glob
 from scipy.ndimage import zoom
 import pandas as pd
 
+from split_data import case_ids
 
 
 class ROIPreprocessor:
@@ -242,7 +243,7 @@ class ROIPreprocessor:
             img[img == -mean / std] = 0  # Ensure padding stays at 0
         return img
 
-    def visualize_umap_and_mask(self,umap, mask, img,axis =0):
+    def visualize_umap_and_mask(self,umap, mask, img, name, umap_type, output_dir,axis =0):
         summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
         idx = np.argmax(summed)
         assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
@@ -274,8 +275,11 @@ class ROIPreprocessor:
         axs[1].set_title(f'Image + Mask Slice {idx}')
         axs[1].axis('off')
 
-        plt.tight_layout()
-        plt.show()
+        # Add figure title here
+        plt.suptitle(name, fontsize=16)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+        plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
 
 
 
@@ -365,7 +369,7 @@ class ROIPreprocessor:
         return np.pad(volume, pad_width, mode='constant')
 
 
-    def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir):
+    def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_df = pd.read_csv(subtypes_csv)
 
@@ -396,7 +400,7 @@ class ROIPreprocessor:
             if os.path.exists(mask_path):
 
                 if self.save_umaps:
-                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir)
+                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
                 else:
                    self.preprocess_case(img_path, gt_path, output_dir)
 
@@ -426,9 +430,9 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        #df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
+        df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
 
-    def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path):
+    def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
 
         case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
@@ -491,7 +495,7 @@ class ROIPreprocessor:
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
-            self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array)
+            self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
 
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
@@ -527,7 +531,7 @@ class ROIPreprocessor:
             print("UMAP max:", cropped_umap.max())
             print("UMAP shape:", cropped_umap.shape)
             print("UMAP dtype:", cropped_umap.dtype)
-            self.visualize_umap_and_mask(cropped_umap, cropped_mask_1, cropped_img)
+            #self.visualize_umap_and_mask(cropped_umap, cropped_mask_1, cropped_img)
 
 
 
@@ -538,47 +542,47 @@ class ROIPreprocessor:
                 umap_pp = cropped_umap
 
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
-            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img)
+            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
             print(f'Resized UMAP shape {resized_umap.shape}')
             print("UMAP resized min:", resized_umap.min())
             print("UMAP  resized max:", resized_umap.max())
             print("UMAP resized shape:", resized_umap.shape)
             print("UMAP resized dtype:", resized_umap.dtype)
 
-        #     if self.save_as_nifti:
-        #         reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-        #                                                       is_mask=False)
-        #
-        #         self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-        #                         os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-        #     else:
-        #         np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-        #
-        #
-        #
-        # if self.save_as_nifti:
-        #
-        #     reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
-        #                                                      is_mask=False)
-        #     reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
-        #                                                       is_mask=True)
-        #
-        #     try:
-        #         self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
-        #                         os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
-        #         self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
-        #                         os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
-        #         print('Saved Image and mask')
-        #     except Exception as e:
-        #         print(f"Error saving image/mask for case {case_id}: {e}")
-        #
-        #
-        #
-        # else:
-        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-        #     np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-        #
-        # print(f'Processed {self.case_id}')
+            if self.save_as_nifti:
+                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+                                                              is_mask=False)
+
+                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+
+
+
+        if self.save_as_nifti:
+
+            reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
+                                                             is_mask=False)
+            reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
+                                                              is_mask=True)
+
+            try:
+                self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
+                self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
+                                os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
+                print('Saved Image and mask')
+            except Exception as e:
+                print(f"Error saving image/mask for case {case_id}: {e}")
+
+
+
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+
+        print(f'Processed {self.case_id}')
 
 
 
@@ -589,12 +593,16 @@ def main():
     predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTs/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder = "/gpfs/home6/palfken/Test_umaps/"
-    os.makedirs(output_folder, exist_ok=True)
+    output_folder_data = "/gpfs/home6/palfken/QA_dataTs_final/"
+    output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals/"
+
+    os.makedirs(output_folder_data, exist_ok=True)
+    os.makedirs(output_folder_visuals, exist_ok=True)
     # dice_scores = []
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=True, save_umaps=True)
-    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder)
+    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
+
+    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 if __name__ == '__main__':
     main()
