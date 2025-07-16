@@ -282,6 +282,9 @@ class ROIPreprocessor:
         #plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
         if 'CROPPED' in umap_type:
             plt.show()
+        else:
+            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}'))
+
 
 
 
