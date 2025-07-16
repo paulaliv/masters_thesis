@@ -163,7 +163,7 @@ class QADataset(Dataset):
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         print(f'Image shape {image.shape}')
-        uncertainty = torch.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
+        uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
         print(f'UMAP shape {uncertainty.shape}')
 
         # Map dice score to category
