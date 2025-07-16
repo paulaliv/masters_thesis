@@ -14,7 +14,7 @@ fold_paths = {
     'fold_4': '/gpfs/home6/palfken/masters_thesis/fold_4',
 }
 
-input_folder= "/gpfs/home6/palfken/QA_dataTS_final"
+input_folder= "/gpfs/home6/palfken/QA_dataTs_final"
 output_folder = "/gpfs/home6/palfken/QA_dataTr_final"
 
 
