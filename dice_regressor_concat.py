@@ -153,9 +153,12 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
-        image = torch.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+
+        image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        image = torch.from_numpy(image).float()
+
         if image.ndim == 3:
-            image_tensor = image.unsqueeze(0)  # Add channel dim
+            image = image.unsqueeze(0)  # Add channel dim
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
