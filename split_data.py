@@ -88,6 +88,6 @@ for filename in os.listdir(input_folder):
     dst_file = os.path.join(output_folder, filename)
 
     if os.path.isfile(src_file):  # Skip subfolders
-        shutil.copy(src_file, dst_file)
+        shutil.move(src_file, dst_file)
 new_number = len(os.listdir(output_folder))
 print(f'new files in dst folder {new_number-initial_number} ')
