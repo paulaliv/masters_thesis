@@ -495,9 +495,9 @@ class ROIPreprocessor:
 
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
-            orig_umap.SetOrigin(img_sitk.GetOrigin())
-            orig_umap.SetSpacing(img_sitk.GetSpacing())
-            orig_umap.SetDirection(img_sitk.GetDirection())
+            orig_umap.SetOrigin(orig_img.GetOrigin())
+            orig_umap.SetSpacing(orig_img.GetSpacing())
+            orig_umap.SetDirection(orig_img.GetDirection())
 
 
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
