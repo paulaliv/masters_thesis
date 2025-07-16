@@ -282,12 +282,12 @@ class ROIPreprocessor:
         #plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
         if 'CROPPED' in umap_type and self.case_id in self.cropped_cases:
 
-            plt.savefig(os.path.join(output_dir, f'TUMOR_{umap_type}_{self.case_id}.png'))
+            #plt.savefig(os.path.join(output_dir, f'TUMOR_{umap_type}_{self.case_id}.png'))
             plt.show()
             plt.close()
 
         else:
-            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+            #plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
             plt.close()
 
 
@@ -603,10 +603,10 @@ class ROIPreprocessor:
 def main():
     input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
     input_folder_gt ="/gpfs/home6/palfken/QA_labelsTr/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTr/output"
+    predicted_mask_folder = "/gpfs/home6/palfken/20QA_imagesTr/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/QA_dataTr_final/"
+    output_folder_data = "/gpfs/home6/palfken/20QA_dataTr_final/"
     output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals/"
 
     os.makedirs(output_folder_data, exist_ok=True)
