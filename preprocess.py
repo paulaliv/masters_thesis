@@ -447,7 +447,7 @@ class ROIPreprocessor:
 
         orig_img_array = sitk.GetArrayFromImage(orig_img)
         orig_mask_array = sitk.GetArrayFromImage(orig_mask)
-        print(f'Original shape :{orig_mask.shape}')
+        print(f'Original shape :{orig_mask_array.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
 
         # Get bounding box in original mask
