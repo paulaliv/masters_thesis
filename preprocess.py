@@ -422,17 +422,17 @@ class ROIPreprocessor:
                 })
         df = pd.DataFrame(case_stats)
         bin_edges = np.arange(0.0, 1.1, 0.1)
-        existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_5epochs.csv')
-        print(f'CSV file has {len(existing_df)} rows')
-        updated_df = pd.concat([existing_df, df], ignore_index=True)
+        #existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
+        #print(f'CSV file has {len(existing_df)} rows')
+        #updated_df = pd.concat([existing_df, df], ignore_index=True)
 
         print("Global Dice Score Distribution:")
-        global_hist, _ = np.histogram(updated_df['dice_5'], bins=bin_edges)
+        global_hist, _ = np.histogram(df['dice_5'], bins=bin_edges)
         for i in range(len(bin_edges) - 1):
             print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
 
         print("\nDice Score Distribution by Tumor Class:")
-        for tumor_class, group in updated_df.groupby('tumor_class'):
+        for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
             class_hist, _ = np.histogram(group['dice_5'], bins=bin_edges)
             for i in range(len(bin_edges) - 1):
@@ -442,7 +442,7 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        updated_df.to_csv("/gpfs/home6/palfken/Dice_scores_5epochs.csv", index=False)
+        df.to_csv("/gpfs/home6/palfken/Die_scores_20epochs.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
 
