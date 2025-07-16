@@ -504,11 +504,10 @@ class ROIPreprocessor:
 
             assert img_sitk.GetSize() == mask_sitk.GetSize() == umap_sitk.GetSize()
 
+            umap_sitk.SetOrigin(img_sitk.GetOrigin())
+            umap_sitk.SetSpacing(img_sitk.GetSpacing())
+            umap_sitk.SetDirection(img_sitk.GetDirection())
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-
-
-
-
             print("Resampled mask shape:", resampled_mask.shape)
             print("Resampled UMAP shape:", resampled_umap.shape)
             print("Resampled mask unique:", np.unique(resampled_mask))
@@ -519,10 +518,8 @@ class ROIPreprocessor:
             z_slice, y_slice, x_slice = bbox1_shape
 
 
-            cropped_umap, _ = self.crop_to_roi(resampled_umap, resampled_mask, slices)
-            cropped_sitk = sitk.GetImageFromArray(cropped_umap)
-            cropped_sitk.SetSpacing(original_spacing)
-            cropped_sitk.SetDirection(original_direction)
+            cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
+
 
 
             print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
@@ -530,7 +527,8 @@ class ROIPreprocessor:
             print("UMAP max:", cropped_umap.max())
             print("UMAP shape:", cropped_umap.shape)
             print("UMAP dtype:", cropped_umap.dtype)
-            self.visualize_umap_and_mask(cropped_sitk, cropped_mask, cropped_img)
+            self.visualize_umap_and_mask(cropped_umap, cropped_mask_1, cropped_img)
+
 
 
 
