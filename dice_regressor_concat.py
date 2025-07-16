@@ -17,6 +17,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch.nn.functional as F
 import time
 import sys
+import json
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
@@ -58,23 +59,6 @@ val_transforms = Compose([
 
 
 
-
-
-# gt_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/labelsTr'
-# logits_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Logits'
-# image_dir =  r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr'
-# preprocessed_dir = r'/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_preprocessed/Dataset002_SoftTissue'
-# tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-# tabular_data = pd.read_csv(tabular_data_dir)
-# pred_fold_paths = {
-#     'fold_0': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_0/validation',
-#     'fold_1': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_1/validation',
-#     'fold_2': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_2/validation',
-#     'fold_3': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_3/validation',
-#     'fold_4': '/home/bmep/plalfken/my-scratch/STT_classification/Segmentation/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/validation',
-# }
-
-
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -103,10 +87,8 @@ class OodDetection(nn.Module):
     def __init__(self,is_train = True):
         super().__init__()
         self.train = is_train
-
-    def compute_mahalanobis_distance(self,x):
-
-
+    def compute_cluster(self):
+        pass
 
 class QAModel(nn.Module):
     def __init__(self,num_classes):
@@ -129,37 +111,36 @@ class QAModel(nn.Module):
         return self.fc(merged)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.7, 0.8, 0.90, 0.95, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
 
 class QADataset(Dataset):
-    def __init__(self, fold, preprocessed_dir, logits_dir, fold_paths, uncertainty_metric, num_bins = 5,transform=None):
+    def __init__(self, case_ids, data_dir, df, uncertainty_metric, num_bins = 5,transform=None):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
         pred_fold_paths: dict with predicted mask folder paths per fold
         fold_paths: dict with fold folder paths containing Dice scores & case IDs
         """
-        self.fold = fold
+        #self.fold = fold
         self.num_bins = num_bins
-        self.preprocessed_dir = preprocessed_dir
-        self.logits_dir = logits_dir
-        self.fold_dir = fold_paths[fold]
+        self.data_dir = data_dir
+        self.df = df
         self.uncertainty_metric = uncertainty_metric
 
 
         # Load Dice scores & case IDs from a CSV or JSON
         # Example CSV: case_id,dice
 
-        self.metadata = pd.read_csv(self.fold_dir)
-
         # List of case_ids
-        self.case_ids = self.metadata['case_id'].tolist()
-        self.dice_scores = self.metadata['dice'].tolist()
-        self.subtypes = self.metadata['subtype'].tolist()
-        self.ds = nnUNetDatasetBlosc2(self.preprocessed_dir)
+        self.case_ids = case_ids.tolist()
+        self.df = self.df[self.df['case_id'].isin(self.case_ids)]
+
+        # Now extract dice scores and subtypes aligned with self.case_ids
+        self.dice_scores = self.df['dice_5'].tolist()
+        self.subtypes = self.df['tumor_class'].tolist()
 
         self.transform = transform
 
@@ -172,28 +153,26 @@ class QADataset(Dataset):
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
-        file = f'{case_id}_resized.pt'
-        image = torch.load(os.path.join(self.preprocessed_dir, file))
-
+        image = torch.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        if image.ndim == 3:
+            image_tensor = image.unsqueeze(0)  # Add channel dim
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
-        logits_path = os.path.join(self.logits_dir, f"{case_id}_uncertainty_maps.npz")
-        data = np.load(logits_path)  # shape (H, W, D)
-        uncertainty = data[self.uncertainty_metric]
+        print(f'Image shape {image.shape}')
+        uncertainty = torch.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
+        print(f'UMAP shape {uncertainty.shape}')
 
-        # nnU-Net raw images usually have multiple channels; choose accordingly:
-        # Here, just take channel 0 for simplicity:
-        #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
         # Map dice score to category
-        # print(f'Dice score: {dice_score}')
+        print(f'Dice score: {dice_score}')
         label = bin_dice_score(dice_score)
-        # print(f'Gets label {label}')
+        print(f'Gets label {label}')
 
         #image_tensor = torch.from_numpy(image).float()
-        #image_tensor = image.unsqueeze(0)  # Add channel dim
+
         # print(f'Image shape {image.shape}')
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
+
         uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
         label_tensor = torch.tensor(label).long()
@@ -319,34 +298,25 @@ def pad_collate_fn(batch):
 #     return images, uncertainties, labels, subtypes
 
 
-def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, uncertainty_metric, device):
+def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
     print(f"Training fold {fold} ...")
 
-    # Initialize datasets for this fold
-    train_fold_ids = [f"fold_{i}" for i in range(5) if i != fold]  # other folds for training
-    val_fold_id = f"fold_{fold}"  # current fold for validation
+    train_case_ids = splits[fold]["train"]
+    val_case_ids = splits[fold]["val"]
 
-    # Combine training folds datasets
-    train_datasets = []
-    for train_fold in train_fold_ids:
-        ds = QADataset(
-            fold=train_fold,
-            preprocessed_dir=preprocessed_dir,
-            logits_dir=logits_dir,
-            fold_paths=fold_paths,
-            uncertainty_metric=uncertainty_metric,
-            num_bins=num_bins,
-            transform=train_transforms
-
-        )
-        train_datasets.append(ds)
-    train_dataset = ConcatDataset(train_datasets)
-
+    # Create datasets
+    train_dataset = QADataset(
+        case_ids=train_case_ids,
+        data_dir=data_dir,
+        df=df,
+        uncertainty_metric=uncertainty_metric,
+        num_bins=num_bins,
+        transform=train_transforms,
+    )
     val_dataset = QADataset(
-        fold=val_fold_id,
-        preprocessed_dir=preprocessed_dir,
-        logits_dir=logits_dir,
-        fold_paths=fold_paths,
+        case_ids=val_case_ids,
+        data_dir=data_dir,
+        df=df,
         uncertainty_metric=uncertainty_metric,
         transform=val_transforms,
     )
@@ -362,17 +332,16 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
     print('Initiating Model')
     model = QAModel(num_classes=6).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    Counts = {
-        0: 49,  # Fail (0-0.1)
-        1: 19,  # Poor (0.1-0.7)
-        2: 24,  # Moderate (0.7-0.8)
-        3: 62,  # Good (0.8-0.9)
-        4: 56,  # Very Good (0.9- 0.95)
-        5: 35  # Excellent (>0.95)
-    }
+    # Counts = {
+    #     0: 66,  # Fail (0-0.1)
+    #     1: 22,  # Poor (0.1-0.7)
+    #     2: 25,  # Moderate (0.7-0.8)
+    #     3: 27,  # Good (0.8-0.9)
+    #     4: 7  # Very Good (0.9- 0.95)
+    # }
 
     # Step 1: Define class counts
-    class_counts = torch.tensor([49, 19, 24, 62, 56, 35], dtype=torch.float)
+    class_counts = torch.tensor([66, 22, 25, 27, 7], dtype=torch.float)
 
     # Step 2: Inverse frequency
     weights = 1.0 / torch.sqrt(class_counts)
@@ -517,16 +486,16 @@ def train_one_fold(fold,preprocessed_dir, logits_dir, fold_paths, num_bins, unce
 #
 #     return dice
 
-def main(preprocessed_dir, logits_dir, plot_dir):
+def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     start = time.time()
     #for fold in range(5):
     # Train the model and retrieve losses + predictions
     train_losses, val_losses, val_preds, val_labels, val_subtypes = train_one_fold(
         0,
-        preprocessed_dir,
-        logits_dir,
-        fold_paths=fold_paths,
+        data_dir,
+        df=df,
+        splits=folds,
         uncertainty_metric='confidence',
         num_bins=5,
         device=device
@@ -594,8 +563,12 @@ def main(preprocessed_dir, logits_dir, plot_dir):
 #metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
-    preprocessed= sys.argv[1]
-    uncertainty = sys.argv[2]
-    plot_dir = sys.argv[3]
+    with open('/gpfs/home6/palfken/QA_5fold_splits.json', 'r') as f:
+        splits = json.load(f)
+    clinical_data = "/gpfs/home6/palfken/Dice_scores_5epochs.csv"
+    df =  pd.read_csv(clinical_data)
 
-    main(preprocessed,uncertainty, plot_dir)
+    preprocessed= sys.argv[1]
+    plot_dir = sys.argv[2]
+
+    main(preprocessed, plot_dir, splits, df)
