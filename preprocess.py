@@ -410,7 +410,8 @@ class ROIPreprocessor:
             if os.path.exists(mask_path):
 
                 if self.save_umaps:
-                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    #self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    pass
                 else:
                    self.preprocess_case(img_path, gt_path, output_dir)
 
