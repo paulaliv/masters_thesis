@@ -569,7 +569,7 @@ class ROIPreprocessor:
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
             else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+                np.save(os.path.join(output_path, f"20EP_{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
 
 
 
@@ -592,8 +592,8 @@ class ROIPreprocessor:
 
 
         else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            np.save(os.path.join(output_path, f"20EP_{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save(os.path.join(output_path, f"20EP_{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
 
