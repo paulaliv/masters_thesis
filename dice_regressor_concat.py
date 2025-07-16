@@ -135,7 +135,7 @@ class QADataset(Dataset):
         # Example CSV: case_id,dice
 
         # List of case_ids
-        self.case_ids = case_ids.tolist()
+        self.case_ids = case_ids
         self.df = self.df[self.df['case_id'].isin(self.case_ids)]
 
         # Now extract dice scores and subtypes aligned with self.case_ids
