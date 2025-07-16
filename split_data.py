@@ -25,27 +25,8 @@ fold2= pd.read_csv(fold_paths['fold_2'])
 fold3= pd.read_csv(fold_paths['fold_3'])
 fold4= pd.read_csv(fold_paths['fold_4'])
 
-#nnunet_ids = pd.concat([fold0, fold1], ignore_index=True)
-qa_train_ids = pd.concat([fold2, fold3], ignore_index=True)
-
-# print(f'number of nnunet train cases ; {len(nnunet_ids)}')
-print(f'number of qa train cases :  {len(qa_train_ids)}')
-print(f'number of qa test cases ; {len(fold4)}')
-
-# nnunet_case_ids = nnunet_ids['case_id'].unique()
-qa_train_ids = qa_train_ids['case_id'].unique()
-qa_test_ids = fold4['case_id'].unique()
-
-# Step 2: Split fine-tuning val set from fold4 (qa_test)
-tuning_val_df, remaining_test_df = train_test_split(
-    fold4, test_size=0.8, stratify=fold4['subtype'], random_state=42
-)
-
-print(f"Fine-tuning validation cases: {len(tuning_val_df)}")
-print(f"Remaining QA test cases: {len(remaining_test_df)}")
-
 # Step 3: Merge remaining test cases with folds 2 and 3 to create training pool
-cv_df = pd.concat([fold2, fold3, remaining_test_df], ignore_index=True)
+cv_df = pd.concat([fold2, fold3, fold4], ignore_index=True)
 case_ids = cv_df['case_id'].values
 subtypes = cv_df['subtype'].values
 # Prepare arrays for splitting
@@ -64,11 +45,15 @@ for train_idx, val_idx in skf.split(case_ids, subtypes):
     splits.append({'train': train_cases, 'val': val_cases})
 
 # Save to JSON file
-with open('/gpfs/home6/palfken/QA_5fold_splits.json', 'w') as f:
+output_path = '/gpfs/home6/palfken/QA_5fold_splits.json'
+output_dir = os.path.dirname(output_path)
+
+# Create the directory if it doesn't exist
+os.makedirs(output_dir, exist_ok=True)
+
+# Now write the JSON file
+with open(output_path, 'w') as f:
     json.dump(splits, f, indent=4)
-
-tuning_val_df.to_csv("gpfs/home6/palfken/fine_tuning_val_set.csv", index=False)
-
 
 print("Stratified 5-fold splits saved to 'stratified_5fold_splits.json'")
 def copy_cases(case_ids, input_folder,image_dst,):
@@ -90,9 +75,19 @@ def copy_cases(case_ids, input_folder,image_dst,):
             print(f"Warning: Image not found for case {case_id}")
 
 # # Copy files
-case_ids_move = remaining_test_df['case_id'].values
 
-
-copy_cases(case_ids_move,input_folder, output_folder)
 # copy_cases(qa_train_ids, output_dirs["QA_imagesTr"], output_dirs["QA_labelsTr"])
 # copy_cases(qa_test_ids, output_dirs["QA_imagesTs"], output_dirs["QA_labelsTs"])
+
+# Loop over all files in source folder
+initial_number =len(os.listdir(output_folder))
+print(f'Number of files in source folder: {len(os.listdir(input_folder))}')
+
+for filename in os.listdir(input_folder):
+    src_file = os.path.join(input_folder, filename)
+    dst_file = os.path.join(output_folder, filename)
+
+    if os.path.isfile(src_file):  # Skip subfolders
+        shutil.copy(src_file, dst_file)
+new_number = len(os.listdir(output_folder))
+print(f'new files in dst folder {new_number-initial_number} ')
