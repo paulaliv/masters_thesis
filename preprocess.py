@@ -445,13 +445,13 @@ class ROIPreprocessor:
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
         resampled_mask = sitk.GetArrayFromImage(mask_sitk)
 
-        orig_img = sitk.GetArrayFromImage(orig_img)
-        orig_mask = sitk.GetArrayFromImage(orig_mask)
+        orig_img_array = sitk.GetArrayFromImage(orig_img)
+        orig_mask_array = sitk.GetArrayFromImage(orig_mask)
         print(f'Original shape :{orig_mask.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
 
         # Get bounding box in original mask
-        slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
+        slices_orig = self.get_roi_bbox(orig_mask_array)  # same as your get_roi_bbox function
         bbox_shape = (
             slices_orig[0].stop - slices_orig[0].start,
             slices_orig[1].stop - slices_orig[1].start,
@@ -489,9 +489,9 @@ class ROIPreprocessor:
             print("INITIAL UMAP max:", umap_array.max())
 
             print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
-            umap_array = self.center_pad_to_shape(umap_array, orig_img.shape)
+            umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
             print(f'Padded UMAP shape : {umap_array.shape}')
-            self.visualize_umap_and_mask(umap_array, orig_mask, orig_img)
+            self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array)
 
             # Convert NumPy array to SimpleITK image
             orig_umap = sitk.GetImageFromArray(umap_array)
