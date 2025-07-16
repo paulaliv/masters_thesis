@@ -4,8 +4,7 @@ import sys
 from typing import Tuple, Optional
 import nibabel as nib
 import numpy as np
-import torch
-import torch.nn.functional as F
+
 import SimpleITK as sitk
 from matplotlib import pyplot as plt
 from numpy import ndarray
@@ -14,7 +13,7 @@ import glob
 from scipy.ndimage import zoom
 import pandas as pd
 
-from split_data import case_ids
+
 
 
 class ROIPreprocessor:
