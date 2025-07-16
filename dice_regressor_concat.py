@@ -333,7 +333,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=6).to(device)
+    model = QAModel(num_classes=5).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
@@ -448,7 +448,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         val_labels_np = np.array(val_labels_list)
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.7)", "Moderate(0.7-0.8)", "Good (0.8-0.9)", "Very Good (0.9-0.95)", "Excellent(>0.95)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.3)", "Moderate(0.3-0.5)", "Good (0.5-0.7)", "Very Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
