@@ -280,10 +280,15 @@ class ROIPreprocessor:
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         #plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
-        if 'CROPPED' in umap_type:
+        if 'CROPPED' in umap_type and self.case_id in self.cropped_cases:
+
+            plt.savefig(os.path.join(output_dir, f'TUMOR_{umap_type}_{self.case_id}.png'))
             plt.show()
+            plt.close()
+
         else:
-            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}'))
+            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+            plt.close()
 
 
 
