@@ -501,12 +501,11 @@ class ROIPreprocessor:
             umap_array = npz_file[umap_type]
             umap_array = umap_array.astype(np.float32)  # or whichever key you want
             umap_array = np.squeeze(umap_array)
-            print("INITIAL UMAP min:", umap_array.min())
-            print("INITIAL UMAP max:", umap_array.max())
+            # print("INITIAL UMAP min:", umap_array.min())
+            # print("INITIAL UMAP max:", umap_array.max())
 
-            print(f'INITIAL UMAP {umap_type} original shape : {umap_array.shape}')
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
-            print(f'Padded UMAP shape : {umap_array.shape}')
+
             self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
 
             # Convert NumPy array to SimpleITK image
@@ -524,25 +523,9 @@ class ROIPreprocessor:
             umap_sitk.SetSpacing(img_sitk.GetSpacing())
             umap_sitk.SetDirection(img_sitk.GetDirection())
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-            print("Resampled mask shape:", resampled_mask.shape)
-            print("Resampled UMAP shape:", resampled_umap.shape)
-            print("Resampled mask unique:", np.unique(resampled_mask))
-
-
-            print(f'Resampled {umap_type} stats before crop: min={resampled_umap.min()}, max={resampled_umap.max()}')
-            print(f'Bounding box shape {bbox1_shape}')
-            z_slice, y_slice, x_slice = bbox1_shape
-
 
             cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
-
-
-            print("Masked UMAP min/max:", cropped_umap.min(), cropped_umap.max())
-            print("UMAP min:", cropped_umap.min())
-            print("UMAP max:", cropped_umap.max())
-            print("UMAP shape:", cropped_umap.shape)
-            print("UMAP dtype:", cropped_umap.dtype)
             #self.visualize_umap_and_mask(cropped_umap, cropped_mask_1, cropped_img)
 
 
@@ -555,11 +538,7 @@ class ROIPreprocessor:
 
             resized_umap, _ = self.adjust_to_shape(umap_pp, cropped_mask, self.target_shape)
             self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
-            print(f'Resized UMAP shape {resized_umap.shape}')
-            print("UMAP resized min:", resized_umap.min())
-            print("UMAP  resized max:", resized_umap.max())
-            print("UMAP resized shape:", resized_umap.shape)
-            print("UMAP resized dtype:", resized_umap.dtype)
+
 
             if self.save_as_nifti:
                 reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
