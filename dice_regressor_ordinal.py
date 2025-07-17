@@ -3,6 +3,7 @@ from collections import defaultdict
 from dynamic_network_architectures.building_blocks.residual import BasicBlockD
 from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
 from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
+from tests.losses.test_nacl_loss import targets
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -263,42 +264,16 @@ def pad_collate_fn(batch):
 
     return images_batch, uncertainties_batch, labels_batch, subtypes
 
-# def pad_collate_fn(batch):
-#     # batch[i] = (image, uncertainty, label, case_id)
-#     max_d = max(item[0].shape[1] for item in batch)  # item[0] is image
-#     max_h = max(item[0].shape[2] for item in batch)
-#     max_w = max(item[0].shape[3] for item in batch)
-#
-#     padded_batch = []
-#     for image, uncertainty, label, case_id in batch:
-#         # Pad image
-#         pad_dims = (
-#             0, max_w - image.shape[3],
-#             0, max_h - image.shape[2],
-#             0, max_d - image.shape[1]
-#         )
-#         image = torch.nn.functional.pad(image, pad_dims)
-#
-#         # Pad uncertainty the same way
-#         uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
-#
-#         padded_batch.append((image, uncertainty, label, case_id))
-#
-#     return padded_batch
+def encode_ordinal_targets(labels, num_thresholds= 4): #K-1 thresholds
+    batch_size = labels.shape[0]
+    targets = torch.zeros((batch_size, num_thresholds), dtype=torch.float32)
+    for i in range(num_thresholds):
+        targets[:i] = (labels > i).float()
+    return targets
 
-# def pad_collate_fn(batch):
-#     max_d = max(item['image'].shape[1] for item in batch)
-#     max_h = max(item['image'].shape[2] for item in batch)
-#     max_w = max(item['image'].shape[3] for item in batch)
-#     target_shape = get_padded_shape((max_d, max_h, max_w))
-#
-#     images = torch.stack([pad_tensor(item['image'], target_shape) for item in batch])
-#     uncertainties = torch.stack([pad_tensor(item['uncertainty'], target_shape) for item in batch])
-#     labels = torch.stack([item['label'] for item in batch])
-#     subtypes = [item['subtype'] for item in batch]
-#
-#     return images, uncertainties, labels, subtypes
-
+def decode_predictions(logits):
+    probs = torch.sigmoid(logits)
+    return (probs > 0.5).sum(dim=1)
 
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
     print(f"Training fold {fold} ...")
@@ -342,18 +317,9 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     #     4: 7  # Very Good (0.9- 0.95)
     # }
 
-    # Step 1: Define class counts
-    class_counts = torch.tensor([66, 22, 25, 27, 7], dtype=torch.float)
-
-    # Step 2: Inverse frequency
-    weights = 1.0 / torch.sqrt(class_counts)
-
-    # Step 3 (optional but recommended): Normalize weights to sum to 1
-    weights = weights / weights.sum()
-    weights = weights.to(device)
 
     # Step 4: Create the weighted loss
-    criterion = nn.CrossEntropyLoss(weight=weights)
+    criterion = nn.BCEWithLogitsLoss()
 
 
     # Early stopping variables
@@ -376,12 +342,14 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         model.train()
 
         for image, uncertainty, label, _ in train_loader:
+
             image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                loss = criterion(preds, label)
+                targets = encode_ordinal_targets(label).to(preds.device)
+                loss = criterion(preds, targets)
 
 
             scaler.scale(loss).backward()
@@ -389,9 +357,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
             scaler.update()
 
             running_loss += loss.item() * image.size(0)
-            _, predicted = torch.max(preds, 1)
-            correct += (predicted == label).sum().item()
             total += label.size(0)
+
+            with torch.no_grad():
+                decoded_preds = decode_predictions(preds)
+                correct += (decoded_preds == label).sum().item()
 
 
         epoch_train_loss = running_loss / total
@@ -414,17 +384,21 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
             for image, uncertainty, label, subtype in val_loader:
                 image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
 
+
                 preds = model(image, uncertainty)
-                #print(f'prediction shape is {preds.shape}, needs to be squeezed if not [Batchsize,3]')
-                loss = criterion(preds, label)
+                targets = encode_ordinal_targets(label).to(preds.device)
+
+                loss = criterion(preds, targets)
                 val_running_loss += loss.item() * image.size(0)
 
+                with torch.no_grad():
+                    decoded_preds = decode_predictions(preds)
+                    val_correct += (decoded_preds == label).sum().item()
 
-                _, predicted = torch.max(preds, 1)
-                val_correct += (predicted == label).sum().item()
+
                 val_total += label.size(0)
 
-                val_preds_list.extend(predicted.cpu().numpy())
+                val_preds_list.extend(decoded_preds.cpu().numpy())
                 val_labels_list.extend(label.cpu().numpy())
 
                 # Convert subtype to list

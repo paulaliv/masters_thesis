@@ -380,7 +380,8 @@ class ROIPreprocessor:
 
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
-        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
+        #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
+        subtypes_csv = "/gpfs/home6/palfken/WORC_clinical_data.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
 
 
@@ -402,7 +403,7 @@ class ROIPreprocessor:
 
             subtype_row = subtypes_df[subtypes_df['case_id'] == case_id]
             if not subtype_row.empty:
-                tumor_class = subtype_row.iloc[0]['subtype']
+                tumor_class = subtype_row.iloc[0]['Final_Classification']
                 tumor_class.strip()
             else:
                 tumor_class = 'Unknown'
@@ -410,7 +411,7 @@ class ROIPreprocessor:
             if os.path.exists(mask_path):
 
                 if self.save_umaps:
-                    #self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
                     pass
                 else:
                    self.preprocess_case(img_path, gt_path, output_dir)
@@ -423,9 +424,9 @@ class ROIPreprocessor:
                 })
         df = pd.DataFrame(case_stats)
         bin_edges = np.arange(0.0, 1.1, 0.1)
-        existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
-        print(f'CSV file has {len(existing_df)} rows')
-        updated_df = pd.concat([existing_df, df], ignore_index=True)
+        #existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
+        #print(f'CSV file has {len(existing_df)} rows')
+        #updated_df = pd.concat([existing_df, df], ignore_index=True)
 
         print("Global Dice Score Distribution:")
         global_hist, _ = np.histogram(df['dice_5'], bins=bin_edges)
@@ -433,18 +434,18 @@ class ROIPreprocessor:
             print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
 
         print("\nDice Score Distribution by Tumor Class:")
-        for tumor_class, group in updated_df.groupby('tumor_class'):
+        for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
             class_hist, _ = np.histogram(group['dice_5'], bins=bin_edges)
             for i in range(len(bin_edges) - 1):
                 print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
 
-        print(f'CSV file has {len(updated_df)} rows')
+        print(f'CSV file has {len(df)} rows')
         # Compute global stats
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        updated_df.to_csv("/gpfs/home6/palfken/Die_scores_20epochs.csv", index=False)
+        df.to_csv("/gpfs/home6/palfken/OOD_Dice_scores_20epochs.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
 
@@ -581,13 +582,14 @@ class ROIPreprocessor:
 
 
 def main():
-    input_folder_img = "/gpfs/home6/palfken/QA_imagesTs/"
-    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs/"
-    predicted_mask_folder = "/gpfs/home6/palfken/20QA_imagesTs"
+
+    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
+    input_folder_gt ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesOOD"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/20QA_dataTr_final/"
-    output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals/"
+    output_folder_data = "/gpfs/home6/palfken/20QA_dataOOD/"
+    output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals_OOD/"
 
     os.makedirs(output_folder_data, exist_ok=True)
     os.makedirs(output_folder_visuals, exist_ok=True)
