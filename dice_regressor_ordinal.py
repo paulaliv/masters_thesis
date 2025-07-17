@@ -53,7 +53,7 @@ train_transforms = Compose([
 ])
 val_transforms = Compose([
     EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     ToTensord(keys=["image", "uncertainty"])
 ])
 
