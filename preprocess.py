@@ -330,13 +330,6 @@ class ROIPreprocessor:
         )
 
         slices = self.get_roi_bbox(resampled_mask)
-        for s in slices:
-            print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
-        bbox1_shape = (
-            slices[0].stop - slices[0].start,
-            slices[1].stop - slices[1].start,
-            slices[2].stop - slices[2].start
-        )
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
         self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id,

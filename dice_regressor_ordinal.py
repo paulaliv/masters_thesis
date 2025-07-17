@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
+from collections import Counter
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 torch.manual_seed(42)
@@ -257,7 +258,11 @@ def decode_predictions(logits):
     #probs = torch.sigmoid(logits)
 
     #return (probs > 0.5).sum(dim=1)
-    return torch.sum(logits > 0, dim=1)
+    thresholds = (logits > 0).sum(dim=1)
+    for i in range(5):
+        print(f"Predicted {i}: {(thresholds == i).sum().item()}")
+
+    return thresholds
 
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
     print(f"Training fold {fold} ...")
@@ -292,7 +297,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_classes=4).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                           factor=0.5, patience=5, verbose=True)
+
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
     #     1: 22,  # Poor (0.1-0.7)
@@ -326,7 +335,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         model.train()
 
         for image, uncertainty, label, _ in train_loader:
-
+            label_counts = Counter(label.cpu().numpy().tolist())
+            print("Batch label distribution:", label_counts)
             image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
 
             optimizer.zero_grad()
@@ -397,6 +407,10 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
+        scheduler.step(epoch_val_loss)
+        for param_group in optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
+
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
         # avg_val_loss = sum(val_losses) / len(val_losses)
@@ -414,6 +428,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+        # After each validation epoch:
+
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
