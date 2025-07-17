@@ -286,7 +286,7 @@ class ROIPreprocessor:
             plt.close()
 
         else:
-            #plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
             plt.close()
 
 
@@ -383,6 +383,7 @@ class ROIPreprocessor:
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_csv = "/gpfs/home6/palfken/WORC_clinical_data.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
+        print(subtypes_df.columns)
 
 
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
