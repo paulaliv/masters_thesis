@@ -613,6 +613,7 @@ def main():
     input_folder_gt = sys.argv[2]
     predicted_mask_folder = sys.argv[3]
     output_folder_data = sys.argv[4]
+    output_folder_visuals = 'empty'
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
 
