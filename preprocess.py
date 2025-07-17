@@ -14,7 +14,6 @@ from scipy.ndimage import zoom
 import pandas as pd
 from radiomics import featureextractor
 
-from split_data import input_folder
 
 
 class ROIPreprocessor:
