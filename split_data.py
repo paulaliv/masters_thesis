@@ -9,7 +9,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 
 # Step 3: Merge remaining test cases with folds 2 and 3 to create training pool
 
-df_dir = '/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv'
+df_dir = '/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv'
 df = pd.read_csv(df_dir)
 
 import shutil
