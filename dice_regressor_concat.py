@@ -162,9 +162,8 @@ class QADataset(Dataset):
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
-        print(f'Image shape {image.shape}')
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
-        print(f'UMAP shape {uncertainty.shape}')
+
 
         # Map dice score to category
         print(f'Dice score: {dice_score}')
@@ -566,9 +565,9 @@ def main(data_dir, plot_dir, folds,df):
 #metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
-    with open('/gpfs/home6/palfken/QA_5fold_splits.json', 'r') as f:
+    with open('/gpfs/home6/palfken/Final_splits.json', 'r') as f:
         splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/Dice_scores_5epochs.csv"
+    clinical_data = "/gpfs/home6/palfken/Final_dice_dist.csv"
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
