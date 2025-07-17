@@ -14,7 +14,7 @@ from scipy.ndimage import zoom
 import pandas as pd
 from radiomics import featureextractor
 
-
+from split_data import input_folder
 
 
 class ROIPreprocessor:
@@ -332,8 +332,7 @@ class ROIPreprocessor:
         slices = self.get_roi_bbox(resampled_mask)
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
-        self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id,
-                                     'empty', 'empty')
+        #self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id','empty', 'empty')
 
         cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
         cropped_img_sitk.SetSpacing(img_sitk.GetSpacing())  # very important!
@@ -598,17 +597,22 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTr/"
-    input_folder_gt ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTr/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesOOD"
-    #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
+    # input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTr/"
+    # input_folder_gt ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTr/"
+    # predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesOOD"
+    # #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
+    #
+    # output_folder_data = "/gpfs/home6/palfken/Classification/"
+    # output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals_OOD/"
+    #
+    # os.makedirs(output_folder_data, exist_ok=True)
+    # os.makedirs(output_folder_visuals, exist_ok=True)
+    # # dice_scores = []
 
-    output_folder_data = "/gpfs/home6/palfken/Classification/"
-    output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals_OOD/"
-
-    os.makedirs(output_folder_data, exist_ok=True)
-    os.makedirs(output_folder_visuals, exist_ok=True)
-    # dice_scores = []
+    input_folder_img = sys.argv[1]
+    input_folder_gt = sys.argv[2]
+    predicted_mask_folder = sys.argv[3]
+    output_folder_data = sys.argv[4]
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
 
