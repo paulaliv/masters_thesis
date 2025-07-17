@@ -249,10 +249,15 @@ def encode_ordinal_targets(labels, num_thresholds= 4): #K-1 thresholds
         targets[:,i] = (labels > i).float()
     return targets
 
-def decode_predictions(logits):
-    probs = torch.sigmoid(logits)
+#hard thresholding of 0.5 biased towoards predicting middle classes
+#try: use argmax on cumulative logits
+#or logit based decoding
 
-    return (probs > 0.5).sum(dim=1)
+def decode_predictions(logits):
+    #probs = torch.sigmoid(logits)
+
+    #return (probs > 0.5).sum(dim=1)
+    return torch.sum(logits > 0, dim=1)
 
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
     print(f"Training fold {fold} ...")
@@ -314,8 +319,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
-    for epoch in range(30):
-        print(f"Epoch {epoch + 1}/{30}")
+    for epoch in range(60):
+        print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()

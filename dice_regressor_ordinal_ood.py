@@ -319,8 +319,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
-    for epoch in range(30):
-        print(f"Epoch {epoch + 1}/{30}")
+    for epoch in range(60):
+        print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
