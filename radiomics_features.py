@@ -3,7 +3,7 @@ import logging
 import os
 import pandas as pd
 import nibabel as nib
-
+import numpy as np
 import SimpleITK as sitk
 
 settings = {
@@ -13,18 +13,9 @@ settings = {
 extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
 
 
-def resample_mask_to_image(mask, image):
-    resampler = sitk.ResampleImageFilter()
-    resampler.SetReferenceImage(image)
-    resampler.SetInterpolator(sitk.sitkNearestNeighbor)  # keep mask labels intact
-    resampler.SetDefaultPixelValue(0)
-    resampled_mask = resampler.Execute(mask)
-    return resampled_mask
-
-
 # === Paths ===
-data_dir = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/"
-output_csv = '/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/radiomics_features.csv'
+data_dir = '/gpfs/home6/palfken/QA_dataTr_final'
+output_csv = '/gpfs/home6/palfken/radiomics_features.csv'
 subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds.csv"
 subtypes_df = pd.read_csv(subtypes_csv)
 print(f'Number of cases in csv file: {subtypes_df.shape[0]}')
@@ -32,33 +23,19 @@ print(f'Number of cases in csv file: {subtypes_df.shape[0]}')
 all_features = []
 
 for filename in os.listdir(data_dir):
-    if not filename.endswith('resized_ROI_image.nii.gz'):
+    if not filename.endswith('_img.npy'):
         continue
 
     # Find corresponding mask
-    base_id = filename.replace('_resized_ROI_image.nii.gz', '')
+    base_id = filename.replace('_img.npy', '')
     print(f'Processing {base_id}')
-    image_path = os.path.join(data_dir, f'{base_id}_resized_ROI_image.nii.gz')
-    mask_path = os.path.join(data_dir, f'{base_id}_resized_ROI_mask.nii.gz')
+    image_path = os.path.join(data_dir, f'{base_id}_img.npy')
+    mask_path = os.path.join(data_dir, f'{base_id}_mask.npy')
 
 
     # Read image and mask
-    image = sitk.ReadImage(image_path)
-    mask = sitk.ReadImage(mask_path)
-
-
-    # Check if image has a channel dimension and squeeze it
-    if image.GetDimension() == 4 and image.GetSize()[0] == 1:
-        # Remove the first dimension (channel = 1)
-        size = list(image.GetSize())  # e.g., [1, 48, 272, 256]
-        index = [0, 0, 0, 0]  # start from the beginning in all dims
-        size[0] = 0  # we want to discard channel dim
-
-
-        image = sitk.Extract(image, size=size, index=index)
-        print(f'Resized image: {image.GetSize()}')
-
-    mask = resample_mask_to_image(mask, image)
+    image = np.load(image_path)
+    mask = np.load(mask_path)
 
     if not os.path.exists(mask_path):
         print(f'Skipping {base_id}: mask not found')

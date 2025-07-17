@@ -12,6 +12,7 @@ from scipy.ndimage import label, find_objects
 import glob
 from scipy.ndimage import zoom
 import pandas as pd
+from radiomics import featureextractor
 
 
 
@@ -30,6 +31,7 @@ class ROIPreprocessor:
         self.save_as_nifti = safe_as_nifti
         self.save_umaps = save_umaps
         self.cropped_cases = []
+        self.extractor = featureextractor.RadiomicsFeatureExtractor()
 
 
     def load_nifti(self, filepath: str):
@@ -137,10 +139,6 @@ class ROIPreprocessor:
             return None
 
         return resampled
-
-    def apply_resampling(self, img_sitk, is_label=False):
-        #img_sitk = sitk.ReadImage(img_path)
-        return self.resample_image(img_sitk, is_label)
 
     def apply_reverse_resampling(self, img:np.ndarray, original_spacing, original_size, is_label=False):
         img_sitk = sitk.GetImageFromArray(img)
@@ -286,38 +284,40 @@ class ROIPreprocessor:
             plt.close()
 
         else:
-            plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+            #plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
             plt.close()
 
+
+    def extract_radiomics_features(self, img, mask):
+        features = self.extractor.execute(img, mask)
+        return features
 
 
 
 
     def preprocess_case(self, img_path, mask_path, output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-        self.case_id = os.path.basename(img_path).replace('.nii.gz', '')
-
+        case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
         orig_mask = sitk.ReadImage(mask_path)
         original_spacing = orig_img.GetSpacing()
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
-        # orig_img = sitk.GetArrayFromImage(orig_img)
 
-        resampled_img_sitk = self.apply_resampling(orig_img, is_label=False)
-        resampled_mask_sitk = self.apply_resampling(orig_mask, is_label=True)
-
-
-        resampled_img = sitk.GetArrayFromImage(resampled_img_sitk)  # [Z, Y, X]
-        resampled_mask = sitk.GetArrayFromImage(resampled_mask_sitk)
+        img_sitk = self.resample_image(orig_img, is_label=False)
+        mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
 
 
-        orig_mask = sitk.GetArrayFromImage(orig_mask)
-        print(f'Original shape :{orig_mask.shape}')
-        print(f'Shape after reshaping to target spacing: {resampled_img.shape}')
+        resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
+        resampled_mask = sitk.GetArrayFromImage(mask_sitk)
+
+        orig_img_array = sitk.GetArrayFromImage(orig_img)
+        orig_mask_array = sitk.GetArrayFromImage(orig_mask)
+        print(f'Original shape :{orig_mask_array.shape}')
+        print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
+
         # Get bounding box in original mask
-        slices_orig = self.get_roi_bbox(orig_mask)  # same as your get_roi_bbox function
+        slices_orig = self.get_roi_bbox(orig_mask_array)  # same as your get_roi_bbox function
         bbox_shape = (
             slices_orig[0].stop - slices_orig[0].start,
             slices_orig[1].stop - slices_orig[1].start,
@@ -326,17 +326,36 @@ class ROIPreprocessor:
         crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
 
         resampled_affine = self.compute_affine_with_origin_shift(
-    original_spacing, original_origin, original_direction, crop_start_index
-)
+            original_spacing, original_origin, original_direction, crop_start_index
+        )
 
         slices = self.get_roi_bbox(resampled_mask)
+        for s in slices:
+            print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
+        bbox1_shape = (
+            slices[0].stop - slices[0].start,
+            slices[1].stop - slices[1].start,
+            slices[2].stop - slices[2].start
+        )
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
-        print(f'Cropped ROI image shape: {cropped_img.shape}')
-        tumor_size= self.count_tumor_voxels(resampled_mask)
+        self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id,
+                                     'empty', 'empty')
+
+        cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
+        cropped_img_sitk.SetSpacing(img_sitk.GetSpacing())  # very important!
+        cropped_mask_sitk = sitk.GetImageFromArray(cropped_mask)
+        cropped_mask_sitk.SetSpacing(mask_sitk.GetSpacing())
+
+        features = self.extract_radiomics_features(cropped_img_sitk, cropped_mask_sitk)
+
+
+        tumor_size = self.count_tumor_voxels(resampled_mask)
         img_pp = self.normalize(cropped_img)
+
+
+
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
-        print(f'Resized image shape {resized_img.shape}')
 
 
         if self.save_as_nifti:
@@ -359,6 +378,7 @@ class ROIPreprocessor:
             np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
+        return features
 
     def compute_dice(self,gt,pred):
         epsilon = 1e-6
@@ -396,8 +416,8 @@ class ROIPreprocessor:
             gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
             pred = nib.load(mask_path)
             gt = nib.load(gt_path)
-            dice = self.compute_dice(gt, pred)
-            print(f'Dice score: {dice}')
+            #dice = self.compute_dice(gt, pred)
+            #print(f'Dice score: {dice}')
 
             if self.save_umaps:
                 umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
@@ -413,14 +433,15 @@ class ROIPreprocessor:
 
                 if self.save_umaps:
                     self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
-                    pass
                 else:
-                   self.preprocess_case(img_path, gt_path, output_dir)
+                   features = self.preprocess_case(img_path, gt_path, output_dir)
+                   filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
 
                 case_stats.append({
                     "case_id": case_id,
                     "tumor_class": tumor_class,
-                    "dice_5": dice,
+                    #"dice_5": dice,
+                    **filtered_features
 
                 })
         df = pd.DataFrame(case_stats)
@@ -446,7 +467,7 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        df.to_csv("/gpfs/home6/palfken/OOD_Dice_scores_20epochs.csv", index=False)
+        df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
 
@@ -584,19 +605,19 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
-    input_folder_gt ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTr/"
+    input_folder_gt ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTr/"
     predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesOOD"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/20QA_dataOOD/"
+    output_folder_data = "/gpfs/home6/palfken/Classification/"
     output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals_OOD/"
 
     os.makedirs(output_folder_data, exist_ok=True)
     os.makedirs(output_folder_visuals, exist_ok=True)
     # dice_scores = []
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
+    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
 
     preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
