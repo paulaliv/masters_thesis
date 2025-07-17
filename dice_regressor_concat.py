@@ -565,9 +565,10 @@ def main(data_dir, plot_dir, folds,df):
 #metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
-    with open('/gpfs/home6/palfken/Final_splits.json', 'r') as f:
+
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
         splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/Final_dice_dist.csv"
+    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv"
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
