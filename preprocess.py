@@ -412,9 +412,9 @@ class ROIPreprocessor:
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             self.case_id = case_id
-            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            #mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
             gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-            pred = nib.load(mask_path)
+            #pred = nib.load(mask_path)
             gt = nib.load(gt_path)
             #dice = self.compute_dice(gt, pred)
             #print(f'Dice score: {dice}')
@@ -429,7 +429,7 @@ class ROIPreprocessor:
             else:
                 tumor_class = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
-            if os.path.exists(mask_path):
+            if os.path.exists(img_path):
 
                 if self.save_umaps:
                     self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
