@@ -54,7 +54,7 @@ train_transforms = Compose([
 ])
 val_transforms = Compose([
     EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     ToTensord(keys=["image", "uncertainty"])
 ])
 
@@ -167,9 +167,9 @@ class QADataset(Dataset):
 
 
         # Map dice score to category
-        print(f'Dice score: {dice_score}')
+
         label = bin_dice_score(dice_score)
-        print(f'Gets label {label}')
+
 
         #image_tensor = torch.from_numpy(image).float()
 
@@ -187,23 +187,6 @@ class QADataset(Dataset):
             })
             image = data["image"]
             uncertainty_tensor = data["uncertainty"]
-
-        # if logits_tensor.ndim == 5:
-        #     logits_tensor = logits_tensor.squeeze(0)  # now shape: [C_classes, D, H, W]
-        #
-        # print('Image tensor shape : ', image.shape)
-        #
-        # print('Uncertainty tensor shape : ', uncertainty_tensor.shape)
-        # print('Label tensor shape : ', label_tensor.shape)
-
-
-
-
-        # assert image_tensor.shape[2:] == uncertainty_tensor.shape[2:], \
-        #     f"Batch and spatial dimensions must match. Got encoder_out: {image_tensor.shape}, logits: {uncertainty_tensor.shape}"
-
-        # x = torch.cat([image_tensor, logits_tensor], dim=0)
-        # print(f'Shape after concatenating: {x.shape}')
 
 
         return image, uncertainty_tensor, label_tensor, subtype
@@ -268,11 +251,12 @@ def encode_ordinal_targets(labels, num_thresholds= 4): #K-1 thresholds
     batch_size = labels.shape[0]
     targets = torch.zeros((batch_size, num_thresholds), dtype=torch.float32)
     for i in range(num_thresholds):
-        targets[:i] = (labels > i).float()
+        targets[:,i] = (labels > i).float()
     return targets
 
 def decode_predictions(logits):
     probs = torch.sigmoid(logits)
+
     return (probs > 0.5).sum(dim=1)
 
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
@@ -307,7 +291,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=5).to(device)
+    model = QAModel(num_classes=4).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
