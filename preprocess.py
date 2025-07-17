@@ -401,7 +401,7 @@ class ROIPreprocessor:
             if self.save_umaps:
                 umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
 
-            subtype_row = subtypes_df[subtypes_df['case_id'] == case_id]
+            subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
             if not subtype_row.empty:
                 tumor_class = subtype_row.iloc[0]['Final_Classification']
                 tumor_class.strip()
