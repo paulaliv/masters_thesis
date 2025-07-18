@@ -9,7 +9,6 @@ import numpy as np
 import os
 import torch.nn as nn
 import torch
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch.nn.functional as F
 import time
 import sys
