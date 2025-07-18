@@ -64,7 +64,7 @@ class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=3, padding=1),
+            nn.Conv3d(2, 16, kernel_size=3, padding=1),
             nn.BatchNorm3d(16),
             nn.ReLU(),
             nn.MaxPool3d(2),  # halves each dimension
@@ -84,18 +84,12 @@ class Light3DEncoder(nn.Module):
         x = self.encoder(x)
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
 
-class OodDetection(nn.Module):
-    def __init__(self,is_train = True):
-        super().__init__()
-        self.train = is_train
-    def compute_cluster(self):
-        pass
 
 class QAModel(nn.Module):
     def __init__(self,num_classes):
         super().__init__()
-        self.encoder_img = Light3DEncoder()
-        self.encoder_unc= Light3DEncoder()
+        self.encoder = Light3DEncoder()
+        #self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Sequential(
             nn.Flatten(),
@@ -104,15 +98,14 @@ class QAModel(nn.Module):
             nn.Linear(64, num_classes)  # Output = predicted Dice class
         )
 
-    def forward(self, image, uncertainty):
-        x1 = self.encoder_img(image)
-        x2 = self.encoder_unc(uncertainty)
-        merged = torch.cat((x1, x2), dim=1) #[B,128]
+    def forward(self, merged):
 
-        return self.fc(merged)
+        x = self.encoder(merged)
+
+        return self.fc(x)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -180,16 +173,17 @@ class QADataset(Dataset):
 
         label_tensor = torch.tensor(label).long()
 
+        merged = torch.cat((image, uncertainty), dim=1)  # [B,2,D,H,W]
+
         if self.transform:
             data = self.transform({
-                "image": image,
-                "uncertainty": uncertainty_tensor
+                "merged": merged,
             })
-            image = data["image"]
-            uncertainty_tensor = data["uncertainty"]
+            merged = data["merged"]
 
 
-        return image, uncertainty_tensor, label_tensor, subtype
+
+        return  merged, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
@@ -247,7 +241,7 @@ def pad_collate_fn(batch):
 
     return images_batch, uncertainties_batch, labels_batch, subtypes
 
-def encode_ordinal_targets(labels, num_thresholds= 4): #K-1 thresholds
+def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
     batch_size = labels.shape[0]
     targets = torch.zeros((batch_size, num_thresholds), dtype=torch.float32)
     for i in range(num_thresholds):
@@ -291,15 +285,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=4).to(device)
+    model = QAModel(num_classes=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    # Counts = {
-    #     0: 66,  # Fail (0-0.1)
-    #     1: 22,  # Poor (0.1-0.7)
-    #     2: 25,  # Moderate (0.7-0.8)
-    #     3: 27,  # Good (0.8-0.9)
-    #     4: 7  # Very Good (0.9- 0.95)
-    # }
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                           factor=0.5, patience=5, verbose=True)
 
 
     # Step 4: Create the weighted loss
@@ -317,21 +307,23 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     train_losses = []
     val_losses = []
 
+    f1_history = defaultdict(list)
+
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
-    for epoch in range(60):
-        print(f"Epoch {epoch + 1}/{60}")
+    for epoch in range(100):
+        print(f"Epoch {epoch + 1}/{100}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
 
-        for image, uncertainty, label, _ in train_loader:
+        for data,label, _ in train_loader:
 
-            image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
+            data, label = data.to(device),label.to(device)
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
-                preds = model(image, uncertainty)  # shape: [B, 3]
+                preds = model(data)  # shape: [B, 3]
                 targets = encode_ordinal_targets(label).to(preds.device)
                 loss = criterion(preds, targets)
 
@@ -340,7 +332,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
             scaler.step(optimizer)
             scaler.update()
 
-            running_loss += loss.item() * image.size(0)
+            running_loss += loss.item() * data.size(0)
             total += label.size(0)
 
             with torch.no_grad():
@@ -365,15 +357,15 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
 
         with torch.no_grad():
-            for image, uncertainty, label, subtype in val_loader:
-                image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
+            for data,label, subtype in val_loader:
+                data, label = data.to(device), label.to(device)
 
 
-                preds = model(image, uncertainty)
+                preds = model(data)
                 targets = encode_ordinal_targets(label).to(preds.device)
 
                 loss = criterion(preds, targets)
-                val_running_loss += loss.item() * image.size(0)
+                val_running_loss += loss.item() * data.size(0)
 
                 with torch.no_grad():
                     decoded_preds = decode_predictions(preds)
@@ -397,6 +389,13 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
+
+        scheduler.step(epoch_val_loss)
+        for param_group in optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
+
+
+
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
         # avg_val_loss = sum(val_losses) / len(val_losses)
@@ -405,13 +404,23 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         val_labels_np = np.array(val_labels_list)
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.3)", "Moderate(0.3-0.5)", "Good (0.5-0.7)", "Very Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
         print("Predicted label counts:", collections.Counter(val_preds_list))
         print("True label counts:", collections.Counter(val_labels_list))
 
+        report_dict = classification_report(
+            val_labels_np,
+            val_preds_np,
+            target_names=class_names,
+            digits=4,
+            output_dict=True,  # this is key
+            zero_division=0
+        )
+        for class_name in class_names:
+            f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
 
@@ -426,6 +435,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
                 'epoch': epoch,
                 'val_loss': epoch_val_loss
             }, f"best_qa_model_fold{fold}.pt")
+
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_early_fusion.npz"), preds=val_preds_np, labels=val_labels_np)
         else:
             patience_counter += 1
             if patience_counter >= patience:
@@ -479,7 +490,7 @@ def main(data_dir, plot_dir, folds,df):
     plt.title('Training and Validation Loss Curves')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
+    plt.savefig(os.path.join(plot_dir, 'loss_curves_early_fusion.png'))
     plt.close()
 
     # ✅ Overall scatter plot
@@ -493,7 +504,7 @@ def main(data_dir, plot_dir, folds,df):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'pred_vs_actual.png'))
+    plt.savefig(os.path.join(plot_dir, 'pred_vs_actual_early_fusion.png'))
     plt.close()
 
     # ✅ Per-subtype scatter plots
@@ -514,7 +525,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.grid(True)
         plt.tight_layout()
 
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}_early_fusion.png'))
         plt.close()
 
 

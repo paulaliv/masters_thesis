@@ -80,13 +80,6 @@ class Light3DEncoder(nn.Module):
         x = self.encoder(x)
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
 
-class OodDetection(nn.Module):
-    def __init__(self,is_train = True):
-        super().__init__()
-        self.train = is_train
-    def compute_cluster(self):
-        pass
-
 class QAModel(nn.Module):
     def __init__(self,num_classes):
         super().__init__()
@@ -243,7 +236,7 @@ def pad_collate_fn(batch):
 
     return images_batch, uncertainties_batch, labels_batch, subtypes
 
-def encode_ordinal_targets(labels, num_thresholds= 4): #K-1 thresholds
+def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
     batch_size = labels.shape[0]
     targets = torch.zeros((batch_size, num_thresholds), dtype=torch.float32)
     for i in range(num_thresholds):
@@ -326,6 +319,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     train_losses = []
     val_losses = []
     f1_history = defaultdict(list)
+
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
@@ -435,6 +429,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
             output_dict=True,  # this is key
             zero_division=0
         )
+
         for class_name in class_names:
             f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
