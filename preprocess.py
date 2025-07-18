@@ -400,9 +400,19 @@ class ROIPreprocessor:
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
         case_stats = []
 
+        save_path = "/gpfs/home6/palfken/radiomics_features.csv"
+        if os.path.exists(save_path):
+            from_scratch = False
+            df = pd.read_csv(save_path)
+        else:
+            from_scratch = True
+
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             self.case_id = case_id
+            if not from_scratch:
+                if case_id in df['case_id'].values:
+                    continue
             #mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
             gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
             #pred = nib.load(mask_path)
@@ -413,29 +423,36 @@ class ROIPreprocessor:
             if self.save_umaps:
                 umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
 
+
             subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
             if not subtype_row.empty:
                 tumor_class = subtype_row.iloc[0]['Final_Classification']
-                tumor_class.strip()
+                tumor_class = tumor_class.strip()
             else:
                 tumor_class = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
             if os.path.exists(img_path):
-
                 if self.save_umaps:
                     self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    filtered_features = {}
                 else:
                    features = self.preprocess_case(img_path, gt_path, output_dir)
                    filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
 
-                case_stats.append({
+                new_row = {
                     "case_id": case_id,
                     "tumor_class": tumor_class,
-                    #"dice_5": dice,
                     **filtered_features
+                }
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                df.to_csv(save_path, index=False)
 
-                })
-        df = pd.DataFrame(case_stats)
+
+        # Load existing results if available
+        if os.path.exists(save_path):
+            df = pd.read_csv(save_path)
+        else:
+            df = pd.DataFrame(case_stats)
         bin_edges = np.arange(0.0, 1.1, 0.1)
         #existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
         #print(f'CSV file has {len(existing_df)} rows')
@@ -458,7 +475,7 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
-        df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
+        #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
 

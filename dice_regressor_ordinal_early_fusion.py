@@ -1,9 +1,5 @@
 from collections import defaultdict
 
-from dynamic_network_architectures.building_blocks.residual import BasicBlockD
-from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
-from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
-from tests.losses.test_nacl_loss import targets
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
