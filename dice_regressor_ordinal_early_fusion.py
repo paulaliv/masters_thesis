@@ -226,7 +226,7 @@ def decode_predictions(logits):
 
     return (probs > 0.5).sum(dim=1)
 
-def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
+def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot_dir,device):
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -259,10 +259,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_classes=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
+
 
 
     # Step 4: Create the weighted loss
@@ -407,7 +408,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch': epoch,
                 'val_loss': epoch_val_loss
-            }, f"best_qa_model_fold{fold}.pt")
+            }, os.path.join(plot_dir,f"best_qa_model_fold{fold}_early_fusion.pt"))
 
             np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_early_fusion.npz"), preds=val_preds_np, labels=val_labels_np)
         else:
@@ -442,6 +443,7 @@ def main(data_dir, plot_dir, folds,df):
         splits=folds,
         uncertainty_metric='confidence',
         num_bins=5,
+        plot_dir = plot_dir,
         device=device
     )
 
