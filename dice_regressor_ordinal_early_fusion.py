@@ -85,7 +85,7 @@ class QAModel(nn.Module):
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128, 64),
+            nn.Linear(64, 64),
             nn.ReLU(),
             nn.Linear(64, num_classes)  # Output = predicted Dice class
         )
