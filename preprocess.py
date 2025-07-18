@@ -406,6 +406,7 @@ class ROIPreprocessor:
             df = pd.read_csv(save_path)
         else:
             from_scratch = True
+            df = pd.DataFrame()
 
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
