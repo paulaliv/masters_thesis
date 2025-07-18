@@ -161,12 +161,13 @@ class QADataset(Dataset):
 
         # print(f'Image shape {image.shape}')
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
+        image_tensor = torch.from_numpy(image).float()
 
         uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
         label_tensor = torch.tensor(label).long()
 
-        merged = torch.cat((image, uncertainty), dim=1)  # [B,2,D,H,W]
+        merged = torch.cat((image_tensor, uncertainty_tensor), dim=1)  # [B,2,D,H,W]
 
         if self.transform:
             data = self.transform({
