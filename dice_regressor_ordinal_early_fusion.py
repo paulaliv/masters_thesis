@@ -3,7 +3,6 @@ from collections import defaultdict
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
-from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -31,29 +30,27 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
+    Compose, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised,
     ToTensord
 )
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    EnsureChannelFirstd(keys="merged", channel_dim=0),  # ensures shape: (C, H, W, D)
     RandAffined(
-        keys=["image", "uncertainty"],  # apply same affine to both
+        keys="merged",
         prob=1.0,
         rotate_range=[np.pi / 9],
         translate_range=[0.1, 0.1],
         scale_range=[0.1, 0.1],
-        mode=('bilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
+        mode='bilinear'  # single input, single interpolation mode
     ),
-    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
-    ToTensord(keys=["image", "uncertainty"])
-])
-val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    ToTensord(keys=["image", "uncertainty"])
+    RandFlipd(keys="merged", prob=0.5, spatial_axis=1),
+    ToTensord(keys="merged")
 ])
 
+val_transforms = Compose([
+    EnsureChannelFirstd(keys="merged", channel_dim=0),
+    ToTensord(keys="merged")
+])
 
 
 class Light3DEncoder(nn.Module):
