@@ -108,7 +108,7 @@ class QAModel(nn.Module):
         return self.fc(merged)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -264,7 +264,7 @@ def decode_predictions(logits):
 
     return thresholds
 
-def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, device):
+def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_dir, device):
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -296,7 +296,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=4).to(device)
+    model = QAModel(num_classes=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
@@ -325,6 +325,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     train_losses = []
     val_losses = []
+    f1_history = defaultdict(list)
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
@@ -419,12 +420,23 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         val_labels_np = np.array(val_labels_list)
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.3)", "Moderate(0.3-0.5)", "Good (0.5-0.7)", "Very Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
+
         print("Validation classification report:\n", report)
         print("Predicted label counts:", collections.Counter(val_preds_list))
         print("True label counts:", collections.Counter(val_labels_list))
+        report_dict = classification_report(
+            val_labels_np,
+            val_preds_np,
+            target_names=class_names,
+            digits=4,
+            output_dict=True,  # this is key
+            zero_division=0
+        )
+        for class_name in class_names:
+            f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
@@ -442,13 +454,18 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
                 'epoch': epoch,
                 'val_loss': epoch_val_loss
             }, f"best_qa_model_fold{fold}.pt")
+
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}.npz"), preds=val_preds_np, labels=val_labels_np)
+
+
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
+
                 break
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list
+    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history
 
 
 # def compute_dice(pred, gt):
@@ -467,13 +484,14 @@ def main(data_dir, plot_dir, folds,df):
     start = time.time()
     #for fold in range(5):
     # Train the model and retrieve losses + predictions
-    train_losses, val_losses, val_preds, val_labels, val_subtypes = train_one_fold(
+    train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history = train_one_fold(
         0,
         data_dir,
         df=df,
         splits=folds,
         uncertainty_metric='confidence',
         num_bins=5,
+        plot_dir=plot_dir,
         device=device
     )
 
@@ -484,6 +502,19 @@ def main(data_dir, plot_dir, folds,df):
     val_preds = np.array(val_preds)
     val_labels = np.array(val_labels)
     val_subtypes = np.array(val_subtypes)
+
+    plt.figure(figsize=(10, 6))
+    for class_name, f1_scores in f1_history.items():
+        plt.plot(f1_scores, label=class_name)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("F1 Score")
+    plt.title("Per-Class F1 Score Over Epochs")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir,"f1_scores_per_class.png"), dpi=300)
+    plt.show()
 
     # ✅ Plot loss curves
     plt.figure(figsize=(10, 6))
