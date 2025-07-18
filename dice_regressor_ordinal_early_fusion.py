@@ -142,32 +142,21 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
-        image = torch.from_numpy(image).float()
+        uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
         if image.ndim == 3:
             image = image.unsqueeze(0)  # Add channel dim
 
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
-        uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
-
-
         # Map dice score to category
-
         label = bin_dice_score(dice_score)
 
-
-        #image_tensor = torch.from_numpy(image).float()
-
-        # print(f'Image shape {image.shape}')
-        uncertainty_tensor = torch.from_numpy(uncertainty).float()
         image_tensor = torch.from_numpy(image).float()
-
-        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
-
+        uncertainty_tensor = torch.from_numpy(uncertainty).float().unsqueeze(0)
         label_tensor = torch.tensor(label).long()
 
-        merged = torch.cat((image_tensor, uncertainty_tensor), dim=1)  # [B,2,D,H,W]
+        merged = torch.cat((image_tensor, uncertainty_tensor), dim=0)  # [2,D,H,W]
 
         if self.transform:
             data = self.transform({
