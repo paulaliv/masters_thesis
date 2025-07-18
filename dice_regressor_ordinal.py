@@ -292,8 +292,20 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     model = QAModel(num_classes=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
+    # Define warmup parameters
+    warmup_epochs = 5  # or warmup_steps if you're doing per-step
+    initial_lr = 3e-4
+
+    # Linear warmup lambda
+    def lr_lambda(current_epoch):
+        if current_epoch < warmup_epochs:
+            return float(current_epoch + 1) / warmup_epochs
+        return 1.0  # Once warmup is over, keep LR constant until ReduceLROnPlateau kicks in
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
+
+    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
@@ -402,9 +414,15 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
-        scheduler.step(epoch_val_loss)
-        for param_group in optimizer.param_groups:
-            print(f"Current LR: {param_group['lr']}")
+
+        # Apply warmup or ReduceLROnPlateau
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()
+            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+           scheduler.step(epoch_val_loss)
+           print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
