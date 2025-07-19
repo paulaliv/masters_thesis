@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-
+from sklearn.metrics import mean_absolute_error
 from torch.optim.lr_scheduler import LambdaLR
 
 from torch.utils.data import Dataset
@@ -83,7 +83,7 @@ class Light3DEncoder(nn.Module):
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
 
 class QAModel(nn.Module):
-    def __init__(self,num_classes):
+    def __init__(self,num_thresholds):
         super().__init__()
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
@@ -92,7 +92,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, num_classes)  # Output = predicted Dice class
+            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
 
     def forward(self, image, uncertainty):
@@ -103,7 +103,7 @@ class QAModel(nn.Module):
         return self.fc(merged)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.45, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -259,6 +259,19 @@ def decode_predictions(logits):
 
     return thresholds
 
+def coral_loss_manual(logits, levels):
+    """
+    logits: [B, num_classes - 1]
+    levels: binary cumulative targets (e.g., [1, 1, 0])
+    """
+    levels =levels.float()
+    log_probs = F.logsigmoid(logits)
+    log_1_minus_probs = F.logsigmoid(-logits)
+
+    loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
+    return loss.mean()
+
+
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_dir, device):
     print(f"Training fold {fold} ...")
 
@@ -291,7 +304,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=3).to(device)
+    model = QAModel(num_thresholds=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     # Define warmup parameters
@@ -309,17 +322,9 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
     warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
-    # Counts = {
-    #     0: 66,  # Fail (0-0.1)
-    #     1: 22,  # Poor (0.1-0.7)
-    #     2: 25,  # Moderate (0.7-0.8)
-    #     3: 27,  # Good (0.8-0.9)
-    #     4: 7  # Very Good (0.9- 0.95)
-    # }
-
-
     # Step 4: Create the weighted loss
-    criterion = nn.BCEWithLogitsLoss()
+    #criterion = nn.BCEWithLogitsLoss()
+    criterion = coral_loss_manual
 
 
     # Early stopping variables
@@ -345,11 +350,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
         for image, uncertainty, label, _ in train_loader:
             label_counts = Counter(label.cpu().numpy().tolist())
-            print("Batch label distribution:", label_counts)
             image, uncertainty, label = image.to(device),uncertainty.to(device), label.to(device)
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
+                print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 targets = encode_ordinal_targets(label).to(preds.device)
                 loss = criterion(preds, targets)
@@ -433,8 +438,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
 
+        val_mae = mean_absolute_error(val_labels_np, val_preds_np)
+        print(f"Val MAE: {val_mae:.4f}")
+
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.45)", "Moderate(0.45-0.7)", " Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
 
@@ -483,16 +491,6 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history
 
 
-# def compute_dice(pred, gt):
-#     pred = np.asarray(pred == 1, dtype =np.uint8)
-#     gt= (np.asarray(gt == 1, dtype=np.uint8))
-#
-#     intersection = np.sum(pred* gt) #true positives
-#     union = np.sum(pred) + np.sum(gt) #predicted plus ground truth voxels
-#
-#     dice = 2. * intersection / union if union > 0 else np.nan
-#
-#     return dice
 
 def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

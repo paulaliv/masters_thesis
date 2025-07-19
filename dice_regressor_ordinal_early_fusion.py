@@ -14,6 +14,8 @@ import time
 import sys
 import json
 
+from sklearn.metrics import mean_absolute_error
+
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
 
@@ -78,7 +80,7 @@ class Light3DEncoder(nn.Module):
 
 
 class QAModel(nn.Module):
-    def __init__(self,num_classes):
+    def __init__(self,num_thresholds):
         super().__init__()
         self.encoder = Light3DEncoder()
         #self.encoder_unc= Light3DEncoder()
@@ -87,7 +89,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, num_classes)  # Output = predicted Dice class
+            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
 
     def forward(self, merged):
@@ -97,7 +99,7 @@ class QAModel(nn.Module):
         return self.fc(x)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.45, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -214,6 +216,18 @@ def pad_collate_fn(batch):
 
     return images_batch,labels_batch, subtypes
 
+def coral_loss_manual(logits, levels):
+    """
+    logits: [B, num_classes - 1]
+    levels: binary cumulative targets (e.g., [1, 1, 0])
+    """
+    log_probs = F.logsigmoid(logits)
+    log_1_minus_probs = F.logsigmoid(-logits)
+
+    loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
+    return loss.mean()
+
+
 def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
     batch_size = labels.shape[0]
     targets = torch.zeros((batch_size, num_thresholds), dtype=torch.float32)
@@ -258,7 +272,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=3).to(device)
+    model = QAModel(num_thresholds=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
@@ -267,7 +281,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
 
 
     # Step 4: Create the weighted loss
-    criterion = nn.BCEWithLogitsLoss()
+    #criterion = nn.BCEWithLogitsLoss()
+    criterion = coral_loss_manual
 
 
     # Early stopping variables
@@ -377,8 +392,11 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
 
+        val_mae = mean_absolute_error(val_labels_np, val_preds_np)
+        print(f"Val MAE: {val_mae:.4f}")
+
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.45)", "Moderate(0.45-0.7)", "Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
