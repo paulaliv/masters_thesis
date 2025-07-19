@@ -32,14 +32,14 @@ reducer = umap.UMAP(n_components=2, random_state=42)
 X_umap = reducer.fit_transform(X_pca)
 
 # --- Define custom consistent colors per priority ---
+
+tumor_classes = df['tumor_class'].unique()
+tumor_class_palette = dict(zip(tumor_classes, sns.color_palette('tab10', len(tumor_classes))))
+
+# Custom priority palette (single color for moderate_malignant)
 priority_order = ['low_malignant', 'intermediate', 'moderate_malignant', 'high_malignant']
 priority_palette = dict(zip(priority_order, sns.color_palette('Set2', len(priority_order))))
 
-# Create tumor_class palette using priority mapping
-class_palette = {
-    cls: priority_palette[priority_mapping[cls]]
-    for cls in df['tumor_class'].unique()
-}
 
 # --- Plot side-by-side ---
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -48,7 +48,7 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 sns.scatterplot(
     x=X_umap[:, 0], y=X_umap[:, 1],
     hue=df['tumor_class'],
-    palette=class_palette,
+    palette=tumor_class_palette,
     s=60, edgecolor='k', ax=axes[0]
 )
 axes[0].set_title("UMAP colored by Tumor Class (PCA 95%)")
