@@ -34,7 +34,7 @@ X_umap = reducer.fit_transform(X_pca)
 # --- Define custom consistent colors per priority ---
 
 tumor_classes = df['tumor_class'].unique()
-tumor_class_palette = dict(zip(tumor_classes, sns.color_palette('tab10', len(tumor_classes))))
+tumor_class_palette = dict(zip(tumor_classes, sns.color_palette('tab20', len(tumor_classes))))
 
 # Custom priority palette (single color for moderate_malignant)
 priority_order = ['low_malignant', 'intermediate', 'moderate_malignant', 'high_malignant']
