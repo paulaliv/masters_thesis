@@ -103,7 +103,7 @@ class QAModel(nn.Module):
         return self.fc(merged)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.45, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.40, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -447,7 +447,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         print(f"Val MAE: {val_mae:.4f}")
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.45)", "Moderate(0.45-0.7)", " Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.40)", "Moderate(0.4-0.7)", " Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
 
