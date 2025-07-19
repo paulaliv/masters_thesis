@@ -26,7 +26,7 @@ priority_mapping = {
 df['priority'] = df['tumor_class'].map(priority_mapping)
 
 # Extract features (drop all non-feature columns)
-features = df.drop(columns=['tumor_class', 'priority'])
+features = df.drop(columns=['case_id','tumor_class', 'priority'])
 
 # --- Standardize features ---
 scaler = StandardScaler()
