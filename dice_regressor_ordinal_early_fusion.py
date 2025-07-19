@@ -105,7 +105,7 @@ def bin_dice_score(dice):
 
 
 class QADataset(Dataset):
-    def __init__(self, case_ids, data_dir, df, uncertainty_metric, num_bins = 5,transform=None):
+    def __init__(self, case_ids, data_dir, df, uncertainty_metric, transform=None):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
@@ -113,7 +113,6 @@ class QADataset(Dataset):
         fold_paths: dict with fold folder paths containing Dice scores & case IDs
         """
         #self.fold = fold
-        self.num_bins = num_bins
         self.data_dir = data_dir
         self.df = df
         self.uncertainty_metric = uncertainty_metric
@@ -240,7 +239,7 @@ def decode_predictions(logits):
 
     return (probs > 0.5).sum(dim=1)
 
-def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot_dir,device):
+def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, device):
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -252,7 +251,6 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
         data_dir=data_dir,
         df=df,
         uncertainty_metric=uncertainty_metric,
-        num_bins=num_bins,
         transform=train_transforms,
     )
     val_dataset = QADataset(
@@ -278,12 +276,9 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
 
-
-
     # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
-
 
     # Early stopping variables
     #DOUBLE CHECK THIS
@@ -421,21 +416,21 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'epoch': epoch,
-                'val_loss': epoch_val_loss
-            }, os.path.join(plot_dir,f"best_qa_model_fold{fold}_early_fusion.pt"))
+            # torch.save({
+            #     'model_state_dict': model.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            #     'epoch': epoch,
+            #     'val_loss': epoch_val_loss
+            # }, os.path.join(plot_dir,f"best_qa_model_fold{fold}_early_fusion.pt"))
 
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_early_fusion.npz"), preds=val_preds_np, labels=val_labels_np)
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_early_fusion_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list
+    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history
 
 
 # def compute_dice(pred, gt):
@@ -451,77 +446,70 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, plot
 
 def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    start = time.time()
-    #for fold in range(5):
+
+    # for fold in range(5):
     # Train the model and retrieve losses + predictions
-    train_losses, val_losses, val_preds, val_labels, val_subtypes = train_one_fold(
-        0,
-        data_dir,
-        df=df,
-        splits=folds,
-        uncertainty_metric='confidence',
-        num_bins=5,
-        plot_dir = plot_dir,
-        device=device
-    )
 
-    end = time.time()
-    print(f"Total training time: {(end - start) / 60:.2f} minutes")
+    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    for idx, metric in enumerate(metrics):
+        start = time.time()
+        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history = train_one_fold(
+            fold=0,
+            data_dir=data_dir,
+            df=df,
+            splits=folds,
+            uncertainty_metric= metric,
+            plot_dir=plot_dir,
+            device=device
+        )
 
-    # Convert prediction outputs to numpy arrays for plotting
-    val_preds = np.array(val_preds)
-    val_labels = np.array(val_labels)
-    val_subtypes = np.array(val_subtypes)
+        end = time.time()
+        print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-    # ✅ Plot loss curves
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_losses, label='Train Loss', marker='o')
-    plt.plot(val_losses, label='Validation Loss', marker='x')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Training and Validation Loss Curves')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'loss_curves_early_fusion.png'))
-    plt.close()
+        # Convert prediction outputs to numpy arrays for plotting
+        val_preds = np.array(val_preds)
+        val_labels = np.array(val_labels)
+        val_subtypes = np.array(val_subtypes)
 
-    # ✅ Overall scatter plot
-    plt.figure(figsize=(8, 6))
-    plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-    plt.plot([val_labels.min(), val_labels.max()],
-             [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
-    plt.xlabel("Actual Label")
-    plt.ylabel("Predicted Label")
-    plt.title("Overall Predicted vs. Actual Labels")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'pred_vs_actual_early_fusion.png'))
-    plt.close()
+        plt.figure(figsize=(10, 6))
+        for class_name, f1_scores in f1_history.items():
+            plt.plot(f1_scores, label=class_name)
 
-    # ✅ Per-subtype scatter plots
-    unique_subtypes = np.unique(val_subtypes)
-
-    for subtype in unique_subtypes:
-        mask = val_subtypes == subtype
-        preds_sub = val_preds[mask]
-        labels_sub = val_labels[mask]
-
-        plt.figure(figsize=(8, 6))
-        plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
-        plt.plot([labels_sub.min(), labels_sub.max()],
-                 [labels_sub.min(), labels_sub.max()], 'r--')
-        plt.xlabel("Actual Label")
-        plt.ylabel("Predicted Label")
-        plt.title(f"Predicted vs Actual for Subtype: {subtype}")
+        plt.xlabel("Epoch")
+        plt.ylabel("F1 Score")
+        plt.title("Per-Class F1 Score Over Epochs")
+        plt.legend()
         plt.grid(True)
         plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f"f1_scores_per_class_{metric}.png"), dpi=300)
+        plt.show()
 
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}_early_fusion.png'))
+        # ✅ Plot loss curves
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_losses, label='Train Loss', marker='o')
+        plt.plot(val_losses, label='Validation Loss', marker='x')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.title('Training and Validation Loss Curves')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
         plt.close()
 
-
+        # ✅ Overall scatter plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
+        plt.plot([val_labels.min(), val_labels.max()],
+                 [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
+        plt.xlabel("Actual Label")
+        plt.ylabel("Predicted Label")
+        plt.title("Overall Predicted vs. Actual Labels")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
+        plt.close()
 
 
 #metrics: confidence, entropy,mutual_info,epkl

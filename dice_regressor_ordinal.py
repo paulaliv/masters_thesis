@@ -2,14 +2,14 @@ from collections import defaultdict
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
-from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
 import torch.nn as nn
 import torch
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
 import torch.nn.functional as F
 import time
 import sys
@@ -18,7 +18,7 @@ from sklearn.metrics import mean_absolute_error
 from torch.optim.lr_scheduler import LambdaLR
 
 from torch.utils.data import Dataset
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 
 from torch.amp import GradScaler, autocast
 import random
@@ -273,6 +273,7 @@ def coral_loss_manual(logits, levels):
 
 
 def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_dir, device):
+    print(f'Training with UMAP: {uncertainty_metric}')
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -309,7 +310,6 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
-    initial_lr = 3e-4
 
     # Linear warmup lambda
     def lr_lambda(current_epoch):
@@ -320,7 +320,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
 
-    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+    #warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
@@ -422,13 +422,18 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         epoch_val_acc = val_correct / val_total
 
 
+
+        scheduler.step(epoch_val_loss)
+        for param_group in optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
+
         # Apply warmup or ReduceLROnPlateau
-        if epoch < warmup_epochs:
-            warmup_scheduler.step()
-            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
-        else:
-           scheduler.step(epoch_val_loss)
-           print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        # if epoch < warmup_epochs:
+        #     warmup_scheduler.step()
+        #     print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        # else:
+        #    scheduler.step(epoch_val_loss)
+        #    print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
 
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
@@ -471,14 +476,14 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'epoch': epoch,
-                'val_loss': epoch_val_loss
-            }, f"best_qa_model_fold{fold}.pt")
+            # torch.save({
+            #     'model_state_dict': model.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            #     'epoch': epoch,
+            #     'val_loss': epoch_val_loss
+            # }, f"best_qa_model_fold{fold}.pt")
 
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}.npz"), preds=val_preds_np, labels=val_labels_np)
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
 
 
         else:
@@ -494,93 +499,96 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
 def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    start = time.time()
     #for fold in range(5):
     # Train the model and retrieve losses + predictions
-    train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history = train_one_fold(
-        0,
-        data_dir,
-        df=df,
-        splits=folds,
-        uncertainty_metric='confidence',
-        num_bins=5,
-        plot_dir=plot_dir,
-        device=device
-    )
 
-    end = time.time()
-    print(f"Total training time: {(end - start) / 60:.2f} minutes")
+    metrics = ['confidence', 'entropy','mutual_info','epkl']
+    for idx, metric in enumerate(metrics):
+        start = time.time()
+        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history = train_one_fold(
+            0,
+            data_dir,
+            df=df,
+            splits=folds,
+            uncertainty_metric=metric,
+            num_bins=5,
+            plot_dir=plot_dir,
+            device=device
+        )
 
-    # Convert prediction outputs to numpy arrays for plotting
-    val_preds = np.array(val_preds)
-    val_labels = np.array(val_labels)
-    val_subtypes = np.array(val_subtypes)
+        end = time.time()
+        print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-    plt.figure(figsize=(10, 6))
-    for class_name, f1_scores in f1_history.items():
-        plt.plot(f1_scores, label=class_name)
+        # Convert prediction outputs to numpy arrays for plotting
+        val_preds = np.array(val_preds)
+        val_labels = np.array(val_labels)
+        val_subtypes = np.array(val_subtypes)
 
-    plt.xlabel("Epoch")
-    plt.ylabel("F1 Score")
-    plt.title("Per-Class F1 Score Over Epochs")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir,"f1_scores_per_class.png"), dpi=300)
-    plt.show()
+        plt.figure(figsize=(10, 6))
+        for class_name, f1_scores in f1_history.items():
+            plt.plot(f1_scores, label=class_name)
 
-    # ✅ Plot loss curves
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_losses, label='Train Loss', marker='o')
-    plt.plot(val_losses, label='Validation Loss', marker='x')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Training and Validation Loss Curves')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'loss_curves.png'))
-    plt.close()
-
-    # ✅ Overall scatter plot
-    plt.figure(figsize=(8, 6))
-    plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-    plt.plot([val_labels.min(), val_labels.max()],
-             [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
-    plt.xlabel("Actual Label")
-    plt.ylabel("Predicted Label")
-    plt.title("Overall Predicted vs. Actual Labels")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'pred_vs_actual.png'))
-    plt.close()
-
-    # ✅ Per-subtype scatter plots
-    unique_subtypes = np.unique(val_subtypes)
-
-    for subtype in unique_subtypes:
-        mask = val_subtypes == subtype
-        preds_sub = val_preds[mask]
-        labels_sub = val_labels[mask]
-
-        plt.figure(figsize=(8, 6))
-        plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
-        plt.plot([labels_sub.min(), labels_sub.max()],
-                 [labels_sub.min(), labels_sub.max()], 'r--')
-        plt.xlabel("Actual Label")
-        plt.ylabel("Predicted Label")
-        plt.title(f"Predicted vs Actual for Subtype: {subtype}")
+        plt.xlabel("Epoch")
+        plt.ylabel("F1 Score")
+        plt.title("Per-Class F1 Score Over Epochs")
+        plt.legend()
         plt.grid(True)
         plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}.png"), dpi=300)
+        plt.show()
 
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
+        # ✅ Plot loss curves
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_losses, label='Train Loss', marker='o')
+        plt.plot(val_losses, label='Validation Loss', marker='x')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.title('Training and Validation Loss Curves')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
         plt.close()
 
+        # ✅ Overall scatter plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
+        plt.plot([val_labels.min(), val_labels.max()],
+                 [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
+        plt.xlabel("Actual Label")
+        plt.ylabel("Predicted Label")
+        plt.title("Overall Predicted vs. Actual Labels")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
+        plt.close()
+
+        # # ✅ Per-subtype scatter plots
+        # unique_subtypes = np.unique(val_subtypes)
+        #
+        # for subtype in unique_subtypes:
+        #     mask = val_subtypes == subtype
+        #     preds_sub = val_preds[mask]
+        #     labels_sub = val_labels[mask]
+        #
+        #     plt.figure(figsize=(8, 6))
+        #     plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
+        #     plt.plot([labels_sub.min(), labels_sub.max()],
+        #              [labels_sub.min(), labels_sub.max()], 'r--')
+        #     plt.xlabel("Actual Label")
+        #     plt.ylabel("Predicted Label")
+        #     plt.title(f"Predicted vs Actual for Subtype: {subtype}")
+        #     plt.grid(True)
+        #     plt.tight_layout()
+        #
+        #     plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
+        #     plt.close()
 
 
 
-#metrics: confidence, entropy,mutual_info,epkl
+
+
 
 if __name__ == '__main__':
 
