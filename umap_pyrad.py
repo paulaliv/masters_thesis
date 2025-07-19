@@ -4,16 +4,12 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import umap
-import numpy as np
 
-# --- Load Data ---
+# --- Load and preprocess data ---
 data_path = "/gpfs/home6/palfken/radiomics_features.csv"
 df = pd.read_csv(data_path)
 
-# Extract tumor_class
-tumor_class = df['tumor_class']
-
-# Add priority group
+# Map tumor_class to priority
 priority_mapping = {
     'LeiomyoSarcomas': 'high_malignant',
     'MyxoidlipoSarcoma': 'moderate_malignant',
@@ -23,33 +19,36 @@ priority_mapping = {
 }
 df['priority'] = df['tumor_class'].map(priority_mapping)
 
-# --- Feature preprocessing ---
+# --- Feature standardization ---
 features = df.drop(columns=['case_id', 'tumor_class', 'priority'])
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(features)
 
-# --- PCA: retain 95% variance ---
+# --- PCA + UMAP ---
 pca = PCA(n_components=0.95)
 X_pca = pca.fit_transform(X_scaled)
-print(f"PCA retained components: {X_pca.shape[1]} for 95% variance")
 
-# --- UMAP ---
 reducer = umap.UMAP(n_components=2, random_state=42)
 X_umap = reducer.fit_transform(X_pca)
 
-# --- Set up side-by-side plots ---
+# --- Define custom consistent colors per priority ---
+priority_order = ['low_malignant', 'intermediate', 'moderate_malignant', 'high_malignant']
+priority_palette = dict(zip(priority_order, sns.color_palette('Set2', len(priority_order))))
+
+# Create tumor_class palette using priority mapping
+class_palette = {
+    cls: priority_palette[priority_mapping[cls]]
+    for cls in df['tumor_class'].unique()
+}
+
+# --- Plot side-by-side ---
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Define consistent colors for each tumor class
-unique_classes = tumor_class.unique()
-palette = sns.color_palette('Set2', len(unique_classes))
-class_color_dict = dict(zip(unique_classes, palette))
-
-# Map tumor_class to consistent colors
+# Plot UMAP colored by tumor_class (using mapped priority colors)
 sns.scatterplot(
     x=X_umap[:, 0], y=X_umap[:, 1],
-    hue=tumor_class,
-    palette=class_color_dict,
+    hue=df['tumor_class'],
+    palette=class_palette,
     s=60, edgecolor='k', ax=axes[0]
 )
 axes[0].set_title("UMAP colored by Tumor Class (PCA 95%)")
@@ -57,17 +56,7 @@ axes[0].set_xlabel("UMAP-1")
 axes[0].set_ylabel("UMAP-2")
 axes[0].legend(title="Tumor Class", bbox_to_anchor=(1.05, 1), loc='upper left')
 
-# Merge tumor_class colors into priority (will merge two classes into one)
-priority_palette = {
-    priority: class_color_dict[tumor]
-    for tumor, priority in priority_mapping.items()
-    if priority_mapping.values()
-}
-# However, some priorities share tumor_class → average or re-assign color
-# For simplicity, use a distinct palette per priority instead
-priority_palette = dict(zip(df['priority'].unique(), sns.color_palette('Set1', len(df['priority'].unique()))))
-
-# Plot priority-colored UMAP
+# Plot UMAP colored by priority (with separate but consistent palette)
 sns.scatterplot(
     x=X_umap[:, 0], y=X_umap[:, 1],
     hue=df['priority'],
@@ -77,7 +66,7 @@ sns.scatterplot(
 axes[1].set_title("UMAP colored by Priority Group (PCA 95%)")
 axes[1].set_xlabel("UMAP-1")
 axes[1].set_ylabel("UMAP-2")
-axes[1].legend(title="Priority", bbox_to_anchor=(1.05, 1), loc='upper left')
+axes[1].legend(title="Priority Group", bbox_to_anchor=(1.05, 1), loc='upper left')
 
 plt.tight_layout()
 plt.show()
