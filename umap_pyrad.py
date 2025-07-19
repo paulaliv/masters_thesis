@@ -38,7 +38,7 @@ tumor_class_palette = dict(zip(tumor_classes, sns.color_palette('tab20', len(tum
 
 # Custom priority palette (single color for moderate_malignant)
 priority_order = ['low_malignant', 'intermediate', 'moderate_malignant', 'high_malignant']
-priority_palette = dict(zip(priority_order, sns.color_palette('Set2', len(priority_order))))
+priority_palette = dict(zip(priority_order, sns.color_palette('tab20', len(priority_order))))
 
 
 # --- Plot side-by-side ---
