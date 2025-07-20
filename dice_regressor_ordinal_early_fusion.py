@@ -99,7 +99,7 @@ class QAModel(nn.Module):
         return self.fc(x)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.40, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
@@ -261,7 +261,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         transform=val_transforms,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=20, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
@@ -391,7 +391,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         print(f"Val MAE: {val_mae:.4f}")
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.4)", "Moderate(0.4-0.7)", "Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
@@ -415,6 +415,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
             patience_counter = 0
+            best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
+                                           zero_division=0)
             # Save best model weights
             # torch.save({
             #     'model_state_dict': model.state_dict(),
@@ -430,7 +432,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
                 print("Early stopping triggered")
                 break
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history
+    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
 
 
 # def compute_dice(pred, gt):
@@ -452,8 +454,9 @@ def main(data_dir, plot_dir, folds,df):
 
     metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
     for idx, metric in enumerate(metrics):
+        print(f'Training with metric {metric}')
         start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history = train_one_fold(
+        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
             fold=0,
             data_dir=data_dir,
             df=df,
@@ -464,6 +467,14 @@ def main(data_dir, plot_dir, folds,df):
         )
 
         end = time.time()
+        print(f'Best Report with metric {metric}: ')
+        print(best_report)
+        file = os.path.join(plot_dir, f'best_report_{metric}_EF')
+        with open(file, "w") as f:
+            f.write(f"Final Classification Report for Fold 0:\n")
+            f.write(best_report)
+
+
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
         # Convert prediction outputs to numpy arrays for plotting
@@ -481,7 +492,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"f1_scores_per_class_{metric}.png"), dpi=300)
+        plt.savefig(os.path.join(plot_dir, f"f1_scores_per_class_{metric}_EF.png"), dpi=300)
         plt.show()
 
         # ✅ Plot loss curves
@@ -494,7 +505,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.title('Training and Validation Loss Curves')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}_EF.png'))
         plt.close()
 
         # ✅ Overall scatter plot
@@ -508,7 +519,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_EF.png'))
         plt.close()
 
 
