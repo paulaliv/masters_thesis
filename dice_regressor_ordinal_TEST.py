@@ -497,7 +497,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
             best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
                                            zero_division=0)
 
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_TEST.npz"), preds=val_preds_np, labels=val_labels_np)
 
 
         else:
@@ -520,69 +520,70 @@ def main(data_dir, plot_dir, folds,df):
     #for fold in range(5):
     # Train the model and retrieve losses + predictions
 
-    metrics = ['confidence', 'entropy','mutual_info','epkl']
-    for idx, metric in enumerate(metrics):
-        start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
-            0,
-            data_dir,
-            df=df,
-            splits=folds,
-            uncertainty_metric=metric,
-            num_bins=5,
-            plot_dir=plot_dir,
-            device=device
-        )
+    # metrics = ['confidence', 'entropy','mutual_info','epkl']
+    # for idx, metric in enumerate(metrics):
+    metric = 'confidence'
+    start = time.time()
+    train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
+        0,
+        data_dir,
+        df=df,
+        splits=folds,
+        uncertainty_metric=metric,
+        num_bins=5,
+        plot_dir=plot_dir,
+        device=device
+    )
 
-        end = time.time()
-        print(f'Best report for {metric}:')
-        print(best_report)
-        print(f"Total training time: {(end - start) / 60:.2f} minutes")
+    end = time.time()
+    print(f'Best report for {metric}:')
+    print(best_report)
+    print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-        # Convert prediction outputs to numpy arrays for plotting
-        val_preds = np.array(val_preds)
-        val_labels = np.array(val_labels)
-        val_subtypes = np.array(val_subtypes)
+    # Convert prediction outputs to numpy arrays for plotting
+    val_preds = np.array(val_preds)
+    val_labels = np.array(val_labels)
+    val_subtypes = np.array(val_subtypes)
 
-        plt.figure(figsize=(10, 6))
-        for class_name, f1_scores in f1_history.items():
-            plt.plot(f1_scores, label=class_name)
+    plt.figure(figsize=(10, 6))
+    for class_name, f1_scores in f1_history.items():
+        plt.plot(f1_scores, label=class_name)
 
-        plt.xlabel("Epoch")
-        plt.ylabel("F1 Score")
-        plt.title("Per-Class F1 Score Over Epochs")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}.png"), dpi=300)
-        plt.show()
+    plt.xlabel("Epoch")
+    plt.ylabel("F1 Score")
+    plt.title("Per-Class F1 Score Over Epochs")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}_TEST.png"), dpi=300)
+    plt.show()
 
-        # ✅ Plot loss curves
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label='Train Loss', marker='o')
-        plt.plot(val_losses, label='Validation Loss', marker='x')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.title('Training and Validation Loss Curves')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
-        plt.close()
+    # ✅ Plot loss curves
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_losses, label='Train Loss', marker='o')
+    plt.plot(val_losses, label='Validation Loss', marker='x')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Training and Validation Loss Curves')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}_TEST.png'))
+    plt.close()
 
-        # ✅ Overall scatter plot
-        plt.figure(figsize=(8, 6))
-        plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-        plt.plot([val_labels.min(), val_labels.max()],
-                 [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
-        plt.xlabel("Actual Label")
-        plt.ylabel("Predicted Label")
-        plt.title("Overall Predicted vs. Actual Labels")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
-        plt.close()
+    # ✅ Overall scatter plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
+    plt.plot([val_labels.min(), val_labels.max()],
+             [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
+    plt.xlabel("Actual Label")
+    plt.ylabel("Predicted Label")
+    plt.title("Overall Predicted vs. Actual Labels")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_TEST.png'))
+    plt.close()
 
         # # ✅ Per-subtype scatter plots
         # unique_subtypes = np.unique(val_subtypes)
