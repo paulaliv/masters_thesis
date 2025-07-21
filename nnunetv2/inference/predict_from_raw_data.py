@@ -1690,6 +1690,7 @@ def main(input_folder, output_folder, model_dir):
         return_features=False,
     )
 
+
     path = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_1/checkpoint_final.pth"
 
     path2 = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_2/checkpoint_final.pth"
@@ -1697,13 +1698,13 @@ def main(input_folder, output_folder, model_dir):
     path4 = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/checkpoint_final.pth"
 
     ckpt = torch.load(path, map_location='cpu')
-    print("Checkpoint keys:", ckpt.keys())
+    print("Checkpoint keys FOLD 1:", ckpt.keys())
     ckpt = torch.load(path2, map_location='cpu')
-    print("Checkpoint keys:", ckpt.keys())
+    print("Checkpoint keys FOLD 2:", ckpt.keys())
     ckpt = torch.load(path3, map_location='cpu')
-    print("Checkpoint keys:", ckpt.keys())
+    print("Checkpoint keys FOLD 3:", ckpt.keys())
     ckpt = torch.load(path4, map_location='cpu')
-    print("Checkpoint keys:", ckpt.keys())
+    print("Checkpoint keys FOLD 4:", ckpt.keys())
 
     # Initialize from your trained model folder
     print('Initializing trained model ...')
