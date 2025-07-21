@@ -154,13 +154,16 @@ class QADataset(Dataset):
         # file = f'{case_id}_features_roi.npz'
         # feat1 = np.load(os.path.join(self.preprocessed_dir, file))
         # image = feat1[feat1.files[0]]
+        image_tensor = torch.from_numpy(image).float()
 
+        image_tensor = image_tensor.unsqueeze(0)
 
-        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
+    # assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
         #image = np.asarray(image)
         #print(f'Image Shape {image.shape}')
 
-        data_dict = {'image': image }
+
+        data_dict = {'image': image_tensor }
         # nnU-Net raw images usually have multiple channels; choose accordingly:
         # Here, just take channel 0 for simplicity:
         #input_image = np.stack([image[0], pred_mask], axis=0)  # (2, H, W, D)
