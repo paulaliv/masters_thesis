@@ -1690,6 +1690,10 @@ def main(input_folder, output_folder, model_dir):
         return_features=False,
     )
 
+    path = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_0/checkpoint_final.pth"
+    ckpt = torch.load(path, map_location='cpu')
+    print("Checkpoint keys:", ckpt.keys())
+
 
     # Initialize from your trained model folder
     print('Initializing trained model ...')

@@ -13,12 +13,12 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import cohen_kappa_score
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
-
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
@@ -276,6 +276,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
 
+    # Optional: define class names for nicer output
+    class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
     # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
@@ -295,6 +297,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
+    best_kappa = -1.0
+    best_kappa_cm = None
+    best_kappa_epoch = -1
     for epoch in range(100):
         print(f"Epoch {epoch + 1}/{100}")
         running_loss, correct, total = 0.0, 0, 0
@@ -338,6 +343,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         val_preds_list.clear()
         val_labels_list.clear()
         val_subtypes_list.clear()
+
 
 
         with torch.no_grad():
@@ -387,11 +393,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
 
-        val_mae = mean_absolute_error(val_labels_np, val_preds_np)
-        print(f"Val MAE: {val_mae:.4f}")
+        # 'linear' or 'quadratic' weights are valid for ordinal tasks
+        kappa_linear = cohen_kappa_score(val_labels_np, val_preds_np, weights='linear')
+        kappa_quadratic = cohen_kappa_score(val_labels_np, val_preds_np, weights='quadratic')
 
-        # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
+        print("Linear Kappa:", kappa_linear)
+        print("Quadratic Kappa:", kappa_quadratic)
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
@@ -410,8 +417,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
-
+        if kappa_quadratic > best_kappa:
+            best_kappa = kappa_quadratic
+            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=class_names)
+            best_kappa_preds = val_preds_np.copy()
+            best_kappa_labels = val_labels_np.copy()
+            best_kappa_report = report
+            best_kappa_epoch = epoch
         # Early stopping check
+
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
             patience_counter = 0
@@ -431,6 +445,17 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
+
+    # Plot and save best confusion matrix
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(best_kappa_cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_EF.png"))
+    plt.close()
 
     return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
 
