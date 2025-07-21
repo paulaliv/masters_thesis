@@ -13,7 +13,7 @@ import glob
 from scipy.ndimage import zoom
 import pandas as pd
 from radiomics import featureextractor
-
+from setuptools.sandbox import save_path
 
 
 class ROIPreprocessor:
@@ -400,7 +400,9 @@ class ROIPreprocessor:
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
         case_stats = []
 
-        save_path = "/gpfs/home6/palfken/radiomics_features.csv"
+        #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
+        save_path = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv"
+
         if os.path.exists(save_path):
             from_scratch = False
             df = pd.read_csv(save_path)
@@ -411,18 +413,13 @@ class ROIPreprocessor:
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             self.case_id = case_id
-            if not from_scratch:
-                if case_id in df['case_id'].values:
-                    continue
-            #mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-            #pred = nib.load(mask_path)
-            gt = nib.load(gt_path)
-            #dice = self.compute_dice(gt, pred)
-            #print(f'Dice score: {dice}')
 
-            if self.save_umaps:
-                umap_path = os.path.join(mask_dir,f"{case_id}_uncertainty_maps.npz")
+            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+            pred = nib.load(mask_path)
+            gt = nib.load(gt_path)
+            dice = self.compute_dice(gt, pred)
+            print(f'Dice score: {dice}')
 
 
             subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
@@ -434,18 +431,27 @@ class ROIPreprocessor:
                 print(f'Case id {case_id}: no subtype in csv file!')
             if os.path.exists(img_path):
                 if self.save_umaps:
+                    umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
                     self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
-                    filtered_features = {}
+                    new_row = {
+                        "case_id": case_id,
+                        "tumor_class": tumor_class,
+                        "dice_30": dice,
+                    }
+
                 else:
                    features = self.preprocess_case(img_path, gt_path, output_dir)
                    filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
 
-                new_row = {
-                    "case_id": case_id,
-                    "tumor_class": tumor_class,
-                    **filtered_features
-                }
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                   new_row = {
+                       "case_id": case_id,
+                       "tumor_class": tumor_class,
+                       **filtered_features}
+
+                if case_id in df['case_id'].values:
+                   df.loc[df['case_id'] == case_id, 'dice_30'] = dice
+                   print(f'Added {case_id}: {dice}')
+
                 df.to_csv(save_path, index=False)
 
 
