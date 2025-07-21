@@ -148,8 +148,8 @@ class QADataset(Dataset):
         #Check if its not case_id_0000
         # data, seg, seg_prev, properties = self.ds.load_case(case_id)
         #print("Data shape:", data.shape)
-        file = f'{case_id}_resized.pt'
-        image = torch.load(os.path.join(self.preprocessed_dir, file))
+        file = f'{case_id}_img.npy'
+        image = np.load(os.path.join(self.preprocessed_dir, file))
 
         # file = f'{case_id}_features_roi.npz'
         # feat1 = np.load(os.path.join(self.preprocessed_dir, file))
