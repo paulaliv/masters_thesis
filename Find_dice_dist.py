@@ -8,10 +8,35 @@ import json
 import shutil
 
 
-df_dir = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
+df_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv"
+df_final = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
+data20 ="/scratch/bmep/plalfken/Dice_scores_20epochs.csv"
+data5 = "/scratch/bmep/plalfken/Dice_scores_5epochs.csv"
+remove_ids = [
+    "DES_0010", "DES_0012", "DES_0035", "DES_0037", "DES_0046", "DES_0050",
+    "DES_0059", "DES_0062", "DES_0075", "DES_0102", "DES_0123", "DES_0142",
+    "DES_0189", "LIP_0013", "LIP_0020", "LIP_0022", "LIP_0027", "LIP_0046",
+    "LIP_0069", "LIP_0083", "LIP_0087", "LIP_0115"
+]
+df5 = pd.read_csv(data5)
+df20 = pd.read_csv(data20)
+df30 = pd.read_csv(df_dir)
+df_final = pd.read_csv(df_final)
 
-df = pd.read_csv(df_dir)
-print(df.columns)
+
+# Remove them
+df_final = df_final[~df_final['case_id'].isin(remove_ids)]
+
+# Optional: Reset index after filtering
+df= df_final.reset_index(drop=True)
+
+
+print(f"Number of cases in df5: {len(df5)}")
+print(f"Number of cases in df20: {len(df20)}")
+print(f"Number of cases in df30: {len(df30)}")
+print(f"Number of cases in df final: {len(df_final)}")
+
+
 
 
 def base_case_id(x):
@@ -89,7 +114,7 @@ for i, split in enumerate(splits):
     print(df.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
 
-output_path = '/gpfs/home6/palfken/masters_thesis/Final_splits.json'
+output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv'
 output_dir = os.path.dirname(output_path)
 
 # Create the directory if it doesn't exist
@@ -99,27 +124,27 @@ os.makedirs(output_dir, exist_ok=True)
 with open(output_path, 'w') as f:
     json.dump(splits, f, indent=4)
 
+# #
+# image_dir = "/gpfs/home6/palfken/30QA_images/"
+# dst_dir = "/gpfs/home6/palfken/QA_dataTr_final/"
+# # Filter for case IDs starting with '30EP_'
+# filtered_ids = df[df['case_id'].str.startswith('30EP_')]['case_id']
 #
-image_dir = "/gpfs/home6/palfken/30QA_images/"
-dst_dir = "/gpfs/home6/palfken/QA_dataTr_final/"
-# Filter for case IDs starting with '30EP_'
-filtered_ids = df[df['case_id'].str.startswith('30EP_')]['case_id']
-
-
-base_ids = [cid.replace('30EP_', '') for cid in filtered_ids]
-file_endings = ['_img.npy', '_mask.npy', '_entropy.npy', '_confidence.npy', '_epkl.npy', '_mutual_info.npy']
-
-for base_id in base_ids:
-    for suffix in file_endings:
-        source_file = os.path.join(image_dir, f'20EP_{base_id}{suffix}')
-        destination_file = os.path.join(dst_dir, f'30EP_{base_id}{suffix}')
-
-        if os.path.exists(source_file):
-            shutil.copyfile(source_file, destination_file)
-            print(f"Copied {source_file} → {destination_file}")
-        else:
-            print(f"❌ Source file not found: {source_file}")
 #
+# base_ids = [cid.replace('30EP_', '') for cid in filtered_ids]
+# file_endings = ['_img.npy', '_mask.npy', '_entropy.npy', '_confidence.npy', '_epkl.npy', '_mutual_info.npy']
+#
+# for base_id in base_ids:
+#     for suffix in file_endings:
+#         source_file = os.path.join(image_dir, f'20EP_{base_id}{suffix}')
+#         destination_file = os.path.join(dst_dir, f'30EP_{base_id}{suffix}')
+#
+#         if os.path.exists(source_file):
+#             shutil.copyfile(source_file, destination_file)
+#             print(f"Copied {source_file} → {destination_file}")
+#         else:
+#             print(f"❌ Source file not found: {source_file}")
+# #
 # print(f'Number of cases: {len(df)}')
 # print(df.columns)
 # df.drop(columns = ['diff'])
@@ -278,18 +303,43 @@ for base_id in base_ids:
 # plt.grid(True)
 # plt.show()
 # #
-# # plt.figure(figsize=(10, 6))
-# # sns.kdeplot(df['dice_5'], label='Dice 5', fill=True, alpha=0.5, color='skyblue')
-# # sns.kdeplot(df['dice_20'], label='Dice 20', fill=True, alpha=0.5, color='salmon')
-# # sns.kdeplot(df_adjusted['dice_5'], label='Adjusted Dice', fill=True, alpha=0.5, color='red')
-# #
-# # plt.title('Overlayed Dice Score Distributions (Adjusted df)')
-# # plt.xlabel('Dice Score')
-# # plt.ylabel('Density')
-# # plt.legend()
-# # plt.grid(True)
-# # plt.show()
-# #
+plt.figure(figsize=(10, 6))
+sns.kdeplot(df5['dice_5'], label='Dice 5', fill=True, alpha=0.5, color='skyblue')
+sns.kdeplot(df20['dice_5'], label='Dice 20', fill=True, alpha=0.5, color='salmon')
+sns.kdeplot(df30['dice_30'], label='Dice 30', fill=True, alpha=0.5, color='red')
+
+plt.title('Overlayed Dice Score Distributions per model (5, 20, 30 epochs)')
+plt.xlabel('Dice Score')
+plt.ylabel('Density')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Your plot
+sns.kdeplot(df_final['dice_5'], fill=False, alpha=0.5, color='black')
+
+# Add vertical lines for bin edges
+bin_edges = [0.1, 0.5, 0.7]
+for edge in bin_edges:
+    plt.axvline(edge, color='black', linestyle='--', alpha=0.8)
+
+# Add colored background spans for bins
+plt.axvspan(0.0, 0.1, color='red', alpha=0.2, label='Fail (0–0.1)')
+plt.axvspan(0.1, 0.5, color='salmon', alpha=0.2, label='Poor (0.1–0.5)')
+plt.axvspan(0.5, 0.7, color='orange', alpha=0.2, label='Moderate (0.5–0.7)')
+plt.axvspan(0.7, 1.0, color='yellowgreen', alpha=0.2, label='Good (>0.7)')
+
+# Labels and legend
+plt.xlabel('Dice Score')
+plt.ylabel('Density')
+plt.title('Merged Dice Score Distribution from all Models with Bins')
+plt.legend()
+plt.xlim(0, 1.0)  # Optional: constrain x-axis
+
+plt.tight_layout()
+plt.show()
+
+
 # print(df['tumor_class_x'].value_counts())
 #
 #
