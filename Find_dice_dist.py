@@ -89,7 +89,7 @@ for i, split in enumerate(splits):
     print(df.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
 
-output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits.json'
+output_path = '/gpfs/home6/palfken/masters_thesis/Final_splits.json'
 output_dir = os.path.dirname(output_path)
 
 # Create the directory if it doesn't exist
