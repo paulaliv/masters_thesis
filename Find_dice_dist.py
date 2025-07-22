@@ -102,21 +102,22 @@ with open(output_path, 'w') as f:
 #
 image_dir = "/gpfs/home6/palfken/30QA_images/"
 dst_dir = "/gpfs/home6/palfken/QA_dataTr_final/"
+# Filter for case IDs starting with '30EP_'
+filtered_ids = df[df['case_id'].str.startswith('30EP_')]['case_id']
 
-for file in os.listdir(image_dir):
-    if file.startswith('20EP_'):
+# Strip '30EP_' from each ID
+base_ids = [cid.replace('30EP_', '') for cid in filtered_ids]
 
-        base_id = base_case_id(file)
-        source_file = os.path.join(image_dir, f'20EP_{base_id}')
-        destination_file = os.path.join(dst_dir, f'30EP_{base_id}')
+# Go through each base ID
+for base_id in base_ids:
+    source_file = os.path.join(image_dir, f'20EP_{base_id}')
+    destination_file = os.path.join(dst_dir, f'30EP_{base_id}')
 
-        if os.path.exists(source_file):
-            shutil.copyfile(source_file, destination_file)
-            print(f'Moving {file} to {destination_file})
-        else:
-            print(f"Source file not found: {source_file}")
-
-
+    if os.path.exists(source_file):
+        shutil.copyfile(source_file, destination_file)
+        print(f"Copied {source_file} → {destination_file}")
+    else:
+        print(f"❌ Source file not found: {source_file}")
 
 #
 # print(f'Number of cases: {len(df)}')
