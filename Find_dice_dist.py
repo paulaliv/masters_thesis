@@ -9,7 +9,7 @@ import shutil
 
 
 df_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv"
-df_final = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
+df_final_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
 data20 ="/scratch/bmep/plalfken/Dice_scores_20epochs.csv"
 data5 = "/scratch/bmep/plalfken/Dice_scores_5epochs.csv"
 remove_ids = [
@@ -21,7 +21,7 @@ remove_ids = [
 df5 = pd.read_csv(data5)
 df20 = pd.read_csv(data20)
 df30 = pd.read_csv(df_dir)
-df_final = pd.read_csv(df_final)
+df_final = pd.read_csv(df_final_dir)
 
 
 # Remove them
@@ -36,7 +36,7 @@ print(f"Number of cases in df20: {len(df20)}")
 print(f"Number of cases in df30: {len(df30)}")
 print(f"Number of cases in df final: {len(df_final)}")
 
-
+df.to_csv(df_final_dir,index=False)
 
 
 def base_case_id(x):
@@ -114,7 +114,7 @@ for i, split in enumerate(splits):
     print(df.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
 
-output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv'
+output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits.json'
 output_dir = os.path.dirname(output_path)
 
 # Create the directory if it doesn't exist
