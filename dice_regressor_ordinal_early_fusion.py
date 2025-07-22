@@ -135,11 +135,11 @@ class QADataset(Dataset):
         return len(self.case_ids)
 
     def __getitem__(self, idx):
-        print(f"Fetching index {idx} out of {len(self.dice_scores)}")
+        #print(f"Fetching index {idx} out of {len(self.dice_scores)}")
         case_id = self.case_ids[idx]
-        print(case_id)
+        #print(case_id)
         dice_score = self.dice_scores[idx]
-        print(dice_score)
+        #print(dice_score)
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
@@ -422,7 +422,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
-            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=class_names)
+            labels_idx = [0, 1, 2, 3]
+            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
             best_kappa_preds = val_preds_np.copy()
             best_kappa_labels = val_labels_np.copy()
             best_kappa_report = report

@@ -479,7 +479,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         # After each validation epoch:
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
-            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=class_names)
+            labels_idx = [0, 1, 2, 3]
+            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
             best_kappa_preds = val_preds_np.copy()
             best_kappa_labels = val_labels_np.copy()
             best_kappa_report = report
