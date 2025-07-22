@@ -5,16 +5,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import json
+import shutil
 
-df_dir = '/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv'
-image_dir =''
-dst_dir = ''
+
+df_dir = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
 
 df = pd.read_csv(df_dir)
+print(df.columns)
+
 
 def base_case_id(x):
-    if x.startswith("20EP_"):
+    if x.startswith("30EP_"):
         return x[5:]  # remove "20EP_" prefix
+    if x.startswith("20EP_"):
+        return x[5:]
     return x
 
 df['base_case_id'] = df['case_id'].apply(base_case_id)
@@ -25,7 +29,7 @@ df['base_case_id'] = df['case_id'].apply(base_case_id)
 
 
 
-dice_bins = [0, 0.1, 0.3, 0.5, 0.7, 1]
+dice_bins = [0, 0.1, 0.5, 0.7, 1]
 dice_labels = ['Very Low', 'Low', 'Medium', 'High', 'Very High']
 
 # Get one row per base_case_id (you can take the first occurrence)
@@ -95,119 +99,181 @@ os.makedirs(output_dir, exist_ok=True)
 with open(output_path, 'w') as f:
     json.dump(splits, f, indent=4)
 
+#
+image_dir = "/gpfs/home6/palfken/30QA_images/"
+dst_dir = "/gpfs/home6/palfken/QA_dataTr_final/"
+
+for file in os.listdir(image_dir):
+    if file.startswith('30EP_'):
+        base_id = base_case_id(file)
+        source_file = os.path.join(image_dir, f'20EP_{base_id}')
+        destination_file = os.path.join(dst_dir, f'30EP_{base_id}')
+
+        if os.path.exists(source_file):
+            shutil.copyfile(source_file, destination_file)
+        else:
+            print(f"Source file not found: {source_file}")
 
 
-# df_20 = df['case_id'].
-# for file in os.listdir(image_dir):
-#     if '20EP' in file:
-#         shutil.copyfile(os.path.join(image_dir, file), os.path.join(dst_dir, file))
 
-
-
-
+#
 # print(f'Number of cases: {len(df)}')
-#
-# df = df.drop(columns=['tumor_class_y'])
-#
-# zero_preds = df[df['dice_5'] == 0]
-# zero_counts = zero_preds['tumor_class_x'].value_counts()
-# print("Number of cases with Dice=0 per tumor class:")
-# print(zero_counts)
+# print(df.columns)
+# df.drop(columns = ['diff'])
+# print(df.columns)
+# subset = df[~df['case_id'].str.startswith('20EP_')]
 #
 #
-# zero_preds = df_adjusted[df_adjusted['dice_5'] == 0]
-# zero_counts = zero_preds['tumor_class_x'].value_counts()
-# print("Number of cases with Dice=0 per tumor class:")
-# print(zero_counts)
+# # Step 2: Compute the difference between 'dice_30' and 'dice_5'
+# subset['dice_diff'] = subset['dice_30'] - subset['dice_5']
 #
-# to_remove = ['DES_0006', 'DES_0016', 'DES_0096', 'DES_0162']
-# df_adjusted = df_adjusted[~df_adjusted['case_id'].isin(to_remove)]
+# # Step 3: Select rows where the difference is greater than 0.1
+# final_subset = subset[subset['dice_diff'] > 0.1]
 #
-# DTF_0 = df_adjusted[(df_adjusted['tumor_class_x'] == 'DTF') & (df_adjusted['dice_20'] == 0)]
+# print(final_subset[['dice_5','dice_30', 'dice_diff']].head(50))
+# #print(len(final_subset))
 #
+# # Step 2: Create modified copies of these rows
+# duplicated_rows = final_subset.copy()
 #
+# # Modify case_id by prefixing with 'EP30_'
+# duplicated_rows['case_id'] = '30EP_' + duplicated_rows['case_id'].astype(str)
 #
+# # Set dice_5 to be equal to dice_30
+# duplicated_rows['dice_5'] = duplicated_rows['dice_30']
 #
-# df_adjusted.rename(columns={'tumor_class_x': 'tumor_class'}, inplace=True)
-# df_adjusted.drop(columns=['dice_20'], inplace=True)
-# print(df_adjusted.head())
-# df_adjusted.to_csv('/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv', index=False)
+# # Step 3: Append to the original df
+# df = pd.concat([df, duplicated_rows], ignore_index=True)
 #
+# df_20 = df[df['case_id'].str.startswith('20EP_')].copy()
+# df_30 = df[df['case_id'].str.startswith('30EP_')].copy()
 #
+# # Step 2: Extract the core ID (remove the prefixes)
+# df_20['core_id'] = df_20['case_id'].str.replace('20EP_', '', regex=False)
+# df_30['core_id'] = df_30['case_id'].str.replace('30EP_', '', regex=False)
+#
+# # Step 3: Inner join on core_id to find matches
+# merged = pd.merge(df_20, df_30, on='core_id', suffixes=('_20', '_30'))
+# print(merged.columns)
+#
+# #print(merged[['case_id_20', 'case_id_30', 'dice_5_20', 'dice_5_30']])
+# print(len(merged))
+#
+# # Step 4: Calculate absolute difference in dice_5
+# merged['dice_diff'] = (merged['dice_5_20'] - merged['dice_5_30']).abs()
+#
+# # Step 5: Keep only those with dice difference ≥ 0.1
+# valid_matches = merged[merged['dice_diff'] >= 0.1]
+#
+# # Step 6: Identify EP30_ case_ids to keep
+# ep30_to_keep = valid_matches['case_id_30']
+#
+# # Step 7: Drop all other EP30_ rows from df
+# df = df[~((df['case_id'].str.startswith('EP30_')) & (~df['case_id'].isin(ep30_to_keep)))]
+#
+# print(len(df))
+# df.to_csv('/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv')
+# # df = df.drop(columns=['tumor_class_y'])
 # #
-# # plt.figure(figsize=(14, 7))
-# # ax = sns.violinplot(
-# #     data=df,
-# #     x='tumor_class_x',
-# #     y='dice_5',
-# #     inner='box',
-# #     scale='width',
-# #     palette='Set3',
-# #     cut=0  # <-- Prevent KDE from extending beyond the data range
-# # )
-# # plt.ylim(0, 1)  # Set y-axis from 0 to 1
-# # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
-# # plt.xlabel('Tumor Subtype')
-# # plt.ylabel('Dice Score')
-# # plt.xticks(rotation=45, ha='right')
-# # plt.tight_layout()
-# # plt.grid(True)
-# # plt.show()
+# # zero_preds = df[df['dice_5'] == 0]
+# # zero_counts = zero_preds['tumor_class_x'].value_counts()
+# # print("Number of cases with Dice=0 per tumor class:")
+# # print(zero_counts)
 # #
 # #
-# # plt.figure(figsize=(14, 7))
-# # ax = sns.violinplot(
-# #     data=df,
-# #     x='tumor_class_x',
-# #     y='dice_5',
-# #     inner='box',
-# #     scale='width',
-# #     palette='Set3',
-# #     cut=0  # <-- Prevent KDE from extending beyond the data range
-# # )
-# # plt.ylim(0, 1)  # Set y-axis from 0 to 1
-# # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
-# # plt.xlabel('Tumor Subtype')
-# # plt.ylabel('Dice Score')
-# # plt.xticks(rotation=45, ha='right')
-# # plt.tight_layout()
-# # plt.grid(True)
-# # plt.show()
+# # zero_preds = df_adjusted[df_adjusted['dice_5'] == 0]
+# # zero_counts = zero_preds['tumor_class_x'].value_counts()
+# # print("Number of cases with Dice=0 per tumor class:")
+# # print(zero_counts)
 # #
-# # plt.figure(figsize=(14, 7))
-# # ax = sns.violinplot(
-# #     data=df_adjusted,
-# #     x='tumor_class_x',
-# #     y='dice_5',
-# #     inner='box',
-# #     scale='width',
-# #     palette='Set3',
-# #     cut=0  # <-- Prevent KDE from extending beyond the data range
-# # )
-# # plt.ylim(0, 1)  # Set y-axis from 0 to 1
-# # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
-# # plt.xlabel('Tumor Subtype')
-# # plt.ylabel('Dice Score')
-# # plt.xticks(rotation=45, ha='right')
-# # plt.tight_layout()
-# # plt.grid(True)
-# # plt.show()
+# # to_remove = ['DES_0006', 'DES_0016', 'DES_0096', 'DES_0162']
+# # df_adjusted = df_adjusted[~df_adjusted['case_id'].isin(to_remove)]
+# #
+# # DTF_0 = df_adjusted[(df_adjusted['tumor_class_x'] == 'DTF') & (df_adjusted['dice_20'] == 0)]
 # #
 # #
 # #
 # #
+# # df_adjusted.rename(columns={'tumor_class_x': 'tumor_class'}, inplace=True)
+# # df_adjusted.drop(columns=['dice_20'], inplace=True)
+# # print(df_adjusted.head())
+# # df_adjusted.to_csv('/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv', index=False)
 # #
 # #
+# # #
+# # # plt.figure(figsize=(14, 7))
+# # # ax = sns.violinplot(
+# # #     data=df,
+# # #     x='tumor_class_x',
+# # #     y='dice_5',
+# # #     inner='box',
+# # #     scale='width',
+# # #     palette='Set3',
+# # #     cut=0  # <-- Prevent KDE from extending beyond the data range
+# # # )
+# # # plt.ylim(0, 1)  # Set y-axis from 0 to 1
+# # # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
+# # # plt.xlabel('Tumor Subtype')
+# # # plt.ylabel('Dice Score')
+# # # plt.xticks(rotation=45, ha='right')
+# # # plt.tight_layout()
+# # # plt.grid(True)
+# # # plt.show()
+# # #
+# # #
+# # # plt.figure(figsize=(14, 7))
+# # # ax = sns.violinplot(
+# # #     data=df,
+# # #     x='tumor_class_x',
+# # #     y='dice_5',
+# # #     inner='box',
+# # #     scale='width',
+# # #     palette='Set3',
+# # #     cut=0  # <-- Prevent KDE from extending beyond the data range
+# # # )
+# # # plt.ylim(0, 1)  # Set y-axis from 0 to 1
+# # # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
+# # # plt.xlabel('Tumor Subtype')
+# # # plt.ylabel('Dice Score')
+# # # plt.xticks(rotation=45, ha='right')
+# # # plt.tight_layout()
+# # # plt.grid(True)
+# # # plt.show()
+# # #
+# # # plt.figure(figsize=(14, 7))
+# # # ax = sns.violinplot(
+# # #     data=df_adjusted,
+# # #     x='tumor_class_x',
+# # #     y='dice_5',
+# # #     inner='box',
+# # #     scale='width',
+# # #     palette='Set3',
+# # #     cut=0  # <-- Prevent KDE from extending beyond the data range
+# # # )
+# # # plt.ylim(0, 1)  # Set y-axis from 0 to 1
+# # # plt.title('Dice Score Distribution per Tumor Subtype (dice_5)')
+# # # plt.xlabel('Tumor Subtype')
+# # # plt.ylabel('Dice Score')
+# # # plt.xticks(rotation=45, ha='right')
+# # # plt.tight_layout()
+# # # plt.grid(True)
+# # # plt.show()
+# # #
+# # #
+# # #
+# # #
 # #
-# # plt.figure(figsize=(10, 6))
-# # sns.kdeplot(df_adjusted['dice_5'], label='Dice 5', fill=True, alpha=0.5, color='skyblue')
-# # sns.kdeplot(df['dice_20'], label='Dice 20', fill=True, alpha=0.5, color='salmon')
-# # plt.title('Overlayed Dice Score Distributions (Original df)')
-# # plt.xlabel('Dice Score')
-# # plt.ylabel('Density')
-# # plt.legend()
-# # plt.grid(True)
-# # plt.show()
+# #
+#
+# plt.figure(figsize=(10, 6))
+# sns.kdeplot(df['dice_5'], label='Dice 5', fill=True, alpha=0.5, color='skyblue')
+#
+# plt.title('Dice distribution of combined model results')
+# plt.xlabel('Dice Score')
+# plt.ylabel('Density')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 # #
 # # plt.figure(figsize=(10, 6))
 # # sns.kdeplot(df['dice_5'], label='Dice 5', fill=True, alpha=0.5, color='skyblue')
