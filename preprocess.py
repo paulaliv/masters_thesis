@@ -466,14 +466,14 @@ class ROIPreprocessor:
         #updated_df = pd.concat([existing_df, df], ignore_index=True)
 
         print("Global Dice Score Distribution:")
-        global_hist, _ = np.histogram(df['dice_20'], bins=bin_edges)
+        global_hist, _ = np.histogram(df['dice_30'], bins=bin_edges)
         for i in range(len(bin_edges) - 1):
             print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
 
         print("\nDice Score Distribution by Tumor Class:")
         for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
-            class_hist, _ = np.histogram(group['dice_20'], bins=bin_edges)
+            class_hist, _ = np.histogram(group['dice_30'], bins=bin_edges)
             for i in range(len(bin_edges) - 1):
                 print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
 
