@@ -135,8 +135,11 @@ class QADataset(Dataset):
         return len(self.case_ids)
 
     def __getitem__(self, idx):
+        print(f"Fetching index {idx} out of {len(self.dice_scores)}")
         case_id = self.case_ids[idx]
+        print(case_id)
         dice_score = self.dice_scores[idx]
+        print(dice_score)
         subtype = self.subtypes[idx]
         subtype = subtype.strip()
 
