@@ -622,14 +622,14 @@ def main():
 
     input_folder_img ="/gpfs/home6/palfken/QA_imagesTr"
     input_folder_gt ="/gpfs/home6/palfken/QA_labelsTr"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_images"
+    predicted_mask_folder = "/gpfs/home6/palfken/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     output_folder_data = "/gpfs/home6/palfken/30QA_images/"
     output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals_OOD/"
 
     os.makedirs(output_folder_data, exist_ok=True)
-    os.makedirs(output_folder_visuals, exist_ok=True)
+    #os.makedirs(output_folder_visuals, exist_ok=True)
     # # dice_scores = []
 
 
