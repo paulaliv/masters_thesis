@@ -30,7 +30,7 @@ df['base_case_id'] = df['case_id'].apply(base_case_id)
 
 
 dice_bins = [0, 0.1, 0.5, 0.7, 1]
-dice_labels = ['Very Low', 'Low', 'Medium', 'High', 'Very High']
+dice_labels = ['Fail', 'Poor', 'Moderate', 'Good']
 
 # Get one row per base_case_id (you can take the first occurrence)
 base_cases = df.drop_duplicates(subset=['base_case_id']).copy()
