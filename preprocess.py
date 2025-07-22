@@ -620,8 +620,8 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/QA_imagesTr"
-    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTr"
+    input_folder_img ="/gpfs/home6/palfken/QA_imagesTs"
+    input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs"
     predicted_mask_folder = "/gpfs/home6/palfken/30QA_images"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
