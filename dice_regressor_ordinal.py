@@ -308,7 +308,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
@@ -322,7 +322,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
 
-    #warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
@@ -349,7 +349,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     # Optional: define class names for nicer output
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
     for epoch in range(70):
-        print(f"Epoch {epoch + 1}/{70}")
+        print(f"Epoch {epoch + 1}/{80}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -430,16 +430,16 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
 
         scheduler.step(epoch_val_loss)
-        for param_group in optimizer.param_groups:
-            print(f"Current LR: {param_group['lr']}")
+        #for param_group in optimizer.param_groups:
+            #print(f"Current LR: {param_group['lr']}")
 
-        # Apply warmup or ReduceLROnPlateau
-        # if epoch < warmup_epochs:
-        #     warmup_scheduler.step()
-        #     print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
-        # else:
-        #    scheduler.step(epoch_val_loss)
-        #    print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        #Apply warmup or ReduceLROnPlateau
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()
+            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+           scheduler.step(epoch_val_loss)
+           print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
 
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")

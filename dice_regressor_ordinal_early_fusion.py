@@ -1,5 +1,5 @@
 from collections import defaultdict
-
+from torch.optim.lr_scheduler import LambdaLR
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -285,6 +285,17 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
 
+    # Define warmup parameters
+    warmup_epochs = 5  # or warmup_steps if you're doing per-step
+
+    # Linear warmup lambda
+    def lr_lambda(current_epoch):
+        if current_epoch < warmup_epochs:
+            return float(current_epoch + 1) / warmup_epochs
+        return 1.0  # Once warmup is over, keep LR constant until ReduceLROnPlateau kicks in
+
+    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+
     # Early stopping variables
     #DOUBLE CHECK THIS
     best_val_loss = float('inf')
@@ -304,7 +315,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     best_kappa_cm = None
     best_kappa_epoch = -1
     for epoch in range(100):
-        print(f"Epoch {epoch + 1}/{100}")
+        print(f"Epoch {epoch + 1}/{85}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -429,6 +440,13 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             best_kappa_report = report
             best_kappa_epoch = epoch
         # Early stopping check
+
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()
+            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+            scheduler.step(epoch_val_loss)
+            print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
 
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
