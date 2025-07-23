@@ -13,10 +13,10 @@ df_final_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
 data20 ="/scratch/bmep/plalfken/Dice_scores_20epochs.csv"
 data5 = "/scratch/bmep/plalfken/Dice_scores_5epochs.csv"
 remove_ids = [
-    "DES_0010", "DES_0012", "DES_0035", "DES_0037", "DES_0046", "DES_0050",
-    "DES_0059", "DES_0062", "DES_0075", "DES_0102", "DES_0123", "DES_0142",
-    "DES_0189", "LIP_0013", "LIP_0020", "LIP_0022", "LIP_0027", "LIP_0046",
-    "LIP_0069", "LIP_0083", "LIP_0087", "LIP_0115"
+    "30EP_DES_0010", "30EP_DES_0012", "30EP_DES_0035", "30EP_DES_0037", "30EP_DES_0046", "30EP_DES_0050",
+    "30EP_DES_0059", "30EP_DES_0062", "30EP_DES_0075", "30EP_DES_0102", "30EP_DES_0123", "30EP_DES_0142",
+    "30EP_DES_0189", "30EP_LIP_0013", "30EP_LIP_0020", "30EP_LIP_0022", "30EP_LIP_0027", "30EP_LIP_0046",
+    "30EP_LIP_0069", "30EP_LIP_0083", "30EP_LIP_0087", "30EP_LIP_0115"
 ]
 df5 = pd.read_csv(data5)
 df20 = pd.read_csv(data20)
@@ -25,6 +25,7 @@ df_final = pd.read_csv(df_final_dir)
 
 
 # Remove them
+
 df_final = df_final[~df_final['case_id'].isin(remove_ids)]
 
 # Optional: Reset index after filtering
