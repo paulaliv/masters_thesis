@@ -261,10 +261,11 @@ def decode_predictions(logits):
 
     return thresholds
 def decode_predictions_argmin(logits):
-    probs = torch.sigmoid(logits)
-    # Append a final probability of 1 to make all samples valid
-    probs = torch.cat([probs, torch.ones(probs.size(0), 1, device=probs.device)], dim=1)
-    return (probs < 0.5).argmin(dim=1)
+    # Append a very negative value (like logit of prob=1) to prevent overflow
+    logits = torch.cat([logits, -torch.ones(logits.size(0), 1, device=logits.device) * 1e6], dim=1)
+    return (logits < 0).float().argmin(dim=1)
+
+
 
 def coral_loss_manual(logits, levels):
     """
