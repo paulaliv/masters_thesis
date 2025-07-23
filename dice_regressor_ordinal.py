@@ -260,6 +260,11 @@ def decode_predictions(logits):
         print(f"Predicted {i}: {(thresholds == i).sum().item()}")
 
     return thresholds
+def decode_predictions_argmin(logits):
+    probs = torch.sigmoid(logits)
+    # Append a final probability of 1 to make all samples valid
+    probs = torch.cat([probs, torch.ones(probs.size(0), 1, device=probs.device)], dim=1)
+    return (probs < 0.5).argmin(dim=1)
 
 def coral_loss_manual(logits, levels):
     """
@@ -348,8 +353,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
     # Optional: define class names for nicer output
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
-    for epoch in range(70):
-        print(f"Epoch {epoch + 1}/{80}")
+    for epoch in range(60):
+        print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -374,7 +379,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
+                decoded_preds = decode_predictions_argmin(preds)
                 correct += (decoded_preds == label).sum().item()
 
 
@@ -406,7 +411,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
+                    decoded_preds = decode_predictions_argmin(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
@@ -528,7 +533,7 @@ def main(data_dir, plot_dir, folds,df):
     # Train the model and retrieve losses + predictions
 
     metrics = ['confidence', 'entropy','mutual_info','epkl']
-    metrics = ['confidence', 'entropy']
+    metrics = ['confidence']
     for idx, metric in enumerate(metrics):
         start = time.time()
         train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
