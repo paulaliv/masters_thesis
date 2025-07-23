@@ -18,7 +18,7 @@ from sklearn.metrics import mean_absolute_error
 from torch.optim.lr_scheduler import LambdaLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
+import umap
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -87,6 +87,7 @@ class Light3DEncoder(nn.Module):
 class QAModel(nn.Module):
     def __init__(self,num_thresholds):
         super().__init__()
+
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
@@ -104,6 +105,11 @@ class QAModel(nn.Module):
 
         return self.fc(merged)
 
+    def extract_features(self, uncertainty):
+        x = self.encoder_unc(uncertainty)
+        return x.view(x.size(0), -1)
+
+
 def bin_dice_score(dice):
     bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
@@ -111,7 +117,7 @@ def bin_dice_score(dice):
 
 
 class QADataset(Dataset):
-    def __init__(self, case_ids, data_dir, df, uncertainty_metric, num_bins = 5,transform=None):
+    def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
@@ -119,7 +125,8 @@ class QADataset(Dataset):
         fold_paths: dict with fold folder paths containing Dice scores & case IDs
         """
         #self.fold = fold
-        self.num_bins = num_bins
+        self.want_features = want_features
+
         self.data_dir = data_dir
         self.df = df
         self.uncertainty_metric = uncertainty_metric
@@ -181,8 +188,10 @@ class QADataset(Dataset):
             image = data["image"]
             uncertainty_tensor = data["uncertainty"]
 
-
-        return image, uncertainty_tensor, label_tensor, subtype
+        if self.want_features:
+            return uncertainty_tensor, case_id
+        else:
+            return image, uncertainty_tensor, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
@@ -280,7 +289,7 @@ def coral_loss_manual(logits, levels):
     return loss.mean()
 
 
-def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_dir, device):
+def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device):
     print(f'Training with UMAP: {uncertainty_metric}')
     print(f"Training fold {fold} ...")
 
@@ -293,8 +302,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         data_dir=data_dir,
         df=df,
         uncertainty_metric=uncertainty_metric,
-        num_bins=num_bins,
         transform=train_transforms,
+        want_features=False,
     )
     val_dataset = QADataset(
         case_ids=val_case_ids,
@@ -302,6 +311,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         df=df,
         uncertainty_metric=uncertainty_metric,
         transform=val_transforms,
+        want_features=False,
     )
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
@@ -543,7 +553,6 @@ def main(data_dir, plot_dir, folds,df):
             df=df,
             splits=folds,
             uncertainty_metric=metric,
-            num_bins=5,
             plot_dir=plot_dir,
             device=device
         )
@@ -619,7 +628,100 @@ def main(data_dir, plot_dir, folds,df):
         #     plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
         #     plt.close()
 
+def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
+    print(f'feature shape {train.shape}')
 
+    reducer = umap.UMAP(
+        n_components=2,
+        n_neighbors=neighbours,
+        min_dist=0.1,
+        metric=m,
+        random_state=42
+    )
+    train_umap = reducer.fit_transform(train)  # (N, 2)
+    # Apply UMAP transform to validation data
+    # val_umap = reducer.transform(val)
+
+    # all_subtypes= np.concatenate([y_train, y_val])
+    unique_labels= sorted(set(y_train))
+
+    # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
+    markers = {'train': 'o', 'val': 's'}
+
+    idx_to_label = {
+        '5':'Model trained for 5 epochs',
+        '20':'Model trained for 20 epochs',
+        '30':'Model trained for 30 epochs',
+
+    }
+
+    cmap = plt.cm.tab20
+    color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_labels)}
+    # 7. scatter plot
+    plt.figure(figsize=(8, 6))
+    # for marker_type in ['train', 'val']:
+    for label in unique_labels:
+        idx = [i for i, lab in enumerate(y_train) if lab == label]
+        if not idx: continue
+        plt.scatter(
+            train_umap[idx, 0], train_umap[idx, 1],
+            s=25,
+            c=[color_lookup[label]] * len(idx),
+            label=f"{idx_to_label[label]} ",
+            alpha=0.8,
+        )
+
+    plt.xlabel("UMAP‑1")
+    plt.ylabel("UMAP‑2")
+    plt.title("Confidence Map Features")
+    plt.legend(fontsize=8, loc='best', markerscale=1)
+    plt.tight_layout()
+    image_loc = os.path.join(image_dir, name)
+    plt.savefig(image_loc, dpi=300)
+    plt.show()
+def visualize_features(data_dir, plot_dir, splits, df):
+    # Create datasets
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = QAModel(num_thresholds=3).to(device)
+    uncertainty_metric = "confidence"
+    train_case_ids = splits[0]["train"]
+    train_dataset = QADataset(
+        case_ids=train_case_ids,
+        data_dir=data_dir,
+        df=df,
+        uncertainty_metric=uncertainty_metric,
+        transform=train_transforms,
+        want_features=True
+    )
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True,
+    collate_fn=pad_collate_fn)
+
+    all_features_train = []
+    all_labels_train = []
+
+    with torch.no_grad():
+        for uncertainty, case_id in train_loader:
+            uncertainty=  uncertainty.to(device)
+            features = model.extract_features(uncertainty).cpu().numpy() # (B, 512)
+            all_features_train.append(features)
+            if "20EP" in case_id:
+                label = "20"
+            elif "30EP" in case_id:
+                label = "30"
+            else:
+                label = "5"
+            all_labels_train.append(label)
+
+
+
+    X_train = np.concatenate(all_features_train, axis=0)
+    y_train = np.array(all_labels_train)
+
+
+    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='QA_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train, y_train, neighbours=10, m='cosine', name='QA_UMAP_cosine_10n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='QA_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
 
 
 
@@ -634,4 +736,5 @@ if __name__ == '__main__':
     preprocessed= sys.argv[1]
     plot_dir = sys.argv[2]
 
-    main(preprocessed, plot_dir, splits, df)
+    #main(preprocessed, plot_dir, splits, df)
+    visualize_features(preprocessed, plot_dir, splits, df)
