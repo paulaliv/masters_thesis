@@ -266,7 +266,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=20, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
@@ -274,7 +274,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
@@ -441,12 +441,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             best_kappa_epoch = epoch
         # Early stopping check
 
-        if epoch < warmup_epochs:
-            warmup_scheduler.step()
-            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
-        else:
-            scheduler.step(epoch_val_loss)
-            print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
 
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
@@ -499,7 +493,8 @@ def main(data_dir, plot_dir, folds,df):
     # for fold in range(5):
     # Train the model and retrieve losses + predictions
 
-    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    metrics = ['confidence', 'entropy']
     for idx, metric in enumerate(metrics):
         print(f'Training with metric {metric}')
         start = time.time()

@@ -300,7 +300,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=20, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
@@ -308,7 +308,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4)
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
@@ -433,14 +433,6 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric,plot_
         #for param_group in optimizer.param_groups:
             #print(f"Current LR: {param_group['lr']}")
 
-        #Apply warmup or ReduceLROnPlateau
-        if epoch < warmup_epochs:
-            warmup_scheduler.step()
-            print(f"[Warmup] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
-        else:
-           scheduler.step(epoch_val_loss)
-           print(f"[Plateau] Epoch {epoch + 1}: LR = {optimizer.param_groups[0]['lr']:.6f}")
-
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
@@ -536,6 +528,7 @@ def main(data_dir, plot_dir, folds,df):
     # Train the model and retrieve losses + predictions
 
     metrics = ['confidence', 'entropy','mutual_info','epkl']
+    metrics = ['confidence', 'entropy']
     for idx, metric in enumerate(metrics):
         start = time.time()
         train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
