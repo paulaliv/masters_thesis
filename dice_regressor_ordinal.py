@@ -698,17 +698,22 @@ def visualize_features(data_dir, plot_dir, splits, df):
     all_labels_train = []
 
     with torch.no_grad():
-        for uncertainty, case_id in train_loader:
-            uncertainty=  uncertainty.to(device)
-            features = model.extract_features(uncertainty).cpu().numpy() # (B, 512)
+        for uncertainty, case_ids in train_loader:
+            uncertainty = uncertainty.to(device)
+            features = model.extract_features(uncertainty).cpu().numpy()  # (B, 512)
             all_features_train.append(features)
-            if "20EP" in case_id:
-                label = "20"
-            elif "30EP" in case_id:
-                label = "30"
-            else:
-                label = "5"
-            all_labels_train.append(label)
+
+            batch_labels = []
+            for cid in case_ids:
+                if "20EP" in cid:
+                    label = "20"
+                elif "30EP" in cid:
+                    label = "30"
+                else:
+                    label = "5"
+                batch_labels.append(label)
+
+            all_labels_train.extend(batch_labels)
 
 
 
