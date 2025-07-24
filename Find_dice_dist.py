@@ -57,6 +57,9 @@ df_final_poor = df_final[df_final['dice_category'] == 'Poor']
 df_poor = df30[df30['dice_category'] == 'Poor']
 
 remove_poor = df_final_poor[~df_final_poor['case_id'].isin(df_poor['case_id'])]
+remove_similar = ['DES_0014','DES_0199','DES_0131','LIP_0040','30EP_DES_0128','DES_0013','LIP_0050','DES_0200']
+
+df_final = df_final[~df_final['case_id'].isin(remove_similar)]
 
 df_final = df_final[~df_final['case_id'].isin(remove_poor['case_id'])]
 
