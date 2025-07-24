@@ -787,5 +787,5 @@ if __name__ == '__main__':
     preprocessed= sys.argv[1]
     plot_dir = sys.argv[2]
 
-    #main(preprocessed, plot_dir, splits, df)
-    visualize_features(preprocessed, plot_dir, splits, df)
+    main(preprocessed, plot_dir, splits, df)
+    #visualize_features(preprocessed, plot_dir, splits, df)
