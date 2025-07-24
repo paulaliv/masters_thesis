@@ -717,12 +717,12 @@ def visualize_features(data_dir, plot_dir, splits, df):
             batch_labels = []
             for cid in case_ids:
                 if "20EP" in cid:
-                    model = "20"
+                    model_ep = "20"
                 elif "30EP" in cid:
-                    model = "30"
+                    model_ep = "30"
                 else:
-                    model = "5"
-                batch_labels.append(model)
+                    model_ep = "5"
+                batch_labels.append(model_ep)
 
             all_model_names.extend(batch_labels)
             all_labels_train.extend(labels)
