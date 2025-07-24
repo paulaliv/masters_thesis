@@ -9,7 +9,8 @@ import numpy as np
 import os
 import torch.nn as nn
 import torch
-
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 import torch.nn.functional as F
 import time
 import sys
@@ -675,14 +676,29 @@ def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
                 s=25,
                 c=[color_lookup[label]] * len(idx),
                 marker=markers[marker_type],
-                label=f"{bin_to_score[label]} ({idx_to_label[marker_type]})",
                 alpha=0.8
             )
+
+    # Create separate legends for color (dice bin) and shape (model type)
+    color_handles = [
+        mpatches.Patch(color=color_lookup[lab], label=bin_to_score[lab])
+        for lab in unique_labels
+    ]
+
+    marker_handles = [
+        mlines.Line2D([], [], color='black', marker=markers[key], linestyle='None',
+                      markersize=6, label=idx_to_label[key])
+        for key in markers
+    ]
+
+    # Plot legends
+    legend1 = plt.legend(handles=color_handles, title='Dice Quality Bin', loc='upper right')
+    plt.gca().add_artist(legend1)
+    plt.legend(handles=marker_handles, title='Model Type', loc='lower right')
 
     plt.xlabel("UMAP‑1")
     plt.ylabel("UMAP‑2")
     plt.title("Confidence Map Features")
-    plt.legend(fontsize=8, loc='best', markerscale=1)
     plt.tight_layout()
     image_loc = os.path.join(image_dir, name)
     plt.savefig(image_loc, dpi=300)
