@@ -189,7 +189,7 @@ class QADataset(Dataset):
             uncertainty_tensor = data["uncertainty"]
 
         if self.want_features:
-            return uncertainty_tensor, case_id
+            return uncertainty_tensor, case_id, label_tensor
         else:
             return image, uncertainty_tensor, label_tensor, subtype
 
@@ -626,7 +626,7 @@ def main(data_dir, plot_dir, folds,df):
         #     plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
         #     plt.close()
 
-def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
+def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
     print(f'feature shape {train.shape}')
 
     reducer = umap.UMAP(
@@ -644,7 +644,7 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
     unique_labels= sorted(set(y_train))
 
     # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
-    markers = {'train': 'o', 'val': 's'}
+    markers = {'5': 'o', '20': 's', '30':'v'}
 
     idx_to_label = {
         '5':'Model trained for 5 epochs',
@@ -652,22 +652,32 @@ def plot_UMAP(train, y_train, neighbours, m, name, image_dir):
         '30':'Model trained for 30 epochs',
 
     }
+    #class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+    bin_to_score = {
+        0: "Fail (0-0.1)",
+        1: "Poor (0.1-0.5)",
+        2: "Moderate(0.5-0.7)",
+        3: "Good (>0.7)"
+
+    }
 
     cmap = plt.cm.tab20
     color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_labels)}
     # 7. scatter plot
     plt.figure(figsize=(8, 6))
-    # for marker_type in ['train', 'val']:
-    for label in unique_labels:
-        idx = [i for i, lab in enumerate(y_train) if lab == label]
-        if not idx: continue
-        plt.scatter(
-            train_umap[idx, 0], train_umap[idx, 1],
-            s=25,
-            c=[color_lookup[label]] * len(idx),
-            label=f"{idx_to_label[label]} ",
-            alpha=0.8,
-        )
+    for marker_type in ['5', '20', '30']:
+        for label in unique_labels:
+            idx = [i for i in range(len(y_train)) if y_train[i] == label and model_array[i] == marker_type]
+            if not idx:
+                continue
+            plt.scatter(
+                train_umap[idx, 0], train_umap[idx, 1],
+                s=25,
+                c=[color_lookup[label]] * len(idx),
+                marker=markers[marker_type],
+                label=f"{bin_to_score[label]} ({idx_to_label[marker_type]})",
+                alpha=0.8
+            )
 
     plt.xlabel("UMAP‑1")
     plt.ylabel("UMAP‑2")
@@ -696,9 +706,10 @@ def visualize_features(data_dir, plot_dir, splits, df):
 
     all_features_train = []
     all_labels_train = []
+    all_model_names = []
 
     with torch.no_grad():
-        for uncertainty, case_ids in train_loader:
+        for uncertainty, case_ids,labels in train_loader:
             uncertainty = uncertainty.to(device)
             features = model.extract_features(uncertainty).cpu().numpy()  # (B, 512)
             all_features_train.append(features)
@@ -706,23 +717,25 @@ def visualize_features(data_dir, plot_dir, splits, df):
             batch_labels = []
             for cid in case_ids:
                 if "20EP" in cid:
-                    label = "20"
+                    model = "20"
                 elif "30EP" in cid:
-                    label = "30"
+                    model = "30"
                 else:
-                    label = "5"
-                batch_labels.append(label)
+                    model = "5"
+                batch_labels.append(model)
 
-            all_labels_train.extend(batch_labels)
+            all_model_names.extend(batch_labels)
+            all_labels_train.extend(labels)
 
 
 
     X_train = np.concatenate(all_features_train, axis=0)
+    y_train = np.array(all_labels_train)
     from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 
     # X_train: (N, 512)
     distance_matrix = cosine_distances(X_train)  # or use euclidean_distances(X_train)
-    y_train = np.array(all_labels_train)
+    model_array= np.array(all_model_names)
 
     # Ignore diagonal
     np.fill_diagonal(distance_matrix, np.inf)
@@ -741,9 +754,9 @@ def visualize_features(data_dir, plot_dir, splits, df):
         print(
             f"Pair: {train_case_ids[i1]} - {train_case_ids[i2]},  Distance: {dist:.4f}")
 
-    plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='QA_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_train, y_train, neighbours=10, m='cosine', name='QA_UMAP_cosine_10n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_train, y_train, neighbours=15, m='cosine', name='QA_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train, y_train, model_array, neighbours=5, m='cosine', name='QA_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train, y_train,model_array, neighbours=10, m='cosine', name='QA_UMAP_cosine_10n_fold0.png', image_dir=plot_dir)
+    plot_UMAP(X_train, y_train, model_array,neighbours=15, m='cosine', name='QA_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
 
 
 
