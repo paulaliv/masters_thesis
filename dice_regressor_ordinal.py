@@ -218,36 +218,36 @@ def pad_tensor(t, target_shape):
     t = F.pad(t, pad)  # Now shape is (1, C, D', H', W')
     return t.squeeze(0)  # Return (C, D', H', W')
 
-def pad_collate_fn(batch):
-    max_d = max(item[0].shape[1] for item in batch)
-    max_h = max(item[0].shape[2] for item in batch)
-    max_w = max(item[0].shape[3] for item in batch)
-
-    images = []
-    uncertainties = []
-    labels = []
-    subtypes = []
-
-    for image, uncertainty, label, subtype in batch:
-        pad_dims = (
-            0, max_w - image.shape[3],
-            0, max_h - image.shape[2],
-            0, max_d - image.shape[1]
-        )
-        image = torch.nn.functional.pad(image, pad_dims)
-        uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
-
-        images.append(image)
-        uncertainties.append(uncertainty)
-        labels.append(label)
-        subtypes.append(subtype)
-
-    images_batch = torch.stack(images)
-    uncertainties_batch = torch.stack(uncertainties)
-    labels_batch = torch.stack(labels)  # works even if labels are scalar tensors
-    # case_ids usually strings, so keep as list
-
-    return images_batch, uncertainties_batch, labels_batch, subtypes
+# def pad_collate_fn(batch):
+#     max_d = max(item[0].shape[1] for item in batch)
+#     max_h = max(item[0].shape[2] for item in batch)
+#     max_w = max(item[0].shape[3] for item in batch)
+#
+#     images = []
+#     uncertainties = []
+#     labels = []
+#     subtypes = []
+#
+#     for image, uncertainty, label, subtype in batch:
+#         pad_dims = (
+#             0, max_w - image.shape[3],
+#             0, max_h - image.shape[2],
+#             0, max_d - image.shape[1]
+#         )
+#         image = torch.nn.functional.pad(image, pad_dims)
+#         uncertainty = torch.nn.functional.pad(uncertainty, pad_dims)
+#
+#         images.append(image)
+#         uncertainties.append(uncertainty)
+#         labels.append(label)
+#         subtypes.append(subtype)
+#
+#     images_batch = torch.stack(images)
+#     uncertainties_batch = torch.stack(uncertainties)
+#     labels_batch = torch.stack(labels)  # works even if labels are scalar tensors
+#     # case_ids usually strings, so keep as list
+#
+#     return images_batch, uncertainties_batch, labels_batch, subtypes
 
 def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
     batch_size = labels.shape[0]
@@ -314,10 +314,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
-    collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True,
-    collate_fn=pad_collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
 
 
 
@@ -694,8 +692,7 @@ def visualize_features(data_dir, plot_dir, splits, df):
         transform=train_transforms,
         want_features=True
     )
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True,
-    collate_fn=pad_collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True)
 
     all_features_train = []
     all_labels_train = []
