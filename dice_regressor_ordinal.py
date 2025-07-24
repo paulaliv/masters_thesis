@@ -718,8 +718,28 @@ def visualize_features(data_dir, plot_dir, splits, df):
 
 
     X_train = np.concatenate(all_features_train, axis=0)
+    from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+
+    # X_train: (N, 512)
+    distance_matrix = cosine_distances(X_train)  # or use euclidean_distances(X_train)
     y_train = np.array(all_labels_train)
 
+    # Ignore diagonal
+    np.fill_diagonal(distance_matrix, np.inf)
+
+    # Get top-k similar pairs (e.g., top-5 most similar pairs)
+    k = 5
+    similar_pairs = []
+    for i in range(len(distance_matrix)):
+        closest_indices = np.argsort(distance_matrix[i])[:k]
+        for j in closest_indices:
+            similar_pairs.append((i, j, distance_matrix[i][j]))
+
+    # Sort by distance
+    similar_pairs.sort(key=lambda x: x[2])
+    for i1, i2, dist in similar_pairs[:30]:
+        print(
+            f"Pair: {train_case_ids[i1]} - {train_case_ids[i2]},  Distance: {dist:.4f}")
 
     plot_UMAP(X_train, y_train, neighbours=5, m='cosine', name='QA_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
     plot_UMAP(X_train, y_train, neighbours=10, m='cosine', name='QA_UMAP_cosine_10n_fold0.png', image_dir=plot_dir)
