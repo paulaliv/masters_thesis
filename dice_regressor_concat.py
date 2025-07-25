@@ -129,14 +129,9 @@ class QADataset(Dataset):
         self.data_dir = data_dir
         self.df = df
         self.uncertainty_metric = uncertainty_metric
-
-
-        # Load Dice scores & case IDs from a CSV or JSON
-        # Example CSV: case_id,dice
-
-        # List of case_ids
         self.case_ids = case_ids
-        self.df = self.df[self.df['case_id'].isin(self.case_ids)]
+        self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
+
 
         # Now extract dice scores and subtypes aligned with self.case_ids
         self.dice_scores = self.df['dice_5'].tolist()

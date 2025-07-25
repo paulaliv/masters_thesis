@@ -123,7 +123,7 @@ class QADataset(Dataset):
 
         # List of case_ids
         self.case_ids = case_ids
-        self.df = self.df[self.df['case_id'].isin(self.case_ids)]
+        self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
 
         # Now extract dice scores and subtypes aligned with self.case_ids
         self.dice_scores = self.df['dice_5'].tolist()
