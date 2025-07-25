@@ -567,8 +567,6 @@ class ROIPreprocessor:
 
             cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
 
-            self.visualize_umap_and_mask(cropped_umap, cropped_mask_1, cropped_img)
-
 
 
 
