@@ -316,7 +316,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
@@ -437,8 +437,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
-        #for param_group in optimizer.param_groups:
-            #print(f"Current LR: {param_group['lr']}")
+        for param_group in optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
 
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
@@ -773,9 +773,9 @@ def visualize_features(data_dir, plot_dir, splits, df):
 
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits20.json', 'r') as f:
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
         splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv"
+    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
