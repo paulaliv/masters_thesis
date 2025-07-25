@@ -339,30 +339,32 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
-    # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
 
-
-    # Early stopping variables
-    #DOUBLE CHECK THIS
+    #Early stopping variables
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
 
+    #Initiate Scaler
     scaler = GradScaler()
 
     train_losses = []
     val_losses = []
+
     f1_history = defaultdict(list)
+
+    #Kappa variables
     best_kappa = -1.0
     best_kappa_cm = None
     best_kappa_epoch = -1
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
 
-    # Optional: define class names for nicer output
+
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+
     for epoch in range(60):
         print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
@@ -398,8 +400,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         print(f"Train Loss: {epoch_train_loss:.4f}, Train Acc: {epoch_train_acc:.4f}")
 
         train_losses.append(epoch_train_loss)
-
-
 
         # Validation step
         model.eval()
@@ -442,9 +442,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
-
-
-        scheduler.step(epoch_val_loss)
         #for param_group in optimizer.param_groups:
             #print(f"Current LR: {param_group['lr']}")
 
