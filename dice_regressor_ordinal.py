@@ -782,7 +782,7 @@ if __name__ == '__main__':
 
     with open('/gpfs/home6/palfken/masters_thesis/Final_splits20.json', 'r') as f:
         splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
+    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv"
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
