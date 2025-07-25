@@ -92,6 +92,8 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
+        self.norm = nn.LayerNorm(128)
+
         self.fc = nn.Sequential(
             nn.Flatten(),
             nn.Linear(128, 64),
@@ -103,7 +105,7 @@ class QAModel(nn.Module):
         x1 = self.encoder_img(image)
         x2 = self.encoder_unc(uncertainty)
         merged = torch.cat((x1, x2), dim=1) #[B,128]
-
+        merged = self.norm(merged)
         return self.fc(merged)
 
     def extract_features(self, uncertainty):
@@ -340,6 +342,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             with autocast(device_type='cuda'):
                 print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
+                print(f'model output shape : {preds.shape}')
                 targets = encode_ordinal_targets(label).to(preds.device)
                 loss = criterion(preds, targets)
 
