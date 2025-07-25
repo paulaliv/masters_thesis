@@ -112,10 +112,8 @@ class QAModel(nn.Module):
 
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.5, 0.7]  # 6 bins
-    label = np.digitize(dice, bin_edges, right=False) - 1
-    return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
-
+    bin_edges = [0.1, 0.5, 0.7]  # 4 bins
+    return np.digitize(dice, bin_edges, right=False)
 
 class QADataset(Dataset):
     def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False):
