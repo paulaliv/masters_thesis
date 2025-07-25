@@ -262,19 +262,11 @@ def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
 #or logit based decoding
 
 def decode_predictions(logits):
+    print("Logits mean:", logits.mean().item())
+    print("Logits min/max:", logits.min().item(), logits.max().item())
     #probs = torch.sigmoid(logits)
 
-    #return (probs > 0.5).sum(dim=1)
-    thresholds = (logits > 0).sum(dim=1)
-    for i in range(5):
-        print(f"Predicted {i}: {(thresholds == i).sum().item()}")
-
-    return thresholds
-def decode_predictions_argmin(logits):
-    # Append a very negative value (like logit of prob=1) to prevent overflow
-    logits = torch.cat([logits, -torch.ones(logits.size(0), 1, device=logits.device) * 1e6], dim=1)
-    return (logits < 0).float().argmin(dim=1)
-
+    return (logits > 0).sum(dim=1)
 
 
 def coral_loss_manual(logits, levels):
@@ -391,7 +383,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions_argmin(preds)
+                decoded_preds = decode_predictions(preds)
                 correct += (decoded_preds == label).sum().item()
 
 
@@ -408,6 +400,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         val_labels_list.clear()
         val_subtypes_list.clear()
 
+        print(f'Train label distribution: {label_counts}')
+
 
         with torch.no_grad():
             for image, uncertainty, label, subtype in val_loader:
@@ -421,7 +415,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions_argmin(preds)
+                    decoded_preds = decode_predictions(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
@@ -475,6 +469,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             zero_division=0
         )
 
+        scheduler.step(epoch_val_loss)
         for class_name in class_names:
             f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
