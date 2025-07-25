@@ -43,50 +43,55 @@ print(df_final.columns)
 dice_bins = [0, 0.1, 0.5, 0.7, 1]
 dice_labels = ['Fail', 'Poor', 'Moderate', 'Good']
 
+cases_30 = df30[df30['case_id'].str.startswith('30EP_')]
+
+df30 = df30[~df30['case_id'].isin(cases_30['case_id'])]
+print(f"Number of cases in df30: {len(df30)}")
+
 # Add dice_category to the full df too:
 df30['dice_category'] = pd.cut(
     df30['dice_5'], bins=dice_bins, labels=dice_labels, include_lowest=True
 )
-
-# Add dice_category to the full df too:
-df_final['dice_category'] = pd.cut(
-    df_final['dice_5'], bins=dice_bins, labels=dice_labels, include_lowest=True
-)
-
-df_final_poor = df_final[df_final['dice_category'] == 'Poor']
-df_poor = df30[df30['dice_category'] == 'Poor']
-
-remove_poor = df_final_poor[~df_final_poor['case_id'].isin(df_poor['case_id'])]
-remove_similar = ['DES_0014','DES_0199','DES_0131','LIP_0040','30EP_DES_0128','DES_0013','LIP_0050','DES_0200']
-
-df_final = df_final[~df_final['case_id'].isin(remove_similar)]
-
-df_final = df_final[~df_final['case_id'].isin(remove_poor['case_id'])]
-
-
-# Your plot
-sns.kdeplot(df_final['dice_5'], fill=False, alpha=0.5, color='black')
-
-# Add vertical lines for bin edges
-bin_edges = [0.1, 0.5, 0.7]
-for edge in bin_edges:
-    plt.axvline(edge, color='black', linestyle='--', alpha=0.8)
-
-# Add colored background spans for bins
-plt.axvspan(0.0, 0.1, color='red', alpha=0.2, label='Fail (0–0.1)')
-plt.axvspan(0.1, 0.5, color='salmon', alpha=0.2, label='Poor (0.1–0.5)')
-plt.axvspan(0.5, 0.7, color='orange', alpha=0.2, label='Moderate (0.5–0.7)')
-plt.axvspan(0.7, 1.0, color='yellowgreen', alpha=0.2, label='Good (>0.7)')
-
-# Labels and legend
-plt.xlabel('Dice Score')
-plt.ylabel('Density')
-plt.title('Merged Dice Score Distribution from all Models with Bins')
-plt.legend()
-plt.xlim(0, 1.0)  # Optional: constrain x-axis
-
-plt.tight_layout()
-plt.show()
+#
+# # Add dice_category to the full df too:
+# df_final['dice_category'] = pd.cut(
+#     df_final['dice_5'], bins=dice_bins, labels=dice_labels, include_lowest=True
+# )
+#
+# df_final_poor = df_final[df_final['dice_category'] == 'Poor']
+# df_poor = df30[df30['dice_category'] == 'Poor']
+#
+# remove_poor = df_final_poor[~df_final_poor['case_id'].isin(df_poor['case_id'])]
+# remove_similar = ['DES_0014','DES_0199','DES_0131','LIP_0040','30EP_DES_0128','DES_0013','LIP_0050','DES_0200']
+#
+# df_final = df_final[~df_final['case_id'].isin(remove_similar)]
+#
+# df_final = df_final[~df_final['case_id'].isin(remove_poor['case_id'])]
+#
+#
+# # Your plot
+# sns.kdeplot(df_final['dice_5'], fill=False, alpha=0.5, color='black')
+#
+# # Add vertical lines for bin edges
+# bin_edges = [0.1, 0.5, 0.7]
+# for edge in bin_edges:
+#     plt.axvline(edge, color='black', linestyle='--', alpha=0.8)
+#
+# # Add colored background spans for bins
+# plt.axvspan(0.0, 0.1, color='red', alpha=0.2, label='Fail (0–0.1)')
+# plt.axvspan(0.1, 0.5, color='salmon', alpha=0.2, label='Poor (0.1–0.5)')
+# plt.axvspan(0.5, 0.7, color='orange', alpha=0.2, label='Moderate (0.5–0.7)')
+# plt.axvspan(0.7, 1.0, color='yellowgreen', alpha=0.2, label='Good (>0.7)')
+#
+# # Labels and legend
+# plt.xlabel('Dice Score')
+# plt.ylabel('Density')
+# plt.title('Merged Dice Score Distribution from all Models with Bins')
+# plt.legend()
+# plt.xlim(0, 1.0)  # Optional: constrain x-axis
+#
+# plt.tight_layout()
+# plt.show()
 
 
 print(df30['dice_category'].value_counts())
@@ -94,7 +99,7 @@ print(df30['dice_category'].value_counts())
 print(df_final['dice_category'].value_counts())
 
 
-df_final.to_csv(df_final_dir,index=False)
+#df_final.to_csv(df_final_dir,index=False)
 
 
 def base_case_id(x):
@@ -104,7 +109,7 @@ def base_case_id(x):
         return x[5:]
     return x
 
-df_final['base_case_id'] = df_final['case_id'].apply(base_case_id)
+df30['base_case_id'] = df30['case_id'].apply(base_case_id)
 
 # Now prepare stratification labels on unique base cases:
 # We want 1 label per base case for stratified splitting
@@ -113,7 +118,7 @@ df_final['base_case_id'] = df_final['case_id'].apply(base_case_id)
 
 
 # Get one row per base_case_id (you can take the first occurrence)
-base_cases = df_final.drop_duplicates(subset=['base_case_id']).copy()
+base_cases = df30.drop_duplicates(subset=['base_case_id']).copy()
 
 print(base_cases.columns)
 
@@ -139,8 +144,8 @@ for train_idx, val_idx in skf.split(base_case_ids, stratify_labels):
     val_base = base_case_ids[val_idx]
 
     # Now assign ALL cases with these base_case_ids to train/val
-    train_cases = df_final[df_final['base_case_id'].isin(train_base)]['case_id'].tolist()
-    val_cases = df_final[df_final['base_case_id'].isin(val_base)]['case_id'].tolist()
+    train_cases = df30[df30['base_case_id'].isin(train_base)]['case_id'].tolist()
+    val_cases = df30[df30['base_case_id'].isin(val_base)]['case_id'].tolist()
 
     print(f"Train cases count: {len(train_cases)}")
     print(f"Val cases count: {len(val_cases)}")
@@ -149,22 +154,22 @@ for train_idx, val_idx in skf.split(base_case_ids, stratify_labels):
 
 
 for i, split in enumerate(splits):
-    train_idx = df_final['case_id'].isin(split['train'])
-    val_idx = df_final['case_id'].isin(split['val'])
+    train_idx = df30['case_id'].isin(split['train'])
+    val_idx = df30['case_id'].isin(split['val'])
 
     print(f"--- Split {i + 1} ---")
     print("Training set tumor_class distribution:")
-    print(df_final.loc[train_idx, 'tumor_class'].value_counts())  # normalized freq
+    print(df30.loc[train_idx, 'tumor_class'].value_counts())  # normalized freq
     print("Training set dice_category distribution:")
-    print(df_final.loc[train_idx, 'dice_category'].value_counts())
+    print(df30.loc[train_idx, 'dice_category'].value_counts())
 
     print("\nValidation set tumor_class distribution:")
-    print(df_final.loc[val_idx, 'tumor_class'].value_counts())
+    print(df30.loc[val_idx, 'tumor_class'].value_counts())
     print("Validation set dice_category distribution:")
-    print(df_final.loc[val_idx, 'dice_category'].value_counts())
+    print(df30.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
 
-output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits.json'
+output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits20.json'
 output_dir = os.path.dirname(output_path)
 
 # Create the directory if it doesn't exist
