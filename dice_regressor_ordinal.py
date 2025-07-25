@@ -112,7 +112,7 @@ class QAModel(nn.Module):
 
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.5, 0.7, 1.0]  # 6 bins
+    bin_edges = [0.0, 0.1, 0.5, 0.7]  # 6 bins
     label = np.digitize(dice, bin_edges, right=False) - 1
     return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
 
