@@ -342,8 +342,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             with autocast(device_type='cuda'):
                 print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                print(f'model output shape : {preds.shape}')
+                print(f'model Output Shape : {preds.shape}')
                 targets = encode_ordinal_targets(label).to(preds.device)
+                print(f'Tagets shape: {targets.shape}')
                 loss = criterion(preds, targets)
 
 
@@ -356,6 +357,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
             with torch.no_grad():
                 decoded_preds = decode_predictions(preds)
+
                 correct += (decoded_preds == label).sum().item()
 
 
