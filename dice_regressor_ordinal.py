@@ -328,8 +328,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
-    for epoch in range(50):
-        print(f"Epoch {epoch + 1}/{50}")
+    for epoch in range(80):
+        print(f"Epoch {epoch + 1}/{8s0}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
