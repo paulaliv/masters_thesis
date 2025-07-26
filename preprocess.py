@@ -617,7 +617,7 @@ def main():
     predicted_mask_folder = "/gpfs/home6/palfken/output"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/30QA_FINAL/"
+    output_folder_data = "/gpfs/home6/palfken/QA_data_Tr_final/"
     output_folder_visuals = "/gpfs/home6/palfken/Umaps_visuals/"
 
     os.makedirs(output_folder_data, exist_ok=True)
