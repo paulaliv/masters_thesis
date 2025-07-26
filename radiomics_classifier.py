@@ -9,6 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 
@@ -54,10 +55,19 @@ csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv")
 X = csv_file.drop(columns=['case_id', 'tumor_class'])
 
 y = csv_file['tumor_class']
+# Encode labels if they're not numeric
+if y.dtype == 'object':
+    le = LabelEncoder()
+    y = le.fit_transform(y)
 
+preprocessing = Pipeline([
+    ('var_thresh', VarianceThreshold(threshold=0.01)),
+    ('scaler', StandardScaler())
+])
 
+# Apply preprocessing
+X_processed = preprocessing.fit_transform(X)
 
-X_processed = preprocess_features(X)
 models = get_models()
 
 for name, model in models.items():
