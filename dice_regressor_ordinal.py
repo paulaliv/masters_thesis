@@ -419,7 +419,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=18, shuffle=True,pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
 
 
