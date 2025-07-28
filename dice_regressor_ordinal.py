@@ -286,7 +286,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=2e-4)
+    optimizer = optim.Adam(model.parameters(), lr=5e-4)
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
