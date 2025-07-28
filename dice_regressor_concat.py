@@ -111,13 +111,13 @@ class QAModel(nn.Module):
         return self.fc(merged)
 
 def bin_dice_score(dice):
-    bin_edges = [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]  # 6 bins
-    label = np.digitize(dice, bin_edges, right=False) - 1
-    return min(label, len(bin_edges) - 2)  # ensures label is in [0, 5]
+    bin_edges = [0.1, 0.5, 0.7]  # 4 bins
+    return np.digitize(dice, bin_edges, right=False)
+
 
 
 class QADataset(Dataset):
-    def __init__(self, case_ids, data_dir, df, uncertainty_metric, num_bins = 5,transform=None):
+    def __init__(self, case_ids, data_dir, df, uncertainty_metric, num_bins = 4,transform=None):
         """
         fold: str, e.g. 'fold_0'
         preprocessed_dir: base preprocessed path with .npz images
@@ -327,7 +327,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_classes=5).to(device)
+    model = QAModel(num_classes=4).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
@@ -338,7 +338,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     # }
 
     # Step 1: Define class counts
-    class_counts = torch.tensor([66, 22, 25, 27, 7], dtype=torch.float)
+    class_counts = torch.tensor([49, 59, 43, 59], dtype=torch.float)
 
     # Step 2: Inverse frequency
     weights = 1.0 / torch.sqrt(class_counts)
@@ -442,7 +442,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         val_labels_np = np.array(val_labels_list)
 
         # Optional: define class names for nicer output
-        class_names = ["Fail (0-0.1)", "Poor (0.1-0.3)", "Moderate(0.3-0.5)", "Good (0.5-0.7)", "Very Good (>0.7)"]
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
         print("Validation classification report:\n", report)
@@ -561,9 +561,9 @@ def main(data_dir, plot_dir, folds,df):
 
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits20.json', 'r') as f:
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
         splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist.csv"
+    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
