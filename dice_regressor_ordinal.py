@@ -60,66 +60,66 @@ val_transforms = Compose([
 ])
 
 
-'''ARCHITECTURE OF THE INSPO PAPER'''
-class Light3DEncoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv3d(1, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool3d(2),
-
-            nn.Conv3d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool3d(2),
-
-            nn.Conv3d(64, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool3d(2),
-
-            nn.Conv3d(32, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool3d(2),
-
-            nn.Conv3d(32, 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool3d(1),
-        )
-
-    def forward(self, x):
-        x = self.encoder(x)
-        return x.view(x.size(0), -1)  # Flatten to [B, 16]
-
-class QAModel(nn.Module):
-    def __init__(self,num_thresholds):
-        super().__init__()
-
-        self.encoder_img = Light3DEncoder()
-        self.encoder_unc= Light3DEncoder()
-        self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(32)
-
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(32, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_thresholds)  # ordinal logits
-        )
-
-
-    def forward(self, image, uncertainty):
-        x1 = self.encoder_img(image)
-        x2 = self.encoder_unc(uncertainty)
-        merged = torch.cat((x1, x2), dim=1) #[B,128]
-        merged = self.norm(merged)
-        return self.fc(merged)
-
-    def extract_features(self, uncertainty):
-        x = self.encoder_unc(uncertainty)
-        return x.view(x.size(0), -1)
-
+# '''ARCHITECTURE OF THE INSPO PAPER'''
+# class Light3DEncoder(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Conv3d(1, 64, kernel_size=3, padding=1),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),
+#
+#             nn.Conv3d(64, 64, kernel_size=3, padding=1),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),
+#
+#             nn.Conv3d(64, 32, kernel_size=3, padding=1),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),
+#
+#             nn.Conv3d(32, 32, kernel_size=3, padding=1),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),
+#
+#             nn.Conv3d(32, 16, kernel_size=3, padding=1),
+#             nn.ReLU(),
+#             nn.AdaptiveAvgPool3d(1),
+#         )
+#
+#     def forward(self, x):
+#         x = self.encoder(x)
+#         return x.view(x.size(0), -1)  # Flatten to [B, 16]
+#
+# class QAModel(nn.Module):
+#     def __init__(self,num_thresholds):
+#         super().__init__()
+#
+#         self.encoder_img = Light3DEncoder()
+#         self.encoder_unc= Light3DEncoder()
+#         self.pool = nn.AdaptiveAvgPool3d(1)
+#         self.norm = nn.LayerNorm(32)
+#
+#         self.fc = nn.Sequential(
+#             nn.Flatten(),
+#             nn.Linear(32, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, num_thresholds)  # ordinal logits
+#         )
+#
+#
+#     def forward(self, image, uncertainty):
+#         x1 = self.encoder_img(image)
+#         x2 = self.encoder_unc(uncertainty)
+#         merged = torch.cat((x1, x2), dim=1) #[B,128]
+#         merged = self.norm(merged)
+#         return self.fc(merged)
+#
+#     def extract_features(self, uncertainty):
+#         x = self.encoder_unc(uncertainty)
+#         return x.view(x.size(0), -1)
+#
 
 
 '''PREVIOUS ARCHITECTURE'''
@@ -174,62 +174,63 @@ class QAModel(nn.Module):
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
 
-# class Light3DEncoder(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.encoder = nn.Sequential(
-#             nn.Conv3d(1, 16, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(16),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),  # halves each dimension
-#
-#             nn.Conv3d(16, 32, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(32),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(32, 64, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(64),
-#             nn.ReLU(),
-#             nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
-#         )
-#
-#     def forward(self, x):
-#         x = self.encoder(x)
-#         return x.view(x.size(0), -1)  # Flatten to [B, 64]
+class Light3DEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv3d(1, 16, kernel_size=3, padding=1),
+            nn.BatchNorm3d(16),
+            nn.ReLU(),
+            nn.MaxPool3d(2),  # halves each dimension
 
-# class QAModel(nn.Module):
-#     def __init__(self,num_thresholds):
-#         super().__init__()
-#
-#         self.encoder_img = Light3DEncoder()
-#         self.encoder_unc= Light3DEncoder()
-#         self.pool = nn.AdaptiveAvgPool3d(1)
-#         self.norm = nn.LayerNorm(128)
-#
-#         self.fc = nn.Sequential(
-#             nn.Flatten(),
-#             nn.Linear(128, 64),
-#             nn.ReLU(),
-#             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
-#         )
-#         #self.biases = nn.Parameter(torch.zeros(num_thresholds))
-#
-#
-#     def forward(self, image, uncertainty):
-#         x1 = self.encoder_img(image)
-#         x2 = self.encoder_unc(uncertainty)
-#         merged = torch.cat((x1, x2), dim=1) #[B,128]
-#         merged = self.norm(merged)
-#         features = self.fc(merged)  # [B, 1]
-#
-#         #logits = features + self.biases  # Broadcast to [B, num_thresholds]
-#         return features
-#
-#
-#     def extract_features(self, uncertainty):
-#         x = self.encoder_unc(uncertainty)
-#         return x.view(x.size(0), -1)
+            nn.Conv3d(16, 32, kernel_size=3, padding=1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm3d(64),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        return x.view(x.size(0), -1)  # Flatten to [B, 64]
+
+
+class QAModel(nn.Module):
+    def __init__(self,num_thresholds):
+        super().__init__()
+
+        self.encoder_img = Light3DEncoder()
+        self.encoder_unc= Light3DEncoder()
+        self.pool = nn.AdaptiveAvgPool3d(1)
+        self.norm = nn.LayerNorm(128)
+
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
+        )
+        #self.biases = nn.Parameter(torch.zeros(num_thresholds))
+
+
+    def forward(self, image, uncertainty):
+        x1 = self.encoder_img(image)
+        x2 = self.encoder_unc(uncertainty)
+        merged = torch.cat((x1, x2), dim=1) #[B,128]
+        merged = self.norm(merged)
+        features = self.fc(merged)  # [B, 1]
+
+        #logits = features + self.biases  # Broadcast to [B, num_thresholds]
+        return features
+
+
+    def extract_features(self, uncertainty):
+        x = self.encoder_unc(uncertainty)
+        return x.view(x.size(0), -1)
 
 
 def bin_dice_score(dice):
@@ -419,7 +420,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=18, shuffle=True,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
 
 
@@ -647,7 +648,7 @@ def main(data_dir, plot_dir, folds,df):
     for idx, metric in enumerate(metrics):
         start = time.time()
         train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
-            0,
+            4,
             data_dir,
             df=df,
             splits=folds,
@@ -879,7 +880,7 @@ def visualize_features(data_dir, plot_dir, splits, df):
 
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
         splits = json.load(f)
     clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)

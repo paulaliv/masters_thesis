@@ -50,9 +50,29 @@ dice_labels = ['Fail', 'Poor', 'Moderate', 'Good']
 # print(f"Number of cases in df30: {len(df30)}")
 
 # Add dice_category to the full df too:
+
+
+# Define a margin around bin edges
+margin = 0.02 # ±2%
+
+borderline_cases = df30[
+    ((df30['dice_5'] > 0.1 - margin) & (df30['dice_5'] < 0.1 + margin)) |
+    ((df30['dice_5'] > 0.5 - margin) & (df30['dice_5'] < 0.5 + margin)) |
+    ((df30['dice_5'] > 0.7 - margin) & (df30['dice_5'] < 0.7 + margin))
+]
+
+print(borderline_cases[['case_id','dice_5', 'dice_category']])
+
+print(borderline_cases['case_id'].values)
+
+to_remove = ['20EP_DES_0012', '20EP_DES_0034', '20EP_LIP_0020 ', '20EP_LIP_0048', '20EP_LIP_0054', 'DES_0062', 'DES_0129', 'DES_0140','DES_0153', 'DES_0158', 'DES_0172', 'DES_0189','LIP_0086', '30EP_DES_0005','30EP_LIP_0044' ]
+print(f'cases to remove: {len(to_remove)}')
+df30 = df30[~df30['case_id'].isin(to_remove)]
+print(len(df30))
 df30['dice_category'] = pd.cut(
     df30['dice_5'], bins=dice_bins, labels=dice_labels, include_lowest=True
 )
+
 #
 # # Add dice_category to the full df too:
 # df_final['dice_category'] = pd.cut(
@@ -101,7 +121,7 @@ print(df30['dice_category'].value_counts())
 
 
 #df_final.to_csv(df_final_dir,index=False)
-
+#
 
 def base_case_id(x):
     if x.startswith("30EP_"):
@@ -169,16 +189,17 @@ for i, split in enumerate(splits):
     print("Validation set dice_category distribution:")
     print(df30.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
-#
-# output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits20.json'
-# output_dir = os.path.dirname(output_path)
-#
-# # Create the directory if it doesn't exist
-# os.makedirs(output_dir, exist_ok=True)
-#
-# # Now write the JSON file
-# with open(output_path, 'w') as f:
-#     json.dump(splits, f, indent=4)
+
+output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits30.json'
+output_dir = os.path.dirname(output_path)
+
+# Create the directory if it doesn't exist
+os.makedirs(output_dir, exist_ok=True)
+
+# Now write the JSON file
+with open(output_path, 'w') as f:
+    json.dump(splits, f, indent=4)
+
 
 # #
 # image_dir = "/gpfs/home6/palfken/30QA_images/"
