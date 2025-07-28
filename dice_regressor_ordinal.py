@@ -233,8 +233,14 @@ class QAModel(nn.Module):
 
 
 def bin_dice_score(dice):
-    bin_edges = [0.1, 0.5, 0.7]  # 4 bins
-    return np.digitize(dice, bin_edges, right=False)
+    # bin_edges = [0.1, 0.5, 0.7]  # 4 bins
+    # return np.digitize(dice, bin_edges, right=False)
+    epsilon = 1e-8
+    dice = np.asarray(dice)
+    dice_adjusted = dice - epsilon  # Shift slightly left
+    bin_edges = [0.1, 0.5, 0.7]  # Same as before
+    return np.digitize(dice_adjusted, bin_edges, right=True)  # right=True = (a <= x)
+
 
 class QADataset(Dataset):
     def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False):
@@ -873,7 +879,7 @@ def visualize_features(data_dir, plot_dir, splits, df):
 
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits20.json', 'r') as f:
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
         splits = json.load(f)
     clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)

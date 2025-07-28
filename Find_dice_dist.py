@@ -39,6 +39,9 @@ print(f"Number of cases in df final: {len(df_final)}")
 
 print(df_final.columns)
 
+def bin_dice_score(dice):
+    bin_edges = [0.1, 0.5, 0.7]  # 4 bins
+    return np.digitize(dice, bin_edges, right=False)
 
 dice_bins = [0, 0.1, 0.5, 0.7, 1]
 dice_labels = ['Fail', 'Poor', 'Moderate', 'Good']
