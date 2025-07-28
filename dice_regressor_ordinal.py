@@ -381,9 +381,9 @@ def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
 
     # Reduce loss across thresholds per sample, then average over batch
     loss = loss.sum(dim=1).mean()
-    probs = torch.sigmoid(logits)
-    entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
-    loss += entropy_weight * entropy
+    # probs = torch.sigmoid(logits)
+    # entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
+    # loss += entropy_weight * entropy
 
     return loss
 
