@@ -349,7 +349,10 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
-
+    # Kappa variables
+    best_kappa = -1.0
+    best_kappa_cm = None
+    best_kappa_epoch = -1
 
 
     # Early stopping variables
