@@ -10,6 +10,7 @@ import shutil
 
 df_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist.csv"
 df_final_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
+splits_file = "/home/bmep/plalfken/my-scratch/nnUNet/Final_splits.json"
 #data20 ="/scratch/bmep/plalfken/Dice_scores_20epochs.csv"
 #data5 = "/scratch/bmep/plalfken/Dice_scores_5epochs.csv"
 # remove_ids = [
@@ -20,8 +21,8 @@ df_final_dir = "/home/bmep/plalfken/my-scratch/nnUNet/Final_dice_dist1.csv"
 # ]
 # df5 = pd.read_csv(data5)
 # df20 = pd.read_csv(data20)
-df30 = pd.read_csv(df_dir)
-df_final = pd.read_csv(df_final_dir)
+#df30 = pd.read_csv(df_dir)
+df30 = pd.read_csv(df_final_dir)
 
 #
 # # Remove them
@@ -34,22 +35,19 @@ df_final = pd.read_csv(df_final_dir)
 #
 # print(f"Number of cases in df5: {len(df5)}")
 # print(f"Number of cases in df20: {len(df20)}")
-print(f"Number of cases in df30: {len(df30)}")
-print(f"Number of cases in df final: {len(df_final)}")
 
-print(df_final.columns)
+print(f"Number of cases in df final: {len(df30)}")
 
-def bin_dice_score(dice):
-    bin_edges = [0.1, 0.5, 0.7]  # 4 bins
-    return np.digitize(dice, bin_edges, right=False)
+print(df30.columns)
+
 
 dice_bins = [0, 0.1, 0.5, 0.7, 1]
 dice_labels = ['Fail', 'Poor', 'Moderate', 'Good']
-
-cases_30 = df30[df30['case_id'].str.startswith('30EP_')]
-
-df30 = df30[~df30['case_id'].isin(cases_30['case_id'])]
-print(f"Number of cases in df30: {len(df30)}")
+#
+# cases_30 = df30[df30['case_id'].str.startswith('30EP_')]
+#
+# df30 = df30[~df30['case_id'].isin(cases_30['case_id'])]
+# print(f"Number of cases in df30: {len(df30)}")
 
 # Add dice_category to the full df too:
 df30['dice_category'] = pd.cut(
@@ -99,7 +97,7 @@ df30['dice_category'] = pd.cut(
 
 print(df30['dice_category'].value_counts())
 
-print(df_final['dice_category'].value_counts())
+
 
 
 #df_final.to_csv(df_final_dir,index=False)
@@ -171,16 +169,16 @@ for i, split in enumerate(splits):
     print("Validation set dice_category distribution:")
     print(df30.loc[val_idx, 'dice_category'].value_counts())
     print("\n")
-
-output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits20.json'
-output_dir = os.path.dirname(output_path)
-
-# Create the directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
-
-# Now write the JSON file
-with open(output_path, 'w') as f:
-    json.dump(splits, f, indent=4)
+#
+# output_path = '/home/bmep/plalfken/my-scratch/nnUNet/Final_splits20.json'
+# output_dir = os.path.dirname(output_path)
+#
+# # Create the directory if it doesn't exist
+# os.makedirs(output_dir, exist_ok=True)
+#
+# # Now write the JSON file
+# with open(output_path, 'w') as f:
+#     json.dump(splits, f, indent=4)
 
 # #
 # image_dir = "/gpfs/home6/palfken/30QA_images/"
