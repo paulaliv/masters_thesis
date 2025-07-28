@@ -371,6 +371,9 @@ def coral_loss_manual(logits, levels, smoothing = 0.2):
     log_1_minus_probs = F.logsigmoid(-logits)
 
     loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
+
+    importance_weights = torch.tensor([1.5, 1.5, 1.0])
+    loss = loss * importance_weights
     return loss.mean()
 
 
