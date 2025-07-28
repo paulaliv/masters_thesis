@@ -372,7 +372,7 @@ def coral_loss_manual(logits, levels, smoothing = 0.2):
 
     loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
 
-    importance_weights = torch.tensor([1.5, 1.5, 1.0])
+    importance_weights = torch.tensor([1.2, 2, 1.0])
     importance_weights = importance_weights.to(logits.device)
     importance_weights = importance_weights.view(1, -1)  # for broadcasting
     loss = loss * importance_weights
