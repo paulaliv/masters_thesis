@@ -328,7 +328,7 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_classes=4).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=5e-4)
     # Counts = {
     #     0: 66,  # Fail (0-0.1)
     #     1: 22,  # Poor (0.1-0.7)
@@ -349,6 +349,10 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     # Step 4: Create the weighted loss
     criterion = nn.CrossEntropyLoss(weight=weights)
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                           factor=0.5, patience=5, verbose=True)
+
 
 
     # Early stopping variables
@@ -451,6 +455,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
+
+        scheduler.step(epoch_val_loss)
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
