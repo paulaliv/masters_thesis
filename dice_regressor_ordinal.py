@@ -359,7 +359,7 @@ def decode_predictions(logits):
     return (logits > 0).sum(dim=1)
 
 
-def coral_loss_manual(logits, levels, smoothing = 0.2):
+def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
     """
     logits: [B, num_classes - 1]
     levels: binary cumulative targets (e.g., [1, 1, 0])
@@ -373,14 +373,17 @@ def coral_loss_manual(logits, levels, smoothing = 0.2):
     loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
 
 
-
-    importance_weights = torch.tensor([2, 3, 1.0])
-    importance_weights = importance_weights.to(logits.device)
-    importance_weights = importance_weights.view(1, -1)  # for broadcasting
-    loss = loss * importance_weights
+    #
+    # importance_weights = torch.tensor([2, 3, 1.0])
+    # importance_weights = importance_weights.to(logits.device)
+    # importance_weights = importance_weights.view(1, -1)  # for broadcasting
+    # loss = loss * importance_weights
 
     # Reduce loss across thresholds per sample, then average over batch
     loss = loss.sum(dim=1).mean()
+    probs = torch.sigmoid(logits)
+    entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
+    loss += entropy_weight * entropy
 
     return loss
 
