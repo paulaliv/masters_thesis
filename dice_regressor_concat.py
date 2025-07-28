@@ -158,10 +158,9 @@ class QADataset(Dataset):
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
 
-        # Map dice score to category
-        print(f'Dice score: {dice_score}')
+
         label = bin_dice_score(dice_score)
-        print(f'Gets label {label}')
+
 
         #image_tensor = torch.from_numpy(image).float()
 
