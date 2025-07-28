@@ -286,21 +286,21 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=2e-4)
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
 
-    # Linear warmup lambda
-    def lr_lambda(current_epoch):
-        if current_epoch < warmup_epochs:
-            return float(current_epoch + 1) / warmup_epochs
-        return 1.0  # Once warmup is over, keep LR constant until ReduceLROnPlateau kicks in
+    # # Linear warmup lambda
+    # def lr_lambda(current_epoch):
+    #     if current_epoch < warmup_epochs:
+    #         return float(current_epoch + 1) / warmup_epochs
+    #     return 1.0  # Once warmup is over, keep LR constant until ReduceLROnPlateau kicks in
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=5, verbose=True)
 
-    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+    # warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
