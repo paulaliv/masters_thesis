@@ -97,7 +97,7 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(128)
+        self.norm = nn.LayerNorm(32)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
