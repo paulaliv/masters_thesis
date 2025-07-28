@@ -119,7 +119,7 @@ val_transforms = Compose([
 #     def extract_features(self, uncertainty):
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
-#
+
 
 
 '''PREVIOUS ARCHITECTURE'''
@@ -211,9 +211,9 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 1)  # Output = predicted Dice class
+            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
-        self.biases = nn.Parameter(torch.zeros(num_thresholds))
+        #self.biases = nn.Parameter(torch.zeros(num_thresholds))
 
 
     def forward(self, image, uncertainty):
@@ -223,8 +223,8 @@ class QAModel(nn.Module):
         merged = self.norm(merged)
         features = self.fc(merged)  # [B, 1]
 
-        logits = features + self.biases  # Broadcast to [B, num_thresholds]
-        return logits
+        #logits = features + self.biases  # Broadcast to [B, num_thresholds]
+        return features
 
 
     def extract_features(self, uncertainty):
