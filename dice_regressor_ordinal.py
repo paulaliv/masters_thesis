@@ -359,12 +359,14 @@ def decode_predictions(logits):
     return (logits > 0).sum(dim=1)
 
 
-def coral_loss_manual(logits, levels):
+def coral_loss_manual(logits, levels, smoothing = 0.2):
     """
     logits: [B, num_classes - 1]
     levels: binary cumulative targets (e.g., [1, 1, 0])
     """
     levels =levels.float()
+    levels = levels * (1 - smoothing) + 0.5 * smoothing
+
     log_probs = F.logsigmoid(logits)
     log_1_minus_probs = F.logsigmoid(-logits)
 
@@ -405,7 +407,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=5e-4)
+    optimizer = optim.Adam(model.parameters(), lr=2e-4)
 
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
