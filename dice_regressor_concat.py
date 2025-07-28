@@ -1,12 +1,10 @@
 from collections import defaultdict
+from sklearn.metrics import cohen_kappa_score
 
-from dynamic_network_architectures.building_blocks.residual import BasicBlockD
-from dynamic_network_architectures.building_blocks.residual_encoders import ResidualEncoder
-from dynamic_network_architectures.architectures.unet import ResidualEncoderUNet
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
-from nnunetv2.training.dataloading.nnunet_dataset import nnUNetDatasetBlosc2
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -318,9 +316,9 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         transform=val_transforms,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=20, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
@@ -368,8 +366,8 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
-    for epoch in range(30):
-        print(f"Epoch {epoch + 1}/{30}")
+    for epoch in range(70):
+        print(f"Epoch {epoch + 1}/{70}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -445,6 +443,13 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
 
+        # 'linear' or 'quadratic' weights are valid for ordinal tasks
+        kappa_linear = cohen_kappa_score(val_labels_np, val_preds_np, weights='linear')
+        kappa_quadratic = cohen_kappa_score(val_labels_np, val_preds_np, weights='quadratic')
+
+        print("Linear Kappa:", kappa_linear)
+        print("Quadratic Kappa:", kappa_quadratic)
+
         # Optional: define class names for nicer output
         class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
 
@@ -457,6 +462,17 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
 
         scheduler.step(epoch_val_loss)
+
+        # After each validation epoch:
+        if kappa_quadratic > best_kappa:
+            best_kappa = kappa_quadratic
+            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
+            best_kappa_preds = val_preds_np.copy()
+            best_kappa_labels = val_labels_np.copy()
+            best_kappa_report = report
+            best_kappa_epoch = epoch
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
@@ -474,6 +490,18 @@ def train_one_fold(fold,data_dir, df, splits, num_bins, uncertainty_metric, devi
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
+
+
+    # Plot and save best confusion matrix
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(best_kappa_cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f"CLASSIFICATION_best_conf_matrix_fold{fold}_{uncertainty_metric}.png"))
+    plt.close()
 
     return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list
 
