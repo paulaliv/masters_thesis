@@ -58,32 +58,34 @@ val_transforms = Compose([
     #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     ToTensord(keys=["image", "uncertainty"])
 ])
-
-
-
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=3, padding=1),
-            nn.BatchNorm3d(16),
-            nn.ReLU(),
-            nn.MaxPool3d(2),  # halves each dimension
-
-            nn.Conv3d(16, 32, kernel_size=3, padding=1),
-            nn.BatchNorm3d(32),
+            nn.Conv3d(1, 64, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool3d(2),
 
-            nn.Conv3d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm3d(64),
+            nn.Conv3d(64, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(64, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(32, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(32, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool3d(1),
         )
 
     def forward(self, x):
         x = self.encoder(x)
-        return x.view(x.size(0), -1)  # Flatten to [B, 64]
+        return x.view(x.size(0), -1)  # Flatten to [B, 16]
 
 class QAModel(nn.Module):
     def __init__(self,num_thresholds):
@@ -96,10 +98,13 @@ class QAModel(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128, 64),
+            nn.Linear(32, 128),
             nn.ReLU(),
-            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, num_thresholds)  # ordinal logits
         )
+
 
     def forward(self, image, uncertainty):
         x1 = self.encoder_img(image)
@@ -111,6 +116,59 @@ class QAModel(nn.Module):
     def extract_features(self, uncertainty):
         x = self.encoder_unc(uncertainty)
         return x.view(x.size(0), -1)
+
+
+#
+# class Light3DEncoder(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Conv3d(1, 16, kernel_size=3, padding=1),
+#             nn.BatchNorm3d(16),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),  # halves each dimension
+#
+#             nn.Conv3d(16, 32, kernel_size=3, padding=1),
+#             nn.BatchNorm3d(32),
+#             nn.ReLU(),
+#             nn.MaxPool3d(2),
+#
+#             nn.Conv3d(32, 64, kernel_size=3, padding=1),
+#             nn.BatchNorm3d(64),
+#             nn.ReLU(),
+#             nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+#         )
+#
+#     def forward(self, x):
+#         x = self.encoder(x)
+#         return x.view(x.size(0), -1)  # Flatten to [B, 64]
+#
+# class QAModel(nn.Module):
+#     def __init__(self,num_thresholds):
+#         super().__init__()
+#
+#         self.encoder_img = Light3DEncoder()
+#         self.encoder_unc= Light3DEncoder()
+#         self.pool = nn.AdaptiveAvgPool3d(1)
+#         self.norm = nn.LayerNorm(128)
+#
+#         self.fc = nn.Sequential(
+#             nn.Flatten(),
+#             nn.Linear(128, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
+#         )
+#
+#     def forward(self, image, uncertainty):
+#         x1 = self.encoder_img(image)
+#         x2 = self.encoder_unc(uncertainty)
+#         merged = torch.cat((x1, x2), dim=1) #[B,128]
+#         merged = self.norm(merged)
+#         return self.fc(merged)
+#
+#     def extract_features(self, uncertainty):
+#         x = self.encoder_unc(uncertainty)
+#         return x.view(x.size(0), -1)
 
 
 def bin_dice_score(dice):
