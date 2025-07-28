@@ -352,8 +352,8 @@ def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
 #or logit based decoding
 
 def decode_predictions(logits):
-    print("Logits mean:", logits.mean().item())
-    print("Logits min/max:", logits.min().item(), logits.max().item())
+    # print("Logits mean:", logits.mean().item())
+    # print("Logits min/max:", logits.min().item(), logits.max().item())
     #probs = torch.sigmoid(logits)
 
     return (logits > 0).sum(dim=1)
