@@ -12,6 +12,10 @@ from scipy.ndimage import label, find_objects
 import glob
 from scipy.ndimage import zoom
 import pandas as pd
+
+from feature_visualization import cropped_mask
+
+
 #from radiomics import featureextractor
 
 
@@ -167,8 +171,25 @@ class ROIPreprocessor:
         return bbox
 
 
-    def crop_to_roi(self,image, mask, bbox: Tuple[slice, slice, slice]):
-        return image[bbox[0], bbox[1], bbox[2]], mask[bbox[0], bbox[1], bbox[2]]
+    def crop_to_roi(self,image, bbox: Tuple[slice, slice, slice]):
+        return image[bbox[0], bbox[1], bbox[2]]
+
+    def get_center_crop_bbox(self,image_shape: Tuple[int, int, int]):
+        z, y, x = image_shape
+        rz, ry, rx = self.target_shape
+
+        # Ensure the crop doesn't exceed image boundaries
+        z_start = max((z - rz) // 2, 0)
+        y_start = max((y - ry) // 2, 0)
+        x_start = max((x - rx) // 2, 0)
+
+        z_end = min(z_start + rz, z)
+        y_end = min(y_start + ry, y)
+        x_end = min(x_start + rx, x)
+
+        bbox = (slice(z_start, z_end), slice(y_start, y_end), slice(x_start, x_end))
+        return bbox
+
 
 
 
@@ -325,7 +346,7 @@ class ROIPreprocessor:
 
         else:
             #plt.show()
-            #plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+            plt.savefig(os.path.join(output_dir, f'TEST_{umap_type}_{self.case_id}.png'))
             plt.close()
 
 
@@ -372,7 +393,9 @@ class ROIPreprocessor:
 
         slices = self.get_roi_bbox(resampled_mask)
 
-        cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
+        cropped_img= self.crop_to_roi(resampled_img,slices)
+        cropped_mask = self.crop_to_roi(resampled_img,  slices)
+
         #self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id','empty', 'empty')
 
         cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
@@ -566,7 +589,7 @@ class ROIPreprocessor:
             original_spacing, original_origin, original_direction, crop_start_index
         )
 
-        slices = self.get_roi_bbox(resampled_mask)
+        slices = self.get_roi_bbox(resampled_pred)
         for s in slices:
             print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
         bbox1_shape = (
@@ -574,66 +597,81 @@ class ROIPreprocessor:
             slices[1].stop - slices[1].start,
             slices[2].stop - slices[2].start
         )
+        if resampled_pred.sum() > 0:
 
-        cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
-        _, cropped_pred = self.crop_to_roi(resampled_img, resampled_pred, slices)
+            cropped_img = self.crop_to_roi(resampled_img,slices)
+            cropped_pred = self.crop_to_roi(resampled_pred, slices)
+            cropped_mask = self.crop_to_roi(resampled_mask, slices)
 
-        if self.case_id == 'DES_0149':
-            self.visualize_img_and_mask(cropped_img, cropped_mask, output_dir_visuals, gt=True)
-            self.visualize_img_and_mask(cropped_img, cropped_pred, output_dir_visuals, gt=False)
 
-        tumor_size = self.count_tumor_voxels(resampled_mask)
-        img_pp = self.normalize(cropped_img)
+            if self.case_id == 'DES_0149':
+                self.visualize_img_and_mask(cropped_img, cropped_mask, output_dir_visuals, gt=True)
+                self.visualize_img_and_mask(cropped_img, cropped_pred, output_dir_visuals, gt=False)
 
-        resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
-        _, resized_pred = self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+            tumor_size = self.count_tumor_voxels(resampled_mask)
+
+            img_pp = self.normalize(cropped_img)
+            resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
+            _, resized_pred = self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+
+        else:
+            print('Prediction is empty, defaulting to center crop')
+            img_pp = self.normalize(resampled_img)
+            resized_img, resized_mask = self.adjust_to_shape(img_pp, resampled_mask, self.target_shape)
+            _, resized_pred = self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
+
 
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
-        # for i, umap_type in enumerate(umap_types):
-        #     npz_file = np.load(umap_path)
-        #
-        #     umap_array = npz_file[umap_type]
-        #     umap_array = umap_array.astype(np.float32)  # or whichever key you want
-        #     umap_array = np.squeeze(umap_array)
-        #     # print("INITIAL UMAP min:", umap_array.min())
-        #     # print("INITIAL UMAP max:", umap_array.max())
-        #
-        #     umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
-        #
-        #    #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
-        #
-        #     # Convert NumPy array to SimpleITK image
-        #     orig_umap = sitk.GetImageFromArray(umap_array)
-        #     orig_umap.SetOrigin(orig_img.GetOrigin())
-        #     orig_umap.SetSpacing(orig_img.GetSpacing())
-        #     orig_umap.SetDirection(orig_img.GetDirection())
-        #
-        #
-        #     umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
-        #
-        #     assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
-        #
-        #     umap_sitk.SetOrigin(img_sitk.GetOrigin())
-        #     umap_sitk.SetSpacing(img_sitk.GetSpacing())
-        #     umap_sitk.SetDirection(img_sitk.GetDirection())
-        #     resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-        #
-        #     cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
-        #
-        #
-        #     resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
-        #     #self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
+        for i, umap_type in enumerate(umap_types):
+            npz_file = np.load(umap_path)
 
-            #
-            # if self.save_as_nifti:
-            #     reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-            #                                                   is_mask=False)
-            #
-            #     self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-            #                     os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            # else:
-            #     np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-            #
+            umap_array = npz_file[umap_type]
+            umap_array = umap_array.astype(np.float32)  # or whichever key you want
+            umap_array = np.squeeze(umap_array)
+            # print("INITIAL UMAP min:", umap_array.min())
+            # print("INITIAL UMAP max:", umap_array.max())
+
+            umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
+
+           #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
+
+            # Convert NumPy array to SimpleITK image
+            orig_umap = sitk.GetImageFromArray(umap_array)
+            orig_umap.SetOrigin(orig_img.GetOrigin())
+            orig_umap.SetSpacing(orig_img.GetSpacing())
+            orig_umap.SetDirection(orig_img.GetDirection())
+
+
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
+
+            assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
+
+            umap_sitk.SetOrigin(img_sitk.GetOrigin())
+            umap_sitk.SetSpacing(img_sitk.GetSpacing())
+            umap_sitk.SetDirection(img_sitk.GetDirection())
+            resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+
+            if resampled_pred.sum() > 0:
+                cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_pred, slices)
+
+
+                resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
+
+            else:
+                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_mask, self.target_shape)
+
+            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
+
+
+            if self.save_as_nifti:
+                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+                                                              is_mask=False)
+
+                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+
 
 
         if self.save_as_nifti:
@@ -655,7 +693,7 @@ class ROIPreprocessor:
 
 
         else:
-            #np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
             #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
             np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
