@@ -682,42 +682,17 @@ class nnUNetPredictor(object):
 
                 if self.return_features:
                     features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
-                    print(f'final prediction shape {prediction.shape}')
+
                     prediction = prediction.cpu()
-                    features = features.cpu()
+                    features = features.cpu().numpy()
+                    filename = f' {ofile}_features.npy'
+                    np.save(filename, features)
 
-                    print(f"Feature shape is {features.shape}")
 
-                    #niform_size = [208, 256, 48]
-                    #uniform_size = (48, 272, 256)
 
-                    uniform_size = [48, 272, 256]
 
-                    context = [3, 15, 15]
-                    tumor_mask = prediction.argmax(0).numpy()
-                    roi_features, cropped_mask = self.reconstruct_and_crop_features(
-                        full_feature_volume=features,
-                        tumor_mask=tumor_mask, uniform_size=uniform_size, context=context)
 
-                    #convert feature file to nifty
-                    # feature_file = ofile + "features.npz"
-                    # np.save(feature_file, features)
-                    # print(f"Saved features to {feature_file}")
 
-                    if cropped_mask is not None:
-
-                        feature_file_roi = ofile + "_features_roi.npz"
-                        np.savez_compressed(feature_file_roi, roi_features)
-                        print(f"Saved features to {feature_file_roi}")
-
-                        cropped_mask_file = ofile + "_cropped_mask.npz"
-                        np.savez_compressed(cropped_mask_file, cropped_mask)
-                        print(f"Saved features to {cropped_mask_file}")
-                        # patch_locations = ofile + "patch_locations.npy"
-                        # np.save(patch_locations, patch_locations)
-                        # print(f'Saved patch locations to {patch_locations}')
-                    else:
-                        print('Model returned an empty mask for this one')
 
 
 
@@ -1034,7 +1009,7 @@ class nnUNetPredictor(object):
 
         patch_positions = None
         all_predictions  = []
-        all_full_feature_volumes = []
+        all_features= []
         for params in self.list_of_parameters:
 
             # messing with state dict names...
@@ -1053,11 +1028,8 @@ class nnUNetPredictor(object):
                 torch.cuda.empty_cache()
 
 
-                mask_shape = new_prediction.shape[1:]
-                #print(f'mask shape: {mask_shape}')
 
-                full_feature_volume = self.reconstruct_full_feature_volume_sparse(new_features, new_patch_positions, mask_shape)
-                all_full_feature_volumes.append(full_feature_volume)
+                all_features.append(new_features)
 
 
             else:
@@ -1079,13 +1051,16 @@ class nnUNetPredictor(object):
             prediction /= len(self.list_of_parameters)
 
             if self.return_features:
-            # Average full reconstructed feature volumes
-                all_full_feature_volumes = [torch.as_tensor(x) for x in all_full_feature_volumes]
-                ensemble_features = sum(all_full_feature_volumes) / len(all_full_feature_volumes)
 
+
+                all_features_stack = torch.stack(all_features)  # shape: [num_folds, num_patches, feature_dim]
+
+                # Average over folds dimension (dim=0)
+                ensemble_features = all_features_stack.mean(dim=0)  # shape: [num_patches, feature_dim]
+                print('Shape of features should be [num_patches, features_dim]:',ensemble_features.shape)
         else:
             if self.return_features:
-                ensemble_features = all_full_feature_volumes[0]
+                ensemble_features = all_features[0]
 
 
         if self.verbose: print('Prediction done')
@@ -1254,7 +1229,9 @@ class nnUNetPredictor(object):
                             # print(f'Feature shape before concatenating: {features.shape}')
                             # print(f'Prediction shape: {prediction.shape}')
 
-                            all_patch_features.append(features)
+                            #Global average pooling of every patch
+                            pooled_features = torch.mean(features, dim=[2, 3, 4])  # shape: [1, C]
+                            all_patch_features.append(pooled_features.cpu().squeeze(0))  # remove batch dimension
                             starts = get_slice_starts(sl)
                             #print(f'Whole slicer output {starts}')
                             z_start, y_start, x_start = starts[-3:]
@@ -1298,10 +1275,10 @@ class nnUNetPredictor(object):
             raise e
 
         if self.return_features:
+            pooled_feats = torch.stack(all_patch_features).numpy()  # shape: [N_patches, C]
 
-            features_concat = torch.cat(all_patch_features, dim=0)
 
-            return features_concat, predicted_logits, patch_positions
+            return pooled_feats, predicted_logits, patch_positions
         else:
             return predicted_logits
 
