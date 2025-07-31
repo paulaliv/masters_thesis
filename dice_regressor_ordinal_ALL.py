@@ -621,7 +621,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
                                            zero_division=0)
 
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
+            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_ALL.npz"), preds=val_preds_np, labels=val_labels_np)
 
 
         else:
@@ -643,7 +643,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.ylabel("True")
     plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}.png"))
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_ALL.png"))
     plt.close()
 
     return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
@@ -691,7 +691,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}.png"), dpi=300)
+        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}_ALL.png"), dpi=300)
         plt.show()
 
         # ✅ Plot loss curves
@@ -704,7 +704,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.title('Training and Validation Loss Curves')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}_ALL.png'))
         plt.close()
 
         # ✅ Overall scatter plot
@@ -718,7 +718,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_ALL.png'))
         plt.close()
 
         # # ✅ Per-subtype scatter plots
