@@ -651,7 +651,7 @@ class ROIPreprocessor:
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
 
             if resampled_pred.sum() > 0:
-                cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_pred, slices)
+                cropped_umap = self.crop_to_roi(resampled_umap, slices)
 
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
