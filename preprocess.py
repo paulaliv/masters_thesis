@@ -612,14 +612,14 @@ class ROIPreprocessor:
             tumor_size = self.count_tumor_voxels(resampled_mask)
 
             img_pp = self.normalize(cropped_img)
-            resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
-            _, resized_pred = self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+            resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+
 
         else:
             print('WARNING:Prediction is empty, defaulting to center crop')
             img_pp = self.normalize(resampled_img)
-            resized_img, resized_mask = self.adjust_to_shape(img_pp, resampled_mask, self.target_shape)
-            _, resized_pred = self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
+            resized_img, resized_pred= self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
+
 
 
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
