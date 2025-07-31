@@ -667,7 +667,7 @@ class ROIPreprocessor:
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
             else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+                np.save(os.path.join(output_path, f"20EP_{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
 
 
 
@@ -690,9 +690,9 @@ class ROIPreprocessor:
 
 
         else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            np.save(os.path.join(output_path, f"20EP_{self.case_id}_img.npy"), resized_img.astype(np.float32))
             #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+            np.save(os.path.join(output_path, f"20EP_{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
@@ -704,7 +704,7 @@ def main():
 
     input_folder_img ="/gpfs/home6/palfken/QA_imagesTs"
     input_folder_gt ="/gpfs/home6/palfken/QA_labelsTs"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTs/output"
+    predicted_mask_folder = "/gpfs/home6/palfken/20QA_imagesTr/"
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     output_folder_data = "/gpfs/home6/palfken/QA_dataTr_final/"
