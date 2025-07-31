@@ -651,6 +651,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
 def main(data_dir, plot_dir, folds,df):
+    print('MODEL INPUT: UNCERTAINTY MAP + MASK WITH IMAGE')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #for fold in range(5):
     # Train the model and retrieve losses + predictions
