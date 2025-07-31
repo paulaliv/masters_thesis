@@ -239,6 +239,47 @@ class ROIPreprocessor:
             img[img == -mean / std] = 0  # Ensure padding stays at 0
         return img
 
+    def visualize_img_and_mask(self, mask, img, name, output_dir, gt=False, axis=0):
+        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
+        idx = np.argmax(summed)
+
+        if axis == 0:
+            img_slice = img[idx]
+            mask_slice = mask[idx]
+
+        elif axis == 1:
+            img_slice = img[:, idx, :]
+            mask_slice = mask[:, idx, :]
+
+        elif axis == 2:
+            img_slice = img[:, :, idx]
+            mask_slice = mask[:, :, idx]
+
+        else:
+            raise ValueError("Axis must be 0, 1, or 2.")
+
+        # Create 3 subplots: UMAP, Image, Mask
+        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+        # Image only
+        axs[0].imshow(img_slice, cmap='gray')
+        axs[0].set_title(f'Image Slice {idx}')
+        axs[0].axis('off')
+
+        # Mask only
+        axs[1].imshow(mask_slice, cmap='Reds')
+        axs[1].set_title(f'Mask Slice {idx}')
+        axs[1].axis('off')
+
+        plt.suptitle(name, fontsize=16)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+        # Save or close figure as per your original logic
+        if gt:
+            plt.savefig(os.path.join(output_dir, f'IMG_GT_{self.case_id}.png'))
+        else:
+            plt.savefig(os.path.join(output_dir, f'IMG_PRED_{self.case_id}.png'))
+        plt.close()
+
     def visualize_umap_and_mask(self,umap, mask, img, name, umap_type, output_dir,axis =0):
         summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
         idx = np.argmax(summed)
@@ -433,7 +474,7 @@ class ROIPreprocessor:
             if os.path.exists(img_path):
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,mask_path=gt_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
                     new_row = {
                         "case_id": case_id,
                         "tumor_class": tumor_class,
@@ -453,7 +494,7 @@ class ROIPreprocessor:
                    #df.loc[df['case_id'] == case_id, 'dice_30'] = dice
                    print(f'Added {case_id}: {dice}')
 
-                df.to_csv(save_path, index=False)
+                #df.to_csv(save_path, index=False)
 
 
         # Load existing results if available
@@ -465,46 +506,51 @@ class ROIPreprocessor:
         #existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
         #print(f'CSV file has {len(existing_df)} rows')
         #updated_df = pd.concat([existing_df, df], ignore_index=True)
-
-        print("Global Dice Score Distribution:")
-        global_hist, _ = np.histogram(df['dice_30'], bins=bin_edges)
-        for i in range(len(bin_edges) - 1):
-            print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
-
-        print("\nDice Score Distribution by Tumor Class:")
-        for tumor_class, group in df.groupby('tumor_class'):
-            print(f"\nTumor Class: {tumor_class}")
-            class_hist, _ = np.histogram(group['dice_30'], bins=bin_edges)
-            for i in range(len(bin_edges) - 1):
-                print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
-
-        print(f'CSV file has {len(df)} rows')
-        # Compute global stats
-        print(f'Cases that were cropped: {self.cropped_cases}')
-        print(f'Total cropped images: {len(self.cropped_cases)}')
+        #
+        # print("Global Dice Score Distribution:")
+        # global_hist, _ = np.histogram(df['dice_30'], bins=bin_edges)
+        # for i in range(len(bin_edges) - 1):
+        #     print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
+        #
+        # print("\nDice Score Distribution by Tumor Class:")
+        # for tumor_class, group in df.groupby('tumor_class'):
+        #     print(f"\nTumor Class: {tumor_class}")
+        #     class_hist, _ = np.histogram(group['dice_30'], bins=bin_edges)
+        #     for i in range(len(bin_edges) - 1):
+        #         print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
+        #
+        # print(f'CSV file has {len(df)} rows')
+        # # Compute global stats
+        # print(f'Cases that were cropped: {self.cropped_cases}')
+        # print(f'Total cropped images: {len(self.cropped_cases)}')
 
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
-    def preprocess_uncertainty_map(self, img_path, umap_path, mask_path, output_path, output_dir_visuals):
+    def preprocess_uncertainty_map(self, img_path, umap_path, gt_path, mask_path, output_path, output_dir_visuals):
 
         case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
-        orig_mask = sitk.ReadImage(mask_path)
+        orig_mask = sitk.ReadImage(gt_path)
+        pred = sitk.ReadImage(mask_path)
         original_spacing = orig_img.GetSpacing()
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
 
         img_sitk = self.resample_image(orig_img, is_label=False)
-        mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
+        orig_mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
+        mask_sitk = self.resample_umap(pred, reference=img_sitk,is_label=True)
 
 
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
-        resampled_mask = sitk.GetArrayFromImage(mask_sitk)
+        resampled_mask = sitk.GetArrayFromImage(orig_mask_sitk)
+        resampled_pred = sitk.GetArrayFromImage(mask_sitk)
 
         orig_img_array = sitk.GetArrayFromImage(orig_img)
         orig_mask_array = sitk.GetArrayFromImage(orig_mask)
+        orig_pred_array = sitk.GetArrayFromImage(pred)
         print(f'Original shape :{orig_mask_array.shape}')
+        print(f'Pred shape :{orig_pred_array.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
 
         # Get bounding box in original mask
@@ -530,57 +576,64 @@ class ROIPreprocessor:
         )
 
         cropped_img, cropped_mask = self.crop_to_roi(resampled_img, resampled_mask, slices)
+        _, cropped_pred = self.crop_to_roi(resampled_img, resampled_pred, slices)
+
+        if self.case_id == 'DES_0149':
+            self.visualize_img_and_mask(cropped_img, cropped_mask, output_dir_visuals, gt=True)
+            self.visualize_img_and_mask(cropped_img, cropped_pred, output_dir_visuals, gt=False)
+
         tumor_size = self.count_tumor_voxels(resampled_mask)
         img_pp = self.normalize(cropped_img)
 
         resized_img, resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
+        _, resized_pred = self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
 
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
-        for i, umap_type in enumerate(umap_types):
-            npz_file = np.load(umap_path)
+        # for i, umap_type in enumerate(umap_types):
+        #     npz_file = np.load(umap_path)
+        #
+        #     umap_array = npz_file[umap_type]
+        #     umap_array = umap_array.astype(np.float32)  # or whichever key you want
+        #     umap_array = np.squeeze(umap_array)
+        #     # print("INITIAL UMAP min:", umap_array.min())
+        #     # print("INITIAL UMAP max:", umap_array.max())
+        #
+        #     umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
+        #
+        #    #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
+        #
+        #     # Convert NumPy array to SimpleITK image
+        #     orig_umap = sitk.GetImageFromArray(umap_array)
+        #     orig_umap.SetOrigin(orig_img.GetOrigin())
+        #     orig_umap.SetSpacing(orig_img.GetSpacing())
+        #     orig_umap.SetDirection(orig_img.GetDirection())
+        #
+        #
+        #     umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
+        #
+        #     assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
+        #
+        #     umap_sitk.SetOrigin(img_sitk.GetOrigin())
+        #     umap_sitk.SetSpacing(img_sitk.GetSpacing())
+        #     umap_sitk.SetDirection(img_sitk.GetDirection())
+        #     resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+        #
+        #     cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
+        #
+        #
+        #     resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
+        #     #self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
 
-            umap_array = npz_file[umap_type]
-            umap_array = umap_array.astype(np.float32)  # or whichever key you want
-            umap_array = np.squeeze(umap_array)
-            # print("INITIAL UMAP min:", umap_array.min())
-            # print("INITIAL UMAP max:", umap_array.max())
-
-            umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
-
-            self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
-
-            # Convert NumPy array to SimpleITK image
-            orig_umap = sitk.GetImageFromArray(umap_array)
-            orig_umap.SetOrigin(orig_img.GetOrigin())
-            orig_umap.SetSpacing(orig_img.GetSpacing())
-            orig_umap.SetDirection(orig_img.GetDirection())
-
-
-            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
-
-            assert img_sitk.GetSize() == mask_sitk.GetSize() == umap_sitk.GetSize()
-
-            umap_sitk.SetOrigin(img_sitk.GetOrigin())
-            umap_sitk.SetSpacing(img_sitk.GetSpacing())
-            umap_sitk.SetDirection(img_sitk.GetDirection())
-            resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-
-            cropped_umap, cropped_mask_1 = self.crop_to_roi(resampled_umap, resampled_mask, slices)
-
-
-            resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
-            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
-
-
-            if self.save_as_nifti:
-                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-                                                              is_mask=False)
-
-                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-
+            #
+            # if self.save_as_nifti:
+            #     reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+            #                                                   is_mask=False)
+            #
+            #     self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+            #                     os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+            # else:
+            #     np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+            #
 
 
         if self.save_as_nifti:
@@ -602,8 +655,10 @@ class ROIPreprocessor:
 
 
         else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            #np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+
 
         print(f'Processed {self.case_id}')
 

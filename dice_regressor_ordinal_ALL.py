@@ -300,7 +300,7 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
-        mask = np.load(os.path.join(self.data_dir, f'{case_id}_mask.npy'))
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         image_tensor = torch.from_numpy(image).float().unsqueeze(0)
         mask_tensor = torch.from_numpy(mask).float().unsqueeze(0)
 

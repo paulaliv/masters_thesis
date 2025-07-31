@@ -283,7 +283,7 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        image = np.load(os.path.join(self.data_dir, f'{case_id}_mask.npy'))
+        image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         image = torch.from_numpy(image).float()
 
         if image.ndim == 3:
