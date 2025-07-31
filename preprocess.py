@@ -609,7 +609,6 @@ class ROIPreprocessor:
                 self.visualize_img_and_mask(cropped_img, cropped_mask, output_dir_visuals, gt=True)
                 self.visualize_img_and_mask(cropped_img, cropped_pred, output_dir_visuals, gt=False)
 
-            tumor_size = self.count_tumor_voxels(resampled_mask)
 
             img_pp = self.normalize(cropped_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
@@ -657,9 +656,9 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
 
             else:
-                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_mask, self.target_shape)
+                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
 
-            self.visualize_umap_and_mask(resized_umap, resized_mask, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
+            self.visualize_umap_and_mask(resized_umap, resized_pred, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
 
 
             if self.save_as_nifti:
@@ -677,7 +676,7 @@ class ROIPreprocessor:
 
             reverted_adjusted_img = self.resample_to_spacing(resized_img, self.target_spacing, original_spacing,
                                                              is_mask=False)
-            reverted_adjusted_mask = self.resample_to_spacing(resized_mask, self.target_spacing, original_spacing,
+            reverted_adjusted_mask = self.resample_to_spacing(resized_pred, self.target_spacing, original_spacing,
                                                               is_mask=True)
 
             try:
