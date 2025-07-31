@@ -259,7 +259,7 @@ class ROIPreprocessor:
             img[img == -mean / std] = 0  # Ensure padding stays at 0
         return img
 
-    def visualize_img_and_mask(self, mask, img, name, output_dir, gt=False, axis=0):
+    def visualize_img_and_mask(self, img,  mask, output_dir, gt=False, axis=0):
         summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
         idx = np.argmax(summed)
 
@@ -290,7 +290,6 @@ class ROIPreprocessor:
         axs[1].set_title(f'Mask Slice {idx}')
         axs[1].axis('off')
 
-        plt.suptitle(name, fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         # Save or close figure as per your original logic
