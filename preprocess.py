@@ -558,6 +558,11 @@ class ROIPreprocessor:
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
+        # Convert NumPy array to SimpleITK image
+
+        pred.SetOrigin(orig_img.GetOrigin())
+        pred.SetSpacing(orig_img.GetSpacing())
+        pred.SetDirection(orig_img.GetDirection())
 
         img_sitk = self.resample_image(orig_img, is_label=False)
         orig_mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
@@ -588,15 +593,12 @@ class ROIPreprocessor:
             original_spacing, original_origin, original_direction, crop_start_index
         )
 
-        slices = self.get_roi_bbox(resampled_pred)
-        for s in slices:
-            print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
-        bbox1_shape = (
-            slices[0].stop - slices[0].start,
-            slices[1].stop - slices[1].start,
-            slices[2].stop - slices[2].start
-        )
+
         if resampled_pred.sum() > 0:
+
+            slices = self.get_roi_bbox(resampled_pred)
+            for s in slices:
+                print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
 
             cropped_img = self.crop_to_roi(resampled_img,slices)
             cropped_pred = self.crop_to_roi(resampled_pred, slices)
@@ -614,7 +616,7 @@ class ROIPreprocessor:
             _, resized_pred = self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
 
         else:
-            print('Prediction is empty, defaulting to center crop')
+            print('WARNING:Prediction is empty, defaulting to center crop')
             img_pp = self.normalize(resampled_img)
             resized_img, resized_mask = self.adjust_to_shape(img_pp, resampled_mask, self.target_shape)
             _, resized_pred = self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
@@ -627,8 +629,6 @@ class ROIPreprocessor:
             umap_array = npz_file[umap_type]
             umap_array = umap_array.astype(np.float32)  # or whichever key you want
             umap_array = np.squeeze(umap_array)
-            # print("INITIAL UMAP min:", umap_array.min())
-            # print("INITIAL UMAP max:", umap_array.max())
 
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
 
@@ -654,7 +654,7 @@ class ROIPreprocessor:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
 
 
-                resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_mask, self.target_shape)
+                resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
 
             else:
                 resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_mask, self.target_shape)
