@@ -44,7 +44,7 @@ train_transforms = Compose([
         rotate_range=[np.pi / 9],
         translate_range=[0.1, 0.1],
         scale_range=[0.1, 0.1],
-        mode=('bilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
+        mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
     RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
     ToTensord(keys=["image", "uncertainty"])

@@ -32,24 +32,27 @@ torch.backends.cudnn.benchmark = False
 
 from monai.transforms import (
     Compose, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised,
-    ToTensord
+    ToTensord,ConcatItemsd
 )
 train_transforms = Compose([
-    EnsureChannelFirstd(keys="merged", channel_dim=0),  # ensures shape: (C, H, W, D)
+    EnsureChannelFirstd(keys=["image","uncertainty"], channel_dim=0),  # ensures shape: (C, H, W, D)
     RandAffined(
-        keys="merged",
+        keys=["image","uncertainty"],
         prob=1.0,
         rotate_range=[np.pi / 9],
         translate_range=[0.1, 0.1],
         scale_range=[0.1, 0.1],
-        mode='bilinear'  # single input, single interpolation mode
+        mode=("trilinear","nearest") # single input, single interpolation mode
     ),
-    RandFlipd(keys="merged", prob=0.5, spatial_axis=1),
+    RandFlipd(keys=["image","uncertainty"], prob=0.5, spatial_axis=1),
+    # Concatenate image and mask along the channel axis
+    ConcatItemsd(keys=["image", "uncertainty"], name="merged"),
     ToTensord(keys="merged")
 ])
 
 val_transforms = Compose([
-    EnsureChannelFirstd(keys="merged", channel_dim=0),
+    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
+    ConcatItemsd(keys=["image", "uncertainty"], name="merged"),
     ToTensord(keys="merged")
 ])
 
@@ -154,11 +157,11 @@ class QADataset(Dataset):
         label = bin_dice_score(dice_score)
         label_tensor = torch.tensor(label).long()
 
-        merged = torch.cat((image_tensor, uncertainty_tensor), dim=0)  # [2,D,H,W]
 
         if self.transform:
             data = self.transform({
-                "merged": merged,
+                "image": image_tensor,
+                'uncertainty':uncertainty_tensor
             })
             merged = data["merged"]
 

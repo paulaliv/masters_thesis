@@ -1,4 +1,6 @@
 from collections import defaultdict
+
+from tests.networks.nets.test_basic_unetplusplus import in_channels
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -39,23 +41,37 @@ from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
     ToTensord
 )
+from monai.transforms import (
+    Compose, EnsureChannelFirstd, RandAffined, RandFlipd,
+    ToTensord, ConcatItemsd
+)
+
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    EnsureChannelFirstd(keys=["image", "mask", "uncertainty"], channel_dim=0),
+
     RandAffined(
-        keys=["image", "uncertainty"],  # apply same affine to both
+        keys=["image", "mask", "uncertainty"],
         prob=1.0,
         rotate_range=[np.pi / 9],
         translate_range=[0.1, 0.1],
         scale_range=[0.1, 0.1],
-        mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
+        mode=("trilinear", "nearest", "nearest"),  # use correct interpolation
     ),
-    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
+
+    RandFlipd(keys=["image", "mask", "uncertainty"], prob=0.5, spatial_axis=1),
+
+    # Concatenate image and mask along the channel axis
+    ConcatItemsd(keys=["image", "mask"], name="image"),
+
     ToTensord(keys=["image", "uncertainty"])
 ])
+
+
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
+    EnsureChannelFirstd(keys=["image", "mask","uncertainty"], channel_dim=0),
     #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    # Concatenate image and mask along the channel axis
+    ConcatItemsd(keys=["image", "mask"], name="image"),
     ToTensord(keys=["image", "uncertainty"])
 ])
 
@@ -175,10 +191,10 @@ val_transforms = Compose([
 #         return x.view(x.size(0), -1)
 
 class Light3DEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self,in_channels):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=3, padding=1),
+            nn.Conv3d(in_channels, 16, kernel_size=3, padding=1),
             nn.BatchNorm3d(16),
             nn.ReLU(),
             nn.MaxPool3d(2),  # halves each dimension
@@ -203,8 +219,8 @@ class QAModel(nn.Module):
     def __init__(self,num_thresholds):
         super().__init__()
 
-        self.encoder_img = Light3DEncoder()
-        self.encoder_unc= Light3DEncoder()
+        self.encoder_img = Light3DEncoder(in_channels=2)
+        self.encoder_unc= Light3DEncoder(in_channels=1)
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.norm = nn.LayerNorm(128)
 
@@ -284,22 +300,17 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
-        image = torch.from_numpy(image).float()
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_mask.npy'))
+        image_tensor = torch.from_numpy(image).float().unsqueeze(0)
+        mask_tensor = torch.from_numpy(mask).float().unsqueeze(0)
 
-        if image.ndim == 3:
-            image = image.unsqueeze(0)  # Add channel dim
 
-        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
-
 
         # Map dice score to category
 
         label = bin_dice_score(dice_score)
-
-
-        #image_tensor = torch.from_numpy(image).float()
 
         # print(f'Image shape {image.shape}')
         uncertainty_tensor = torch.from_numpy(uncertainty).float()
@@ -311,6 +322,7 @@ class QADataset(Dataset):
         if self.transform:
             data = self.transform({
                 "image": image,
+                'mask': mask,
                 "uncertainty": uncertainty_tensor
             })
             image = data["image"]

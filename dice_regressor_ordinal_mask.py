@@ -283,7 +283,7 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        image = np.load(os.path.join(self.data_dir, f'{case_id}_mask.npy'))
         image = torch.from_numpy(image).float()
 
         if image.ndim == 3:
@@ -649,7 +649,7 @@ def main(data_dir, plot_dir, folds,df):
         start = time.time()
         train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
             4,
-            data_dir,
+            data_dir=data_dir,
             df=df,
             splits=folds,
             uncertainty_metric=metric,
