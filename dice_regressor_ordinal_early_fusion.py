@@ -491,6 +491,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 #     return dice
 
 def main(data_dir, plot_dir, folds,df):
+    print('MODEL INPUT: UNCERTAINTY MAP + IMAGE')
+    print('FUSION: EARLY')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # for fold in range(5):
