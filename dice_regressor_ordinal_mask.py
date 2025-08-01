@@ -289,30 +289,30 @@ class QADataset(Dataset):
         image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         image = torch.from_numpy(image).float()
 
+        if image.ndim == 3:
+            image = image.unsqueeze(0)  # Add channel dim
+
+        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
         if uncertainty.sum() == 0:
             print(f'{case_id} has empty map!')
 
-        # Convert to torch and ensure shape [1, D, H, W]
-        if image.ndim == 3:
-            image = torch.from_numpy(image).float().unsqueeze(0)
-        else:
-            image = torch.from_numpy(image).float()
-            assert image.ndim == 4, f"Expected image to have 4 dims (C, D, H, W), got {image.shape}"
 
-        if uncertainty.ndim == 3:
-            uncertainty_tensor = torch.from_numpy(uncertainty).float().unsqueeze(0)
-        else:
-            uncertainty_tensor = torch.from_numpy(uncertainty).float()
-            assert uncertainty_tensor.ndim == 4, f"Expected uncertainty to have 4 dims (C, D, H, W), got {uncertainty_tensor.shape}"
 
 
         # Map dice score to category
 
         label = bin_dice_score(dice_score)
 
+
+        #image_tensor = torch.from_numpy(image).float()
+
+        # print(f'Image shape {image.shape}')
+        uncertainty_tensor = torch.from_numpy(uncertainty).float()
+
+        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
         label_tensor = torch.tensor(label).long()
 
