@@ -41,22 +41,21 @@ from monai.transforms import (
     Compose, EnsureChannelFirstd, RandAffined, RandFlipd,
     ToTensord, ConcatItemsd
 )
-
 train_transforms = Compose([
     EnsureChannelFirstd(keys=["image", "mask", "uncertainty"], channel_dim=0),
 
     RandAffined(
         keys=["image", "mask", "uncertainty"],
         prob=1.0,
-        rotate_range=[np.pi / 9],
-        translate_range=[0.1, 0.1],
-        scale_range=[0.1, 0.1],
-        mode=("trilinear", "nearest", "nearest"),  # use correct interpolation
+        rotate_range=(np.pi / 9, np.pi / 9, np.pi / 9),     # 3D rotation
+        translate_range=(5, 5, 5),                          # adjust as needed, in voxels
+        scale_range=(0.1, 0.1, 0.1),
+        mode=("trilinear", "nearest", "nearest"),
+        padding_mode="border"
     ),
 
     RandFlipd(keys=["image", "mask", "uncertainty"], prob=0.5, spatial_axis=1),
 
-    # Concatenate image and mask along the channel axis
     ConcatItemsd(keys=["image", "mask"], name="image"),
 
     ToTensord(keys=["image", "uncertainty"])

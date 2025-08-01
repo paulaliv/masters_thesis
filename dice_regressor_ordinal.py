@@ -45,9 +45,10 @@ train_transforms = Compose([
     RandAffined(
         keys=["image", "uncertainty"],  # apply same affine to both
         prob=1.0,
-        rotate_range=[np.pi / 9],
-        translate_range=[0.1, 0.1],
-        scale_range=[0.1, 0.1],
+        rotate_range=(np.pi/12, np.pi/12, np.pi/12),
+        translate_range=(5, 5, 5),  # in voxels
+        scale_range=(0.1, 0.1, 0.1),
+
         mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
     RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
