@@ -588,7 +588,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             zero_division=0
         )
 
-        scheduler.step(epoch_val_loss)
+        scheduler.step()
         for class_name in class_names:
             f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
