@@ -18,7 +18,7 @@ import pandas as pd
 
 class ROIPreprocessor:
     def __init__(self,
-                 roi_context: Tuple[int, int, int] = (5, 20, 20),
+                 roi_context: Tuple[int, int, int] = (7, 30, 30),
                  target_spacing: Tuple[int, int, int] = (1,1,3),
                  safe_as_nifti = False,
                  save_umaps = False,
@@ -605,6 +605,7 @@ class ROIPreprocessor:
 
             img_pp = self.normalize(cropped_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+            print('Adjusting GT Mask!!')
             _,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
 
             if self.case_id == 'DES_0149':
