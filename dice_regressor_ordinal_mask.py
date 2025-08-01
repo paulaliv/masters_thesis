@@ -441,7 +441,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #Early stopping variables
     best_val_loss = float('inf')
-    patience = 10
+    patience = 15
     patience_counter = 0
 
     #Initiate Scaler
@@ -597,6 +597,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
+            print(f'Yay, new best : {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights

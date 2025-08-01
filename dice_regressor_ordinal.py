@@ -284,6 +284,8 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+
+
         image = torch.from_numpy(image).float()
 
         if image.ndim == 3:
@@ -292,6 +294,9 @@ class QADataset(Dataset):
         assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
+
+        if uncertainty.sum() == 0:
+            print(f'{case_id} map is empty')
 
 
         # Map dice score to category
@@ -597,6 +602,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
+            print(f'Yay, new best : {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights

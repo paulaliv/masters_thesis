@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from tests.networks.nets.test_basic_unetplusplus import in_channels
+
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -17,8 +17,7 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-from sklearn.metrics import mean_absolute_error
-from torch.optim.lr_scheduler import LambdaLR
+
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import umap
@@ -37,10 +36,7 @@ random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
-    ToTensord
-)
+
 from monai.transforms import (
     Compose, EnsureChannelFirstd, RandAffined, RandFlipd,
     ToTensord, ConcatItemsd
@@ -609,6 +605,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
+            print(f'Yay, new best : {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights
