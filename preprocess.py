@@ -539,8 +539,8 @@ class ROIPreprocessor:
         #
         # print(f'CSV file has {len(df)} rows')
         # # Compute global stats
-        # print(f'Cases that were cropped: {self.cropped_cases}')
-        # print(f'Total cropped images: {len(self.cropped_cases)}')
+        print(f'Cases that were cropped: {self.cropped_cases}')
+        print(f'Total cropped images: {len(self.cropped_cases)}')
 
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
