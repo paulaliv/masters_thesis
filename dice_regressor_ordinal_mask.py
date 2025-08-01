@@ -438,10 +438,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
     # Step 1: Warmup
-    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=3)
 
     # Step 2: Cosine Annealing after warmup
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=45)  # 45 = total_epochs - warmup_epochs
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=47)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
     scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
