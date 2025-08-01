@@ -51,7 +51,9 @@ train_transforms = Compose([
         translate_range=(5, 5, 5),                          # adjust as needed, in voxels
         scale_range=(0.1, 0.1, 0.1),
         mode=("trilinear", "nearest", "nearest"),
-        padding_mode="border"
+        spatial_size=(48, 256, 256),
+
+
     ),
 
     RandFlipd(keys=["image", "mask", "uncertainty"], prob=0.5, spatial_axis=1),
@@ -296,6 +298,8 @@ class QADataset(Dataset):
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
         mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
+
+
         image_tensor = torch.from_numpy(image).float().unsqueeze(0)
         mask_tensor = torch.from_numpy(mask).float().unsqueeze(0)
 
