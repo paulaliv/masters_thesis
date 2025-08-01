@@ -30,6 +30,7 @@ class ROIPreprocessor:
         self.save_as_nifti = safe_as_nifti
         self.save_umaps = save_umaps
         self.cropped_cases = []
+        self.empty_masks = []
         #self.extractor = featureextractor.RadiomicsFeatureExtractor()
 
 
@@ -332,17 +333,9 @@ class ROIPreprocessor:
         plt.suptitle(name, fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-        #plt.savefig(os.path.join(output_dir,f'{umap_type}_{self.case_id}'))
-        if 'CROPPED' in umap_type and self.case_id in self.cropped_cases:
 
-            #plt.savefig(os.path.join(output_dir, f'TUMOR_{umap_type}_{self.case_id}.png'))
-            #plt.show()
-            plt.close()
-
-        else:
-            #plt.show()
-            plt.savefig(os.path.join(output_dir, f'TEST_{umap_type}_EP30_{self.case_id}.png'))
-            plt.close()
+        plt.savefig(os.path.join(output_dir, f'{umap_type}_EP30_{self.case_id}.png'))
+        plt.close()
 
 
     def extract_radiomics_features(self, img, mask):
@@ -542,6 +535,9 @@ class ROIPreprocessor:
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
 
+        print(f'Empty Predictions: {self.empty_masks}')
+        print(f'Total empty preds: {len(self.empty_masks)}')
+
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, gt_path, mask_path, output_path, output_dir_visuals):
@@ -616,6 +612,7 @@ class ROIPreprocessor:
 
         else:
             print('WARNING:Prediction is empty, defaulting to center crop')
+            self.empty_masks.append(self.case_id)
             img_pp = self.normalize(resampled_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
 
