@@ -18,7 +18,7 @@ import pandas as pd
 
 class ROIPreprocessor:
     def __init__(self,
-                 roi_context: Tuple[int, int, int] = (7, 30, 30),
+                 roi_context: Tuple[int, int, int] = (9, 40, 40),
                  target_spacing: Tuple[int, int, int] = (1,1,3),
                  safe_as_nifti = False,
                  save_umaps = False,
