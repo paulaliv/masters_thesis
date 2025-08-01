@@ -20,6 +20,8 @@ from torch.optim.lr_scheduler import LambdaLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import umap
+
+from torch.optim.lr_scheduler import SequentialLR, CosineAnnealingLR, LinearLR
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -293,6 +295,9 @@ class QADataset(Dataset):
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
+        if uncertainty.sum() == 0:
+            print(f'{case_id} has empty map!')
+
 
         # Map dice score to category
 
@@ -432,9 +437,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
+    # Step 1: Warmup
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
-    # warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+    # Step 2: Cosine Annealing after warmup
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=45)  # 45 = total_epochs - warmup_epochs
+
+    # Combine them
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
     criterion = coral_loss_manual
@@ -586,6 +597,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # After each validation epoch:
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
+            patience_counter = 0
+
             present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
             labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
             best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
@@ -594,23 +607,23 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_kappa_report = report
             best_kappa_epoch = epoch
 
-
-        # Early stopping check
-        if epoch_val_loss < best_val_loss:
-            print(f'Yay, new best : {epoch_val_loss}!')
-            best_val_loss = epoch_val_loss
-            patience_counter = 0
-            # Save best model weights
-            # torch.save({
-            #     'model_state_dict': model.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            #     'epoch': epoch,
-            #     'val_loss': epoch_val_loss
-            # }, f"best_qa_model_fold{fold}.pt")
-            best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
-                                           zero_division=0)
-
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_MASK.npz"), preds=val_preds_np, labels=val_labels_np)
+        #
+        # # Early stopping check
+        # if epoch_val_loss < best_val_loss:
+        #     print(f'Yay, new best : {epoch_val_loss}!')
+        #     best_val_loss = epoch_val_loss
+        #     patience_counter = 0
+        #     # Save best model weights
+        #     # torch.save({
+        #     #     'model_state_dict': model.state_dict(),
+        #     #     'optimizer_state_dict': optimizer.state_dict(),
+        #     #     'epoch': epoch,
+        #     #     'val_loss': epoch_val_loss
+        #     # }, f"best_qa_model_fold{fold}.pt")
+        #     best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
+        #                                    zero_division=0)
+        #
+        #     np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_MASK.npz"), preds=val_preds_np, labels=val_labels_np)
 
 
         else:
@@ -619,10 +632,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 print("Early stopping triggered")
 
                 break
-    file = os.path.join(plot_dir, f'best_report_{uncertainty_metric}')
-    with open(file, "w") as f:
-        f.write(f"Final Classification Report for Fold {fold}:\n")
-        f.write(best_report)
+    # file = os.path.join(plot_dir, f'best_report_{uncertainty_metric}')
+    # with open(file, "w") as f:
+    #     f.write(f"Final Classification Report for Fold {fold}:\n")
+    #     f.write(best_report)
 
     # Plot and save best confusion matrix
     plt.figure(figsize=(6, 5))
@@ -635,7 +648,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
+    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history
 
 
 
@@ -650,7 +663,7 @@ def main(data_dir, plot_dir, folds,df):
     metrics = ['confidence']
     for idx, metric in enumerate(metrics):
         start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
+        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history= train_one_fold(
             4,
             data_dir=data_dir,
             df=df,
@@ -661,8 +674,8 @@ def main(data_dir, plot_dir, folds,df):
         )
 
         end = time.time()
-        print(f'Best report for {metric}:')
-        print(best_report)
+        # print(f'Best report for {metric}:')
+        # print(best_report)
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
         # Convert prediction outputs to numpy arrays for plotting
