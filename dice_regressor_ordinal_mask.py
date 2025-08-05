@@ -194,7 +194,7 @@ class CORNLoss(nn.Module):
         B, K_minus_1 = logits.shape
 
         temperature = 0.5
-        print(f'Added temp to logits: {temperature}')
+
         logits = logits/temperature
 
         # Create binary targets: 1 if label > threshold
@@ -247,7 +247,7 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(128)
+        #self.norm = nn.LayerNorm(128)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
