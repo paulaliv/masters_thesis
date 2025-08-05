@@ -576,7 +576,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-5)
     # Step 1: Warmup
-    warmup_epochs = 3
+    warmup_epochs = 5
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
     #
     # # Step 2: Cosine Annealing after warmup
