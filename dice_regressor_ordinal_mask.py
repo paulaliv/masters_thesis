@@ -266,8 +266,8 @@ class QAModel(nn.Module):
         merged = self.norm(merged)
         features = self.fc(merged)  # [B, 1]
 
-        logits = features + self.biases  # Broadcast to [B, num_thresholds]
-        return logits
+        #logits = features + self.biases  # Broadcast to [B, num_thresholds]
+        return features
 
 
     def extract_features(self, uncertainty):
