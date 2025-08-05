@@ -191,8 +191,7 @@ class CORNLoss(nn.Module):
         labels: Tensor of shape (B,) with values in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
-        print(f'logits shape: {logits.shape}')
-        print(f'K-1 : {K_minus_1}')
+
         # Create binary targets: 1 if label > threshold
         y_bin = torch.zeros_like(logits, dtype=torch.long)
         for k in range(K_minus_1):
@@ -206,6 +205,7 @@ class CORNLoss(nn.Module):
 
         loss = F.cross_entropy(logits_reshaped, targets_reshaped, reduction='mean')
         return loss
+
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -533,9 +533,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
-                print(f'Label shape {label.shape}')
+                # print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                print(f'model Output Shape : {preds.shape}')
+                # print(f'model Output Shape : {preds.shape}')
                 #targets = encode_ordinal_targets(label).to(preds.device)
                 #print(f'Tagets shape: {targets.shape}')
                 loss = criterion(preds, label)
