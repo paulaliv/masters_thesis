@@ -747,8 +747,7 @@ def main(data_dir, plot_dir, folds,df):
         )
 
         end = time.time()
-        # print(f'Best report for {metric}:')
-        # print(best_report)
+
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
         # Convert prediction outputs to numpy arrays for plotting
