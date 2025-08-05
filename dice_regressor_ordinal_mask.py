@@ -621,7 +621,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
 
     all_labels = []
-    for _,_,labels, in train_loader:
+    for _,_,labels,_ in train_loader:
         all_labels.extend(labels.cpu().numpy().tolist())
 
     dist = compute_class_distribution(all_labels)
