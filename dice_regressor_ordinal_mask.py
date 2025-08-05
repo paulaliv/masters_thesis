@@ -738,7 +738,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             print(f"Current LR: {param_group['lr']}")
 
 
-        print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+
 
 
         val_losses.append(epoch_val_loss)
@@ -793,7 +793,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             scheduler.step(epoch_val_loss)
             print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
+            #
+        # # Early stopping check
+        if epoch_val_loss < best_val_loss:
+            print(f'YAY, new best Val loss: {epoch_val_loss}!')
+        else:
+            print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+
         if kappa_quadratic > best_kappa:
+            print(f'New Best Kappa: {kappa_quadratic}!')
             best_kappa = kappa_quadratic
             patience_counter = 0
 
@@ -805,10 +813,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_kappa_report = report
             best_kappa_epoch = epoch
 
-        #
-        # # Early stopping check
-        # if epoch_val_loss < best_val_loss:
-        #     print(f'Yay, new best : {epoch_val_loss}!')
+
         #     best_val_loss = epoch_val_loss
         #     patience_counter = 0
         #     # Save best model weights
