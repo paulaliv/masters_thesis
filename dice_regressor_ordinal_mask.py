@@ -256,7 +256,7 @@ class QAModel(nn.Module):
             nn.Dropout(0.1),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
-        self.biases = nn.Parameter(torch.zeros(num_thresholds))
+        #self.biases = nn.Parameter(torch.zeros(num_thresholds))
 
 
     def forward(self, image, uncertainty):
