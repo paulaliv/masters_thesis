@@ -191,6 +191,8 @@ class CORNLoss(nn.Module):
         labels: Tensor of shape (B,) with values in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
+        print(f'logits shape: {logits.shape}')
+        print(f'K-1 : {K_minus_1}')
         # Create binary targets: 1 if label > threshold
         y_bin = torch.zeros_like(logits, dtype=torch.long)
         for k in range(K_minus_1):
