@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from sympy.physics.units import temperature
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -192,6 +193,9 @@ class CORNLoss(nn.Module):
         """
         B, K_minus_1 = logits.shape
 
+        temperature = 0.5
+        logits = logits/temperature
+
         # Create binary targets: 1 if label > threshold
         y_bin = torch.zeros_like(logits, dtype=torch.long)
         for k in range(K_minus_1):
@@ -200,6 +204,10 @@ class CORNLoss(nn.Module):
         # Compute softmax over two classes (not raw binary classification)
         # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
         logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
+
+
+
+
         logits_reshaped = logits_stacked.view(-1, 2)  # [B*(K-1), 2]
         targets_reshaped = y_bin.view(-1)  # [B*(K-1)]
 
@@ -244,7 +252,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.1),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
         self.biases = nn.Parameter(torch.zeros(num_thresholds))
