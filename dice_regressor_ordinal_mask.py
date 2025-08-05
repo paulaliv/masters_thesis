@@ -439,15 +439,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 
-   # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
     # Step 1: Warmup
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=3)
-
-    # Step 2: Cosine Annealing after warmup
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=47)  # 45 = total_epochs - warmup_epochs
+    #
+    # # Step 2: Cosine Annealing after warmup
+    # cosine_scheduler = CosineAnnealingLR(optimizer, T_max=47)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
@@ -518,6 +518,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # Validation step
         model.eval()
         val_running_loss, val_correct, val_total = 0.0, 0, 0
+        empty_mask_count = 0
+        total_masks = 0
         val_preds_list.clear()
         val_labels_list.clear()
         val_subtypes_list.clear()
@@ -527,8 +529,13 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         with torch.no_grad():
             for image, uncertainty, label, subtype in val_loader:
+
                 image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
 
+                # Count empty masks in the batch
+                batch_empty = (image.sum(dim=[1, 2, 3, 4]) == 0).sum().item()  # assumes mask shape is (B, C, D, H, W)
+                empty_mask_count += batch_empty
+                total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
                 targets = encode_ordinal_targets(label).to(preds.device)
@@ -554,6 +561,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
                 val_subtypes_list.extend(subtype_list)
 
+        print(f"{empty_mask_count} out of {total_masks} masks in validation were completely empty.")
 
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
