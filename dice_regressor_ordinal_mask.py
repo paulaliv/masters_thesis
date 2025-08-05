@@ -201,7 +201,10 @@ class CORNLoss(nn.Module):
         # Compute softmax over two classes (not raw binary classification)
         # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
         logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
-        loss = F.cross_entropy(logits_stacked, y_bin, reduction='mean')
+        logits_reshaped = logits_stacked.view(-1, 2)  # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)  # [B*(K-1)]
+
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, reduction='mean')
         return loss
 class Light3DEncoder(nn.Module):
     def __init__(self):
