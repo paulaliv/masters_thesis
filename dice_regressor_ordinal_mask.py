@@ -299,7 +299,6 @@ class Light3DEncoder(nn.Module):
 
 
 
-)
 class QAModel(nn.Module):
     def __init__(self,num_thresholds):
         super().__init__()
