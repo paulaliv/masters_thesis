@@ -179,6 +179,47 @@ val_transforms = Compose([
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
 
+class BatchWeightedCORNLoss(nn.Module):
+    def __init__(self, eps=1e-6):
+        super().__init__()
+        self.eps = eps  # To prevent division by zero
+
+    def forward(self, logits, labels):
+        """
+        logits: [B, K-1] logits for ordinal thresholds
+        labels: [B] with values in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # Construct binary target matrix: y_bin[b, k] = 1 if label[b] > k
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Compute logits for 2-class problem: P(class ≤ k) vs P(class > k)
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # [B, K-1, 2]
+        logits_reshaped = logits_stacked.view(-1, 2)            # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)                       # [B*(K-1)]
+
+        # Compute class weights per threshold (for each binary task)
+        # This results in a weight vector [B*(K-1)]
+        pos_counts = y_bin.sum(dim=0).float() + self.eps
+        neg_counts = (B - y_bin.sum(dim=0)).float() + self.eps
+
+        weight_pos = (B / (2.0 * pos_counts))  # shape [K-1]
+        weight_neg = (B / (2.0 * neg_counts))  # shape [K-1]
+
+        weights = torch.where(
+            y_bin.bool(),
+            weight_pos.unsqueeze(0).expand_as(y_bin),
+            weight_neg.unsqueeze(0).expand_as(y_bin)
+        ).view(-1)  # [B*(K-1)]
+
+        # Use cross-entropy with per-sample weights
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, weight=None, reduction='none')
+        loss = (loss * weights).mean()
+
+        return loss
 class CORNLoss(nn.Module):
     """
     CORN Loss for ordinal regression.
@@ -193,9 +234,9 @@ class CORNLoss(nn.Module):
         """
         B, K_minus_1 = logits.shape
 
-        temperature = 0.5
-
-        logits = logits/temperature
+        # temperature = 0.5
+        #
+        # logits = logits/temperature
 
         # Create binary targets: 1 if label > threshold
         y_bin = torch.zeros_like(logits, dtype=torch.long)
@@ -247,7 +288,7 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        #self.norm = nn.LayerNorm(128)
+        self.norm = nn.LayerNorm(128)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
@@ -263,7 +304,7 @@ class QAModel(nn.Module):
         x1 = self.encoder_img(image)
         x2 = self.encoder_unc(uncertainty)
         merged = torch.cat((x1, x2), dim=1) #[B,128]
-        #merged = self.norm(merged)
+        merged = self.norm(merged)
         features = self.fc(merged)  # [B, 1]
 
         #logits = features + self.biases  # Broadcast to [B, num_thresholds]
@@ -502,7 +543,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = coral_loss_manual
-    criterion = CORNLoss()
+    criterion = BatchWeightedCORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
