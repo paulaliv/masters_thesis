@@ -263,34 +263,34 @@ class CORNLoss(nn.Module):
 
 class Light3DEncoder(nn.Module):
     def __init__(self):
-        super().__init__()
-        # self.encoder = nn.Sequential(
-        #     nn.Conv3d(1, 16, kernel_size=3, padding=1),
-        #     nn.BatchNorm3d(16),
-        #     nn.ReLU(),
-        #     nn.MaxPool3d(2),  # halves each dimension
-        #
-        #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
-        #     nn.BatchNorm3d(32),
-        #     nn.ReLU(),
-        #     nn.MaxPool3d(2),
-        #
-        #     nn.Conv3d(32, 64, kernel_size=3, padding=1),
-        #     nn.BatchNorm3d(64),
-        #     nn.ReLU(),
-        #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
-        # )
+        # super().__init__()
+        # # self.encoder = nn.Sequential(
+        # #     nn.Conv3d(1, 16, kernel_size=3, padding=1),
+        # #     nn.BatchNorm3d(16),
+        # #     nn.ReLU(),
+        # #     nn.MaxPool3d(2),  # halves each dimension
+        # #
+        # #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
+        # #     nn.BatchNorm3d(32),
+        # #     nn.ReLU(),
+        # #     nn.MaxPool3d(2),
+        # #
+        # #     nn.Conv3d(32, 64, kernel_size=3, padding=1),
+        # #     nn.BatchNorm3d(64),
+        # #     nn.ReLU(),
+        # #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        # # )
 
-        self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
-            nn.MaxPool3d(2),
-            nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
-            nn.MaxPool3d(2),
-            nn.Conv3d(32, 64, 3, padding=1), nn.BatchNorm3d(64), nn.ReLU(),
-            nn.MaxPool3d(2),  # <- NEW BLOCK
-            nn.Conv3d(64, 128, 3, padding=1), nn.BatchNorm3d(128), nn.ReLU(),
-            nn.AdaptiveAvgPool3d(1),
-        )
+        # self.encoder = nn.Sequential(
+        #     nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
+        #     nn.MaxPool3d(2),
+        #     nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
+        #     nn.MaxPool3d(2),
+        #     nn.Conv3d(32, 64, 3, padding=1), nn.BatchNorm3d(64), nn.ReLU(),
+        #     nn.MaxPool3d(2),  # <- NEW BLOCK
+        #     nn.Conv3d(64, 128, 3, padding=1), nn.BatchNorm3d(128), nn.ReLU(),
+        #     nn.AdaptiveAvgPool3d(1),
+        # )
         # Output would now be [B, 128]
 
     def forward(self, x):
@@ -306,13 +306,13 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(256)
+        self.norm = nn.LayerNorm(128)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256, 64),
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.3),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
         #self.biases = nn.Parameter(torch.zeros(num_thresholds))
@@ -737,10 +737,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         for param_group in optimizer.param_groups:
             print(f"Current LR: {param_group['lr']}")
 
-
-
-
-
         val_losses.append(epoch_val_loss)
 
         # all_logits = torch.cat(all_logits, dim=0)
@@ -797,6 +793,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # # Early stopping check
         if epoch_val_loss < best_val_loss:
             print(f'YAY, new best Val loss: {epoch_val_loss}!')
+            best_val_loss = epoch_val_loss
         else:
             print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
 
