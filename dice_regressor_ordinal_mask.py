@@ -264,28 +264,42 @@ class CORNLoss(nn.Module):
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
+        # self.encoder = nn.Sequential(
+        #     nn.Conv3d(1, 16, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(16),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),  # halves each dimension
+        #
+        #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(32),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),
+        #
+        #     nn.Conv3d(32, 64, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(64),
+        #     nn.ReLU(),
+        #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        # )
+
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=3, padding=1),
-            nn.BatchNorm3d(16),
-            nn.ReLU(),
-            nn.MaxPool3d(2),  # halves each dimension
-
-            nn.Conv3d(16, 32, kernel_size=3, padding=1),
-            nn.BatchNorm3d(32),
-            nn.ReLU(),
+            nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
             nn.MaxPool3d(2),
-
-            nn.Conv3d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+            nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
+            nn.MaxPool3d(2),
+            nn.Conv3d(32, 64, 3, padding=1), nn.BatchNorm3d(64), nn.ReLU(),
+            nn.MaxPool3d(2),  # <- NEW BLOCK
+            nn.Conv3d(64, 128, 3, padding=1), nn.BatchNorm3d(128), nn.ReLU(),
+            nn.AdaptiveAvgPool3d(1),
         )
+        # Output would now be [B, 128]
 
     def forward(self, x):
         x = self.encoder(x)
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
 
 
+
+)
 class QAModel(nn.Module):
     def __init__(self,num_thresholds):
         super().__init__()
@@ -293,11 +307,11 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(128)
+        self.norm = nn.LayerNorm(256)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128, 64),
+            nn.Linear(256, 64),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
