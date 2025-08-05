@@ -337,9 +337,6 @@ class QADataset(Dataset):
         if uncertainty.sum() == 0:
             print(f'{case_id} has empty map!')
 
-
-
-
         # Map dice score to category
 
         label = bin_dice_score(dice_score)
