@@ -1,4 +1,6 @@
 from collections import defaultdict
+
+from tests.losses.test_adversarial_loss import criterion
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -177,6 +179,29 @@ val_transforms = Compose([
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
 
+class CORNLoss(nn.Module):
+    """
+    CORN Loss for ordinal regression.
+    """
+    def __init__(self):
+        super(CORNLoss, self).__init__()
+
+    def forward(self, logits, labels):
+        """
+        logits: Tensor of shape (B, K-1), where K is the number of ordinal classes
+        labels: Tensor of shape (B,) with values in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+        # Create binary targets: 1 if label > threshold
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Compute softmax over two classes (not raw binary classification)
+        # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
+        loss = F.cross_entropy(logits_stacked, y_bin, reduction='mean')
+        return loss
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -367,12 +392,25 @@ def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
 #try: use argmax on cumulative logits
 #or logit based decoding
 
+# logit based decofing: (logits > 0).sum(dim=1)If all 3 logits > 0 → class 3
+# If first 2 > 0, last ≤ 0 → class 2
+# If only 1st > 0 → class 1
+# If all ≤ 0 → class 0
+#
+# ✅ This works well but relies heavily on raw logit thresholds at zero, which may be unstable or biased.
 def decode_predictions(logits):
     # print("Logits mean:", logits.mean().item())
     # print("Logits min/max:", logits.min().item(), logits.max().item())
     #probs = torch.sigmoid(logits)
 
     return (logits > 0).sum(dim=1)
+
+@torch.no_grad()
+def corn_predict(logits):
+    # logits shape: [B, num_thresholds]
+    probs = torch.stack([-logits, logits], dim=2)  # shape: [B, num_thresholds, 2]
+    pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
+    return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
 
 
 def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
@@ -453,7 +491,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = coral_loss_manual
+    #criterion = coral_loss_manual
+    criterion = CORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
@@ -506,7 +545,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
+                #decoded_preds = decode_predictions(preds)
+                decoded_preds = corn_predict(preds)
 
                 correct += (decoded_preds == label).sum().item()
 
@@ -546,7 +586,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
+                   # decoded_preds = decode_predictions(preds)
+                    decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
