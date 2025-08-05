@@ -696,7 +696,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 all_labels.append(label.cpu())
 
 
-                loss = criterion(preds, label, dist)
+                loss = criterion(preds, label)
                 val_running_loss += loss.item() * image.size(0)
 
 
