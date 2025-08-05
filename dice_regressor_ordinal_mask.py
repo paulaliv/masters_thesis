@@ -194,6 +194,7 @@ class CORNLoss(nn.Module):
         B, K_minus_1 = logits.shape
 
         temperature = 0.5
+        print(f'Added temp to logits: {temperature}')
         logits = logits/temperature
 
         # Create binary targets: 1 if label > threshold
@@ -416,7 +417,7 @@ def decode_predictions(logits):
 
 @torch.no_grad()
 def corn_predict(logits):
-    # logits shape: [B, num_thresholds]
+    #logits shape: [B, num_thresholds]
     probs = torch.stack([-logits, logits], dim=2)  # shape: [B, num_thresholds, 2]
     pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
     return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
