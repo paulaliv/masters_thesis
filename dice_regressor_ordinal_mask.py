@@ -263,7 +263,7 @@ class QAModel(nn.Module):
         x1 = self.encoder_img(image)
         x2 = self.encoder_unc(uncertainty)
         merged = torch.cat((x1, x2), dim=1) #[B,128]
-        merged = self.norm(merged)
+        #merged = self.norm(merged)
         features = self.fc(merged)  # [B, 1]
 
         #logits = features + self.biases  # Broadcast to [B, num_thresholds]
