@@ -190,7 +190,7 @@ class BatchWeightedCORNLoss(nn.Module):
         labels: [B] with values in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
-        K = dist.shape[0]
+
 
         # Construct binary target matrix: y_bin[b, k] = 1 if label[b] > k
         y_bin = torch.zeros_like(logits, dtype=torch.long)
