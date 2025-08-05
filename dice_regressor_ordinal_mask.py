@@ -441,13 +441,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
     # Step 1: Warmup
-    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=3)
+    warmup_epochs = 3
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
     #
     # # Step 2: Cosine Annealing after warmup
     # cosine_scheduler = CosineAnnealingLR(optimizer, T_max=47)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
+    #scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
@@ -606,6 +607,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         # After each validation epoch:
+
+        # Step the appropriate scheduler
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()
+            print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+            scheduler.step(epoch_val_loss)
+            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
             patience_counter = 0
