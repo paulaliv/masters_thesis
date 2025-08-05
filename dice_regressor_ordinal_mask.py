@@ -213,7 +213,7 @@ class DistanceAwareCORNLoss(nn.Module):
         weights = distances ** self.distance_power          # [B, K-1]
 
         # Normalize per-sample weights (optional but stabilizing)
-        weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
+        #weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
 
 
         # Flatten for use in loss
@@ -589,7 +589,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = coral_loss_manual
-    criterion = CORNLoss()
+    criterion = DistanceAwareCORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
