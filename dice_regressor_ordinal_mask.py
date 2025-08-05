@@ -190,7 +190,7 @@ class BatchWeightedCORNLoss(nn.Module):
         labels: [B] with values in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
-        K = self.global_dist.shape[0]
+        K = dist.shape[0]
 
         # Construct binary target matrix: y_bin[b, k] = 1 if label[b] > k
         y_bin = torch.zeros_like(logits, dtype=torch.long)
@@ -208,9 +208,9 @@ class BatchWeightedCORNLoss(nn.Module):
 
         for k in range(K_minus_1):
             # Sum of probabilities for classes > k
-            pos_counts[k] = self.global_dist[(k + 1):].sum()
+            pos_counts[k] = dist[(k + 1):].sum()
             # Sum of probabilities for classes <= k
-            neg_counts[k] = self.global_dist[:(k + 1)].sum()
+            neg_counts[k] = dist[:(k + 1)].sum()
 
         # To avoid division by zero
         pos_counts = pos_counts + self.eps
