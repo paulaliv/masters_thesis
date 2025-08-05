@@ -412,33 +412,33 @@ def corn_predict(logits):
     return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
 
 
-def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
-    """
-    logits: [B, num_classes - 1]
-    levels: binary cumulative targets (e.g., [1, 1, 0])
-    """
-    levels =levels.float()
-    levels = levels * (1 - smoothing) + 0.5 * smoothing
-
-    log_probs = F.logsigmoid(logits)
-    log_1_minus_probs = F.logsigmoid(-logits)
-
-    loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
-
-
-    #
-    # importance_weights = torch.tensor([2, 3, 1.0])
-    # importance_weights = importance_weights.to(logits.device)
-    # importance_weights = importance_weights.view(1, -1)  # for broadcasting
-    # loss = loss * importance_weights
-
-    # Reduce loss across thresholds per sample, then average over batch
-    loss = loss.sum(dim=1).mean()
-    # probs = torch.sigmoid(logits)
-    # entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
-    # loss += entropy_weight * entropy
-
-    return loss
+# def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
+#     """
+#     logits: [B, num_classes - 1]
+#     levels: binary cumulative targets (e.g., [1, 1, 0])
+#     """
+#     levels =levels.float()
+#     levels = levels * (1 - smoothing) + 0.5 * smoothing
+#
+#     log_probs = F.logsigmoid(logits)
+#     log_1_minus_probs = F.logsigmoid(-logits)
+#
+#     loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
+#
+#
+#     #
+#     # importance_weights = torch.tensor([2, 3, 1.0])
+#     # importance_weights = importance_weights.to(logits.device)
+#     # importance_weights = importance_weights.view(1, -1)  # for broadcasting
+#     # loss = loss * importance_weights
+#
+#     # Reduce loss across thresholds per sample, then average over batch
+#     loss = loss.sum(dim=1).mean()
+#     # probs = torch.sigmoid(logits)
+#     # entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
+#     # loss += entropy_weight * entropy
+#
+#     return loss
 
 
 def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device):
@@ -531,9 +531,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 print(f'model Output Shape : {preds.shape}')
-                targets = encode_ordinal_targets(label).to(preds.device)
-                print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, targets)
+                #targets = encode_ordinal_targets(label).to(preds.device)
+                #print(f'Tagets shape: {targets.shape}')
+                loss = criterion(preds, label)
 
 
             scaler.scale(loss).backward()
@@ -579,9 +579,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
-                targets = encode_ordinal_targets(label).to(preds.device)
+                #targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, targets)
+                loss = criterion(preds, preds)
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
