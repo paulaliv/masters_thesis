@@ -586,7 +586,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 preds = model(image, uncertainty)
                 #targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, preds)
+                loss = criterion(preds, label)
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
