@@ -214,6 +214,7 @@ class DistanceAwareCORNLoss(nn.Module):
 
         # Normalize per-sample weights (optional but stabilizing)
         weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
+        print(f'Weights: {weights}')
 
         # Flatten for use in loss
         weights_flat = weights.view(-1)  # [B*(K-1)]
@@ -563,7 +564,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True,pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
 
 
@@ -691,11 +692,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
                 preds = model(image, uncertainty)
 
-
-                all_logits.append(preds.cpu())
-                all_labels.append(label.cpu())
-
-
                 loss = criterion(preds, label)
                 val_running_loss += loss.item() * image.size(0)
 
@@ -734,14 +730,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         val_losses.append(epoch_val_loss)
 
-        all_logits = torch.cat(all_logits, dim=0)
-        all_labels = torch.cat(all_labels, dim=0).numpy()
-
-        threshold_metrics = evaluate_per_threshold(all_logits, all_labels)
-
-        for t, metric in threshold_metrics.items():
-            print(f"{t} => Accuracy: {metric['Accuracy']:.3f}, AUROC: {metric['AUROC']}")
-        # avg_val_loss = sum(val_losses) / len(val_losses)
+        # all_logits = torch.cat(all_logits, dim=0)
+        # all_labels = torch.cat(all_labels, dim=0).numpy()
+        #
+        # threshold_metrics = evaluate_per_threshold(all_logits, all_labels)
+        #
+        # for t, metric in threshold_metrics.items():
+        #     print(f"{t} => Accuracy: {metric['Accuracy']:.3f}, AUROC: {metric['AUROC']}")
+        # # avg_val_loss = sum(val_losses) / len(val_losses)
 
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
