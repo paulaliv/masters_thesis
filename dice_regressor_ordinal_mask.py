@@ -639,7 +639,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 # print(f'model Output Shape : {preds.shape}')
                 #targets = encode_ordinal_targets(label).to(preds.device)
                 #print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, label, dist)
+                loss = criterion(preds, label)
 
 
             scaler.scale(loss).backward()
