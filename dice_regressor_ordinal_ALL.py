@@ -35,7 +35,13 @@ np.random.seed(42)
 random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+from monai.transforms import MapTransform
 
+class PrintKeysShape(MapTransform):
+    def __call__(self, data):
+        for key in self.keys:
+            print(f"{key} shape: {data[key].shape}")
+        return data
 
 from monai.transforms import (
     Compose, EnsureChannelFirstd, RandAffined, RandFlipd,
@@ -43,6 +49,7 @@ from monai.transforms import (
 )
 train_transforms = Compose([
     EnsureChannelFirstd(keys=["image", "mask", "uncertainty"], channel_dim=0),
+    PrintKeysShape(keys=["image", "mask", "uncertainty"]),
 
     RandAffined(
         keys=["image", "mask", "uncertainty"],
