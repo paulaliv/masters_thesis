@@ -215,9 +215,10 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
-        #self.biases = nn.Parameter(torch.zeros(num_thresholds))
+        self.biases = nn.Parameter(torch.zeros(num_thresholds))
 
 
     def forward(self, image, uncertainty):
@@ -227,8 +228,8 @@ class QAModel(nn.Module):
         merged = self.norm(merged)
         features = self.fc(merged)  # [B, 1]
 
-        #logits = features + self.biases  # Broadcast to [B, num_thresholds]
-        return features
+        logits = features + self.biases  # Broadcast to [B, num_thresholds]
+        return logits
 
 
     def extract_features(self, uncertainty):
