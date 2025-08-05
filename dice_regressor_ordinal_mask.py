@@ -179,61 +179,51 @@ val_transforms = Compose([
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
 
-class BatchWeightedCORNLoss(nn.Module):
-    def __init__(self, eps=1e-6):
-        super().__init__()
-        self.eps = eps  # To prevent division by zero
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-    def forward(self, logits, labels, dist):
+class DistanceAwareCORNLoss(nn.Module):
+    def __init__(self, eps=1e-6, distance_power=0.5):
+        super().__init__()
+        self.eps = eps
+        self.distance_power = distance_power  # use sqrt by default
+
+    def forward(self, logits, labels):
         """
-        logits: [B, K-1] logits for ordinal thresholds
-        labels: [B] with values in {0, ..., K-1}
+        logits: [B, K-1] - logits for ordinal thresholds
+        labels: [B] - integer labels in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
 
-
-        # Construct binary target matrix: y_bin[b, k] = 1 if label[b] > k
+        # Binary label matrix: y_bin[b, k] = 1 if label[b] > k
         y_bin = torch.zeros_like(logits, dtype=torch.long)
         for k in range(K_minus_1):
             y_bin[:, k] = (labels > k).long()
 
-        # Compute logits for 2-class problem: P(class ≤ k) vs P(class > k)
+        # Reshape logits for binary cross-entropy
         logits_stacked = torch.stack([-logits, logits], dim=2)  # [B, K-1, 2]
         logits_reshaped = logits_stacked.view(-1, 2)            # [B*(K-1), 2]
         targets_reshaped = y_bin.view(-1)                       # [B*(K-1)]
 
-        # Compute pos/neg class proportions per threshold k using global distribution
-        pos_counts = torch.zeros(K_minus_1)
-        neg_counts = torch.zeros(K_minus_1)
+        # Compute distance-based weights (e.g., sqrt(|label - k|))
+        label_expanded = labels.unsqueeze(1).expand(-1, K_minus_1)  # [B, K-1]
+        ks = torch.arange(K_minus_1, device=labels.device).unsqueeze(0)  # [1, K-1]
+        distances = torch.abs(label_expanded - ks).float()  # [B, K-1]
+        weights = distances ** self.distance_power          # [B, K-1]
 
-        for k in range(K_minus_1):
-            # Sum of probabilities for classes > k
-            pos_counts[k] = dist[(k + 1):].sum()
-            # Sum of probabilities for classes <= k
-            neg_counts[k] = dist[:(k + 1)].sum()
+        # Normalize per-sample weights (optional but stabilizing)
+        weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
 
-        # To avoid division by zero
-        pos_counts = pos_counts + self.eps
-        neg_counts = neg_counts + self.eps
+        # Flatten for use in loss
+        weights_flat = weights.view(-1)  # [B*(K-1)]
 
-        # Weight positive and negative samples per threshold inversely proportional to their frequency
-        weight_pos = 1.0 / pos_counts  # shape [K-1]
-        weight_neg = 1.0 / neg_counts  # shape [K-1]
-
-        # Expand weights to match y_bin shape: [B, K-1]
-        weights = torch.where(
-            y_bin.bool(),
-            weight_pos.unsqueeze(0).expand_as(y_bin),
-            weight_neg.unsqueeze(0).expand_as(y_bin)
-        )
-        weights_reshaped = weights.view(-1)
-
-
-        # Use cross-entropy with per-sample weights
+        # Compute weighted cross-entropy loss
         loss = F.cross_entropy(logits_reshaped, targets_reshaped, weight=None, reduction='none')
-        loss = (loss * weights).mean()
+        loss = (loss * weights_flat).mean()
 
         return loss
+
 class CORNLoss(nn.Module):
     """
     CORN Loss for ordinal regression.
@@ -598,7 +588,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = coral_loss_manual
-    criterion = BatchWeightedCORNLoss()
+    criterion = DistanceAwareCORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
@@ -700,10 +690,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
-                targets = encode_ordinal_targets(label).to(preds.device)
+
 
                 all_logits.append(preds.cpu())
-                all_labels.append(targets.cpu())
+                all_labels.append(label.cpu())
 
 
                 loss = criterion(preds, label, dist)
