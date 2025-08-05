@@ -17,7 +17,7 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-
+from sklearn.metrics import accuracy_score, roc_auc_score
 from torch.optim.lr_scheduler import LambdaLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
@@ -184,12 +184,13 @@ class BatchWeightedCORNLoss(nn.Module):
         super().__init__()
         self.eps = eps  # To prevent division by zero
 
-    def forward(self, logits, labels):
+    def forward(self, logits, labels, dist):
         """
         logits: [B, K-1] logits for ordinal thresholds
         labels: [B] with values in {0, ..., K-1}
         """
         B, K_minus_1 = logits.shape
+        K = self.global_dist.shape[0]
 
         # Construct binary target matrix: y_bin[b, k] = 1 if label[b] > k
         y_bin = torch.zeros_like(logits, dtype=torch.long)
@@ -201,19 +202,32 @@ class BatchWeightedCORNLoss(nn.Module):
         logits_reshaped = logits_stacked.view(-1, 2)            # [B*(K-1), 2]
         targets_reshaped = y_bin.view(-1)                       # [B*(K-1)]
 
-        # Compute class weights per threshold (for each binary task)
-        # This results in a weight vector [B*(K-1)]
-        pos_counts = y_bin.sum(dim=0).float() + self.eps
-        neg_counts = (B - y_bin.sum(dim=0)).float() + self.eps
+        # Compute pos/neg class proportions per threshold k using global distribution
+        pos_counts = torch.zeros(K_minus_1)
+        neg_counts = torch.zeros(K_minus_1)
 
-        weight_pos = (B / (2.0 * pos_counts))  # shape [K-1]
-        weight_neg = (B / (2.0 * neg_counts))  # shape [K-1]
+        for k in range(K_minus_1):
+            # Sum of probabilities for classes > k
+            pos_counts[k] = self.global_dist[(k + 1):].sum()
+            # Sum of probabilities for classes <= k
+            neg_counts[k] = self.global_dist[:(k + 1)].sum()
 
+        # To avoid division by zero
+        pos_counts = pos_counts + self.eps
+        neg_counts = neg_counts + self.eps
+
+        # Weight positive and negative samples per threshold inversely proportional to their frequency
+        weight_pos = 1.0 / pos_counts  # shape [K-1]
+        weight_neg = 1.0 / neg_counts  # shape [K-1]
+
+        # Expand weights to match y_bin shape: [B, K-1]
         weights = torch.where(
             y_bin.bool(),
             weight_pos.unsqueeze(0).expand_as(y_bin),
             weight_neg.unsqueeze(0).expand_as(y_bin)
-        ).view(-1)  # [B*(K-1)]
+        )
+        weights_reshaped = weights.view(-1)
+
 
         # Use cross-entropy with per-sample weights
         loss = F.cross_entropy(logits_reshaped, targets_reshaped, weight=None, reduction='none')
@@ -324,6 +338,17 @@ def bin_dice_score(dice):
     dice_adjusted = dice - epsilon  # Shift slightly left
     bin_edges = [0.1, 0.5, 0.7]  # Same as before
     return np.digitize(dice_adjusted, bin_edges, right=True)  # right=True = (a <= x)
+
+
+def compute_class_distribution(labels):
+    """
+    labels: list or 1D numpy array or tensor of ordinal class labels (e.g., from 0 to 3)
+    """
+    counter = Counter(labels)
+    total = sum(counter.values())
+    distribution = {k: v / total for k, v in sorted(counter.items())}
+    return distribution
+
 
 
 class QADataset(Dataset):
@@ -463,7 +488,37 @@ def corn_predict(logits):
     pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
     return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
 
+def evaluate_per_threshold(logits, labels):
+    """
+    logits: [N, K-1] - model outputs
+    labels: [N] - ground truth labels (ordinal, from 0 to K-1)
+    """
+    N, K_minus_1 = logits.shape
 
+    # Create binary targets per threshold
+    y_bin = np.zeros_like(logits, dtype=np.int32)
+    for k in range(K_minus_1):
+        y_bin[:, k] = (labels > k).astype(int)
+
+    metrics = {}
+    for k in range(K_minus_1):
+        prob = torch.sigmoid(logits[:, k]).cpu().numpy()
+        true_bin = y_bin[:, k]
+
+        pred_bin = (prob > 0.5).astype(int)
+
+        acc = accuracy_score(true_bin, pred_bin)
+        try:
+            auc = roc_auc_score(true_bin, prob)
+        except:
+            auc = None  # In case only one class is present
+
+        metrics[f"Threshold {k}"] = {
+            "Accuracy": acc,
+            "AUROC": auc
+        }
+
+    return metrics
 # def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
 #     """
 #     logits: [B, num_classes - 1]
@@ -565,6 +620,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
 
+    all_labels = []
+    for _,_,labels, in train_loader:
+        all_labels.extend(labels.cpu().numpy().tolist())
+
+    dist = compute_class_distribution(all_labels)
+    print("Global class distribution:", dist)
+
+
+
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
@@ -585,7 +649,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 # print(f'model Output Shape : {preds.shape}')
                 #targets = encode_ordinal_targets(label).to(preds.device)
                 #print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, label)
+                loss = criterion(preds, label, dist)
 
 
             scaler.scale(loss).backward()
@@ -611,8 +675,13 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # Validation step
         model.eval()
         val_running_loss, val_correct, val_total = 0.0, 0, 0
+
         empty_mask_count = 0
         total_masks = 0
+
+        all_logits = []
+        all_labels = []
+
         val_preds_list.clear()
         val_labels_list.clear()
         val_subtypes_list.clear()
@@ -631,10 +700,16 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
-                #targets = encode_ordinal_targets(label).to(preds.device)
+                targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, label)
+                all_logits.append(preds.cpu())
+                all_labels.append(targets.cpu())
+
+
+                loss = criterion(preds, label, dist)
                 val_running_loss += loss.item() * image.size(0)
+
+
 
                 with torch.no_grad():
                    # decoded_preds = decode_predictions(preds)
@@ -665,7 +740,17 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
+
+
         val_losses.append(epoch_val_loss)
+
+        all_logits = torch.cat(all_logits, dim=0)
+        all_labels = torch.cat(all_labels, dim=0).numpy()
+
+        threshold_metrics = evaluate_per_threshold(all_logits, all_labels)
+
+        for t, metric in threshold_metrics.items():
+            print(f"{t} => Accuracy: {metric['Accuracy']:.3f}, AUROC: {metric['AUROC']}")
         # avg_val_loss = sum(val_losses) / len(val_losses)
 
         val_preds_np = np.array(val_preds_list)
