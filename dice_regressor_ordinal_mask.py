@@ -1,6 +1,5 @@
 from collections import defaultdict
 
-from tests.losses.test_adversarial_loss import criterion
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -17,7 +16,7 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-from sklearn.metrics import mean_absolute_error
+
 from torch.optim.lr_scheduler import LambdaLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
