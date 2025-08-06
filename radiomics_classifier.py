@@ -98,6 +98,7 @@ def evaluate_model(name, model, X, y, label_names):
 
 
 
+
 # Load your features and labels
 csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv")
 X = csv_file.drop(columns=['case_id', 'tumor_class'])
