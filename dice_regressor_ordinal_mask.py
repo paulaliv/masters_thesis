@@ -312,7 +312,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.2),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
         #self.biases = nn.Parameter(torch.zeros(num_thresholds))
@@ -577,7 +577,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True,pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
 
 
