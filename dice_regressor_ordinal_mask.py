@@ -602,7 +602,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = coral_loss_manual
-    criterion = DistanceAwareCORNLoss()
+    criterion = CORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
