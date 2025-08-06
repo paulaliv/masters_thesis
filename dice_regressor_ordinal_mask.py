@@ -287,13 +287,11 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
-        image = torch.from_numpy(image).float()
+
 
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
-        if uncertainty.sum() == 0:
-            print(f'{case_id} has empty map!')
 
         # Convert to torch and ensure shape [1, D, H, W]
         if image.ndim == 3:
