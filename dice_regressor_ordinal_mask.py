@@ -490,11 +490,11 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
-                print(f'Label shape {label.shape}')
+                #print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                print(f'model Output Shape : {preds.shape}')
+                #print(f'model Output Shape : {preds.shape}')
                 targets = encode_ordinal_targets(label).to(preds.device)
-                print(f'Tagets shape: {targets.shape}')
+                #print(f'Tagets shape: {targets.shape}')
                 loss = criterion(preds, targets)
 
 
@@ -524,7 +524,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         val_labels_list.clear()
         val_subtypes_list.clear()
 
-        print(f'Train label distribution: {label_counts}')
+        #print(f'Train label distribution: {label_counts}')
 
 
         with torch.no_grad():
@@ -560,9 +560,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
 
-        for param_group in optimizer.param_groups:
-            print(f"Current LR: {param_group['lr']}")
-
 
         print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
@@ -571,6 +568,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
 
+
         # 'linear' or 'quadratic' weights are valid for ordinal tasks
         kappa_linear = cohen_kappa_score(val_labels_np, val_preds_np, weights='linear')
         kappa_quadratic = cohen_kappa_score(val_labels_np, val_preds_np, weights='quadratic')
@@ -578,6 +576,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         print("Linear Kappa:", kappa_linear)
         print("Quadratic Kappa:", kappa_quadratic)
 
+        for param_group in optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
 
         report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4, zero_division=0)
 
@@ -594,8 +594,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         )
 
         scheduler.step()
-        for class_name in class_names:
-            f1_history[class_name].append(report_dict[class_name]["f1-score"])
+
+        if epoch_val_loss < best_val_loss:
+            print(f'Yay, new best Val Loss: {epoch_val_loss}!')
+            best_val_loss = epoch_val_loss
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         # After each validation epoch:
@@ -622,9 +624,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         #
         # # Early stopping check
-        # if epoch_val_loss < best_val_loss:
-        #     print(f'Yay, new best : {epoch_val_loss}!')
-        #     best_val_loss = epoch_val_loss
         #     patience_counter = 0
         #     # Save best model weights
         #     # torch.save({
