@@ -50,7 +50,7 @@ train_transforms = Compose([
         keys=["image", "uncertainty"],  # apply same affine to both
         prob=1.0,
         rotate_range=(np.pi/12, np.pi/12, np.pi/12),
-        translate_range=(5, 5, 5),  # in voxels
+        translate_range=(3, 3, 3),  # in voxels
         scale_range=(0.1, 0.1, 0.1),
         spatial_size=(48, 256, 256),
         mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
@@ -585,16 +585,16 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-5)
 
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-6)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-6)
     # Step 1: Warmup
     warmup_epochs = 5
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
     #
     # # Step 2: Cosine Annealing after warmup
-    # cosine_scheduler = CosineAnnealingLR(optimizer, T_max=47)  # 45 = total_epochs - warmup_epochs
+    scheduler = CosineAnnealingLR(optimizer, T_max=45)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
     #scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
@@ -628,10 +628,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     for _,_,labels,_ in train_loader:
         all_labels.extend(labels.cpu().numpy().tolist())
 
-    dist = compute_class_distribution(all_labels)
-    print("Global class distribution:", dist)
-
-
+    # dist = compute_class_distribution(all_labels)
+    # print("Global class distribution:", dist)
 
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
