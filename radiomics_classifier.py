@@ -10,6 +10,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import cross_validate
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 
@@ -38,16 +39,32 @@ def get_models():
         "SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
         "LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42)
     }
+
+
+    models = {
+        name: Pipeline([
+            ('var_thresh', VarianceThreshold(threshold=0.01)),
+            ('scaler', StandardScaler()),
+            ('clf', model)
+        ])
+        for name, model in models.items()
+    }
     return models
 
 
 def evaluate_model(model, X, y):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    acc = cross_val_score(model, X, y, cv=skf, scoring="accuracy").mean()
-    f1 = cross_val_score(model, X, y, cv=skf, scoring="f1_weighted").mean()
-    auc = cross_val_score(model, X, y, cv=skf, scoring="roc_auc_ovr").mean()
+    scores = cross_validate(
+        model, X, y, cv=skf,
+        scoring=["accuracy", "f1_weighted", "roc_auc_ovr"],
+        return_train_score=False
+    )
+    return {
+        "accuracy": scores['test_accuracy'].mean(),
+        "f1_score": scores['test_f1_weighted'].mean(),
+        "roc_auc_ovr": scores['test_roc_auc_ovr'].mean()
+    }
 
-    return {"accuracy": acc, "f1_score": f1, "roc_auc_ovr": auc}
 
 
 # Load your features and labels
