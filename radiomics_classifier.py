@@ -55,23 +55,41 @@ def get_models():
 
 def evaluate_model(name, model, X, y, label_names):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    y_true_all = []
-    y_pred_all = []
 
-    for train_idx, test_idx in skf.split(X, y):
+    accs, f1s, aucs = [], [], []
+
+    print(f"Model: {name}")
+    print("-" * 40)
+
+    for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        pipeline = Pipeline([
+            ('var_thresh', VarianceThreshold(threshold=0.01)),
+            ('scaler', StandardScaler()),
+            ('clf', model)
+        ])
 
-        y_true_all.extend(y_test)
-        y_pred_all.extend(y_pred)
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict(X_test)
+        y_proba = pipeline.predict_proba(X_test)
 
-    print(f"Model: {name}")
-    report = classification_report(y_true_all, y_pred_all, target_names=label_names, digits=4)
-    print(report)
-    print("-" * 40)
+        accs.append(accuracy_score(y_test, y_pred))
+        f1s.append(f1_score(y_test, y_pred, average='weighted'))
+        aucs.append(roc_auc_score(y_test, y_proba, multi_class='ovr'))
+
+        print(f"[Fold {fold}]")
+        print(classification_report(y_test, y_pred, target_names=label_names))
+        print("-" * 40)
+
+    return {
+        "accuracy": np.mean(accs),
+        "f1_score": np.mean(f1s),
+        "roc_auc_ovr": np.mean(aucs)
+    }
+
+
 
 
 
