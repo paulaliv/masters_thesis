@@ -57,7 +57,7 @@ def evaluate_model(name, model, X, y, label_names):
         #Preprocessing per fold
         pipeline = Pipeline([
             ('var_thresh', VarianceThreshold(threshold=0.01)),
-            ('select_best', SelectKBest(mutual_info_classif, k=min(40, X.shape[1]))),
+            ('select_best', SelectKBest(mutual_info_classif, k=min(45, X.shape[1]))),
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
