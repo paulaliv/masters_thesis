@@ -14,19 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import cross_validate
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-
-# Feature preprocessing
-def preprocess_features(X):
-    # Remove near-zero variance features
-    var_thresh = VarianceThreshold(threshold=0.01)
-    X = var_thresh.fit_transform(X)
-
-
-    # Z-score normalization
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
-
-    return X
+from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
 def get_models():
     models = {
@@ -66,8 +54,10 @@ def evaluate_model(name, model, X, y, label_names):
             X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
+        #Preprocessing per fold
         pipeline = Pipeline([
             ('var_thresh', VarianceThreshold(threshold=0.01)),
+            ('select_best', SelectKBest(mutual_info_classif, k=min(50, X.shape[1]))),
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
