@@ -598,6 +598,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         if epoch_val_loss < best_val_loss:
             print(f'Yay, new best Val Loss: {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
+            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+            best_val_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
+
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         # After each validation epoch:
@@ -660,7 +664,23 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
 
+
+
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(best_val_cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f"val_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
+    plt.close()
+
     print(f'Best Kappa of {best_kappa}observed after {best_epoch} epochs!')
+    return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
+
+
+
     return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
 
 
