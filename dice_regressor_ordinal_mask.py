@@ -523,33 +523,33 @@ def evaluate_per_threshold(logits, labels):
         }
 
     return metrics
-# def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
-#     """
-#     logits: [B, num_classes - 1]
-#     levels: binary cumulative targets (e.g., [1, 1, 0])
-#     """
-#     levels =levels.float()
-#     levels = levels * (1 - smoothing) + 0.5 * smoothing
-#
-#     log_probs = F.logsigmoid(logits)
-#     log_1_minus_probs = F.logsigmoid(-logits)
-#
-#     loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
-#
-#
-#     #
-#     # importance_weights = torch.tensor([2, 3, 1.0])
-#     # importance_weights = importance_weights.to(logits.device)
-#     # importance_weights = importance_weights.view(1, -1)  # for broadcasting
-#     # loss = loss * importance_weights
-#
-#     # Reduce loss across thresholds per sample, then average over batch
-#     loss = loss.sum(dim=1).mean()
-#     # probs = torch.sigmoid(logits)
-#     # entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
-#     # loss += entropy_weight * entropy
-#
-#     return loss
+def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
+    """
+    logits: [B, num_classes - 1]
+    levels: binary cumulative targets (e.g., [1, 1, 0])
+    """
+    levels =levels.float()
+    levels = levels * (1 - smoothing) + 0.5 * smoothing
+
+    log_probs = F.logsigmoid(logits)
+    log_1_minus_probs = F.logsigmoid(-logits)
+
+    loss = -levels * log_probs - (1 - levels) * log_1_minus_probs
+
+
+    #
+    # importance_weights = torch.tensor([2, 3, 1.0])
+    # importance_weights = importance_weights.to(logits.device)
+    # importance_weights = importance_weights.view(1, -1)  # for broadcasting
+    # loss = loss * importance_weights
+
+    # Reduce loss across thresholds per sample, then average over batch
+    loss = loss.sum(dim=1).mean()
+    # probs = torch.sigmoid(logits)
+    # entropy = -(probs * log_probs + (1 - probs) * log_1_minus_probs).mean()
+    # loss += entropy_weight * entropy
+
+    return loss
 
 
 def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device):
@@ -601,8 +601,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
-    #criterion = coral_loss_manual
-    criterion = CORNLoss()
+    criterion = coral_loss_manual
+    #criterion = CORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
@@ -662,8 +662,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                #decoded_preds = decode_predictions(preds)
-                decoded_preds = corn_predict(preds)
+                decoded_preds = decode_predictions(preds)
+                #decoded_preds = corn_predict(preds)
 
                 correct += (decoded_preds == label).sum().item()
 
@@ -709,8 +709,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
                 with torch.no_grad():
-                   # decoded_preds = decode_predictions(preds)
-                    decoded_preds = corn_predict(preds)
+                    decoded_preds = decode_predictions(preds)
+                    #decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
