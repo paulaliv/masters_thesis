@@ -94,12 +94,12 @@ preprocessing = Pipeline([
 ])
 
 # Apply preprocessing
-X_processed = preprocessing.fit_transform(X)
+#X_processed = preprocessing.fit_transform(X)
 
 models = get_models()
 
 for name, model in models.items():
-    results = evaluate_model(name,model, X_processed, y, label_names)
+    results = evaluate_model(name,model, X, y, label_names)
     print(f"Model: {name}")
     for k, v in results.items():
         print(f"  {k}: {v:.4f}")
