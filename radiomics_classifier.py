@@ -52,17 +52,18 @@ def get_models():
     }
     return models
 
-
 def evaluate_model(name, model, X, y, label_names):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
     accs, f1s, aucs = [], [], []
-
-    print(f"Model: {name}")
-    print("-" * 40)
+    all_y_true, all_y_pred = [], []
 
     for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
-        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        # Ensure X supports .iloc (convert back to DataFrame if needed)
+        if isinstance(X, np.ndarray):
+            X_train, X_test = X[train_idx], X[test_idx]
+        else:
+            X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
         pipeline = Pipeline([
@@ -75,13 +76,17 @@ def evaluate_model(name, model, X, y, label_names):
         y_pred = pipeline.predict(X_test)
         y_proba = pipeline.predict_proba(X_test)
 
+        all_y_true.extend(y_test)
+        all_y_pred.extend(y_pred)
+
         accs.append(accuracy_score(y_test, y_pred))
         f1s.append(f1_score(y_test, y_pred, average='weighted'))
         aucs.append(roc_auc_score(y_test, y_proba, multi_class='ovr'))
 
-        print(f"[Fold {fold}]")
-        print(classification_report(y_test, y_pred, target_names=label_names))
-        print("-" * 40)
+    # Print final averaged classification report
+    print(f"Model: {name}")
+    print(classification_report(all_y_true, all_y_pred, target_names=label_names))
+    print("-" * 40)
 
     return {
         "accuracy": np.mean(accs),
