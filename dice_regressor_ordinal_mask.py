@@ -649,9 +649,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 # print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 # print(f'model Output Shape : {preds.shape}')
-                #targets = encode_ordinal_targets(label).to(preds.device)
+                targets = encode_ordinal_targets(label).to(preds.device)
                 #print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, label)
+                loss = criterion(preds, targets)
 
 
             scaler.scale(loss).backward()
@@ -702,8 +702,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
+                targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, label)
+
+                loss = criterion(preds, targets)
                 val_running_loss += loss.item() * image.size(0)
 
 
