@@ -444,7 +444,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=3)
 
     # Step 2: Cosine Annealing after warmup
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=27)  # 45 = total_epochs - warmup_epochs
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=37)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
     scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
@@ -478,7 +478,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
-    for epoch in range(50):
+    for epoch in range(40):
         print(f"Epoch {epoch + 1}/{40}")
         running_loss, correct, total = 0.0, 0, 0
 
