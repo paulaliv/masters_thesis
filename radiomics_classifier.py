@@ -8,6 +8,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
 from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import cross_validate
@@ -52,18 +53,25 @@ def get_models():
     return models
 
 
-def evaluate_model(model, X, y):
+def evaluate_model(name, model, X, y, label_names):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scores = cross_validate(
-        model, X, y, cv=skf,
-        scoring=["accuracy", "f1_weighted", "roc_auc_ovr"],
-        return_train_score=False
-    )
-    return {
-        "accuracy": scores['test_accuracy'].mean(),
-        "f1_score": scores['test_f1_weighted'].mean(),
-        "roc_auc_ovr": scores['test_roc_auc_ovr'].mean()
-    }
+    y_true_all = []
+    y_pred_all = []
+
+    for train_idx, test_idx in skf.split(X, y):
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        y_true_all.extend(y_test)
+        y_pred_all.extend(y_pred)
+
+    print(f"Model: {name}")
+    report = classification_report(y_true_all, y_pred_all, target_names=label_names, digits=4)
+    print(report)
+    print("-" * 40)
 
 
 
@@ -76,6 +84,9 @@ y = csv_file['tumor_class']
 if y.dtype == 'object':
     le = LabelEncoder()
     y = le.fit_transform(y)
+    label_names = le.classes_
+else:
+    label_names = np.unique(y)
 
 preprocessing = Pipeline([
     ('var_thresh', VarianceThreshold(threshold=0.01)),
@@ -88,7 +99,7 @@ X_processed = preprocessing.fit_transform(X)
 models = get_models()
 
 for name, model in models.items():
-    results = evaluate_model(model, X_processed, y)
+    results = evaluate_model(name,model, X_processed, y, label_names)
     print(f"Model: {name}")
     for k, v in results.items():
         print(f"  {k}: {v:.4f}")
