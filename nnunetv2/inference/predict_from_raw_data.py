@@ -57,7 +57,7 @@ class nnUNetPredictor(object):
                  perform_everything_on_device: bool = True,
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = True,
-                 return_features: bool = True,
+                 return_features: bool = False,
                  compute_train_info: bool = False,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
@@ -1549,7 +1549,7 @@ def main(input_folder, output_folder, model_dir):
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        return_features=True,
+        return_features=False,
         compute_train_info=False
     )
 
