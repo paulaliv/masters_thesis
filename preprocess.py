@@ -341,7 +341,9 @@ class ROIPreprocessor:
 
     def visualize_all(self,umap, mask, img,gt, name, output_dir,axis =0):
         summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
-        idx = np.argmax(summed)
+        #idx = np.argmax(summed)
+        idx = np.argmax(np.max(np.abs(umap), axis=(1, 2)))
+
         assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
         if axis == 0:
             img_slice = img[idx]
@@ -646,8 +648,6 @@ class ROIPreprocessor:
         resampled_affine = self.compute_affine_with_origin_shift(
             original_spacing, original_origin, original_direction, crop_start_index
         )
-
-
 
 
 
