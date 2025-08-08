@@ -1034,13 +1034,12 @@ class nnUNetPredictor(object):
             if self.return_features:
                 new_features, new_prediction, new_patch_positions  = self.predict_sliding_window_return_logits(data)
                 new_prediction = new_prediction.to('cpu')
-                new_features = new_features.to('cpu')
+
+
                 torch.cuda.empty_cache()
 
 
-
-                all_features.append(new_features)
-
+                all_features.append(torch.from_numpy(new_features))
 
             else:
                 new_prediction = self.predict_sliding_window_return_logits(data).to('cpu')
