@@ -1233,7 +1233,6 @@ class nnUNetPredictor(object):
 
                         #double check what is now being returned for features and prediction
                         if features is not None:
-
                             features = features.to(results_device)
                             if prediction.ndim == 5:
                                 prediction = prediction[0]
@@ -1275,8 +1274,8 @@ class nnUNetPredictor(object):
                     # if prediction.ndim == 4:
                     #     prediction = prediction.unsqueeze(0)  #  shape is [1, 2, 40, 320, 320]
 
-
-
+                    if prediction.ndim == 5:
+                        prediction = prediction[0]
                     predicted_logits[sl] += prediction
                     n_predictions[sl[1:]] += gaussian
                     queue.task_done()
