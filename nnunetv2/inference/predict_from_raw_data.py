@@ -479,8 +479,16 @@ class nnUNetPredictor(object):
 
         return distance_map
 
-
-
+    def kl_divergence(self, p: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
+        """
+        Compute voxel-wise KL divergence between two probability distributions p and q.
+        Both p and q have shape [C, H, W, D].
+        Returns tensor of shape [H, W, D].
+        """
+        eps = 1e-8
+        p = p.clamp(min=eps)
+        q = q.clamp(min=eps)
+        return torch.sum(p * torch.log(p / q), dim=0)
 
     def predict_from_data_iterator(self,
                                    data_iterator,
