@@ -58,7 +58,7 @@ class nnUNetPredictor(object):
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = True,
                  return_features: bool = True,
-                 compute_train_info: bool = True,
+                 compute_train_info: bool = False,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
         self.verbose = verbose
@@ -524,6 +524,7 @@ class nnUNetPredictor(object):
                         features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
 
                         prediction = prediction.cpu()
+                        print(f'Prediction Shape: {prediction.shape}')
                         features = features.cpu().numpy()
                         patch_locations = patch_locations.cpu().numpy()
 
@@ -543,7 +544,7 @@ class nnUNetPredictor(object):
 
                     else:
 
-                        train_data = np.load(train_data_info)
+                        train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
                         mean, cov, cov_inv =  train_data['mean'], train_data['cov'], train_data['cov_inv']
                         patch_distances = self.get_patch_distances(features, mean, cov_inv)
                         patch_shape = [1, 320, 5, 5, 5]
@@ -1538,12 +1539,13 @@ def predict_entry_point():
 
 
 
-def main(input_folder, output_folder, model_dir, train_data_info):
+def main(input_folder, output_folder, model_dir):
     folds = (0,1,2,3,4)
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         return_features=True,
+        compute_train_info=False
     )
 
 
@@ -1591,11 +1593,11 @@ if __name__ == '__main__':
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]
     model_dir = sys.argv[3]
-    train_data_info = ''
+
 
     sys.path.insert(0, "/gpfs/home6/palfken/masters_thesis/dynamic-network-architectures/")
 
-    main(input_folder, output_folder, model_dir, train_data_info)
+    main(input_folder, output_folder, model_dir)
 
 # if __name__ == '__main__':
 #
