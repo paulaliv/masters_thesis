@@ -548,8 +548,9 @@ class nnUNetPredictor(object):
                         train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
                         mean, cov, cov_inv =  train_data['mean'], train_data['cov'], train_data['cov_inv']
                         patch_distances = self.get_patch_distances(features, mean, cov_inv)
-                        patch_shape = [1, 320, 5, 5, 5]
-                        distance_map = self.create_distance_map(patch_distances, patch_locations, prediction.shape,patch_shape )
+                        patch_shape = [5, 5, 5]
+                        pred_shape = tuple(prediction.shape[1:])
+                        distance_map = self.create_distance_map(patch_distances, patch_locations, pred_shape, patch_shape)
                         print(f'distance map shape : {distance_map.shape}')
 
                         # # Resample logits to original image shape
