@@ -7,11 +7,15 @@ import pandas as pd
 
 def compute_train_dist():
     all_train_features = []
-
-    for npz_file in glob.glob("path/to/train_features/*.npz"):
-        data = np.load(npz_file)
-        feats = data['features']  # shape: (num_patches, 320)
-        all_train_features.append(feats)
+    feature_dirs = [
+        "/gpfs/home6/palfken/ood_features/output",
+        "/gpfs/home6/palfken/ood_features/output1"
+    ]
+    for folder in feature_dirs:
+        for npz_file in glob.glob(os.path.join(folder,"*.npz")):
+            data = np.load(npz_file)
+            feats = data['features']  # shape: (num_patches, 320)
+            all_train_features.append(feats)
 
     all_train_features = np.vstack(all_train_features)
 
@@ -57,7 +61,13 @@ def compute_test_dist(mean, cov_inv, test_feature_dir,csv_file):
 def main():
     mean, cov, cov_inv = compute_train_dist()
 
-    save_train_distribution(mean, cov, cov_inv, "train_dist.npz")
+    print(f'MEAN: {mean}')
+    print(f'COV: {cov}')
+    print(f'COV_INV: {cov_inv}')
+
+    save_loc = "/gpfs/home6/palfken/ood_features/"
+
+    save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
 
     # csv_file = "/path/to/ood_cases.csv"
     # test_feature_dir = "/path/to/test_features"
