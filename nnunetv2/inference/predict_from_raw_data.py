@@ -693,7 +693,7 @@ class nnUNetPredictor(object):
                     print("Std per feature:", features.std(axis=0)[:5])
 
 
-                    filename = f' {ofile}_features.npz'
+                    filename = f'{ofile}_features.npz'
                     ensemble_features_half = features.astype(np.float16)
                     np.savez_compressed(filename, features=ensemble_features_half)
 
