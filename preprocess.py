@@ -684,11 +684,19 @@ class ROIPreprocessor:
         if self.save_dist_maps:
             data = np.load(dist_path)
             dist_array = data['distance']
+            print(f"Initial distance shape: {dist_array.shape}, dtype: {dist_array.dtype}, min: {dist_array.min()}, max: {dist_array.max()}, sum: {dist_array.sum()}")
 
             dist_array = dist_array.astype(np.float32)  # or whichever key you want
+
             dist_array = np.squeeze(dist_array)
+            print(f"After squeeze -> shape: {dist_array.shape}, sum: {dist_array.sum()}")
+
+            # 4. Pad to match original image shape
 
             dist_array = self.center_pad_to_shape(dist_array, orig_img_array.shape)
+            print(f"After pad -> shape: {dist_array.shape}, expected: {orig_img_array.shape}")
+
+            # 5. Convert to SimpleITK image
 
             orig_dist_map = sitk.GetImageFromArray(dist_array)
             orig_dist_map.SetOrigin(orig_img.GetOrigin())
@@ -696,6 +704,7 @@ class ROIPreprocessor:
             orig_dist_map.SetDirection(orig_img.GetDirection())
 
             dist_sitk = self.resample_umap(orig_dist_map, reference=img_sitk, is_label=False)
+            print(f"After resample -> size: {dist_sitk.GetSize()} (reference: {img_sitk.GetSize()})")
 
             assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == dist_sitk.GetSize()
 
@@ -703,6 +712,8 @@ class ROIPreprocessor:
             dist_sitk.SetSpacing(img_sitk.GetSpacing())
             dist_sitk.SetDirection(img_sitk.GetDirection())
             resampled_dist = sitk.GetArrayFromImage(dist_sitk)
+            print(
+                f"Final resampled dist -> shape: {resampled_dist.shape}, min: {resampled_dist.min()}, max: {resampled_dist.max()}, sum: {resampled_dist.sum()}")
 
             if resampled_pred.sum() > 0:
                 cropped_dist = self.crop_to_roi(resampled_dist, slices)
