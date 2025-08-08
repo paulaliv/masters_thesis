@@ -689,8 +689,8 @@ class nnUNetPredictor(object):
 
                     # Basic stats
                     print("Shape:", features.shape)
-                    print("Mean per feature:", features.mean(dim=0)[:5])  # first 5 features
-                    print("Std per feature:", features.std(dim=0)[:5])
+                    print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
+                    print("Std per feature:", features.std(axis=0)[:5])
 
 
                     filename = f' {ofile}_features.npz'
