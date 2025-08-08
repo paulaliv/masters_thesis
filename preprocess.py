@@ -562,7 +562,7 @@ class ROIPreprocessor:
                        "tumor_class": tumor_class,
                        **filtered_features}
 
-                if case_id in df['case_id'].values:
+                if case_id in df['nnunet_id'].values:
                    df.loc[df['nnunet_id'] == case_id, 'dice'] = dice
                    print(f'Added {case_id}: {dice}')
                 else:
