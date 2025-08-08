@@ -520,21 +520,22 @@ class nnUNetPredictor(object):
                 print(f"[DEBUG] return_features is {self.return_features} (type: {type(self.return_features)})")
 
                 if self.return_features:
+                    features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
+
+                    prediction = prediction.cpu()
+                    print(f'Prediction Shape: {prediction.shape}')
+                    features = features.cpu().numpy()
+                    patch_locations = patch_locations.cpu().numpy()
+
+                    # Basic stats
+                    print(f'Patch Location shape : {patch_locations.shape}')
+                    print(patch_locations[0])
+
+                    print("Shape:", features.shape)
+                    print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
+                    print("Std per feature:", features.std(axis=0)[:5])
+
                     if self.compute_train_info:
-                        features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
-
-                        prediction = prediction.cpu()
-                        print(f'Prediction Shape: {prediction.shape}')
-                        features = features.cpu().numpy()
-                        patch_locations = patch_locations.cpu().numpy()
-
-                        # Basic stats
-                        print(f'Patch Location shape : {patch_locations.shape}')
-                        print(patch_locations[0])
-
-                        print("Shape:", features.shape)
-                        print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
-                        print("Std per feature:", features.std(axis=0)[:5])
 
 
                         filename = f'{ofile}_features.npz'
