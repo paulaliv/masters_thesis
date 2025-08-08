@@ -17,7 +17,7 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-from sklearn.metrics import mean_absolute_error
+
 from torch.optim.lr_scheduler import LambdaLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
@@ -676,10 +676,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.savefig(os.path.join(plot_dir, f"val_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
 
-    print(f'Best Kappa of {best_kappa}observed after {best_epoch} epochs!')
-    return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
-
-
+    print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
 
     return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
 
@@ -726,12 +723,8 @@ def main(data_dir, plot_dir, folds,df):
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
         # Combine folds data
-        val_preds_np = np.array(all_val_preds)
-        val_labels_np = np.array(all_val_labels)
-
-        # Combine folds data as needed, for example:
-        val_preds = np.concatenate(val_preds_np)
-        val_labels = np.concatenate(val_labels_np)
+        val_preds = np.concatenate(all_val_preds, axis=0)
+        val_labels = np.concatenate(all_val_labels, axis=0)
 
 
         # Plot loss curves - you can average losses epoch-wise over folds similarly
@@ -769,10 +762,10 @@ def main(data_dir, plot_dir, folds,df):
         #confusion matrix
         # Plot and save best confusion matrix
         class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
-        present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+        present_labels = np.unique(np.concatenate((val_labels, val_preds)))
         labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
 
-        disp = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
+        disp = confusion_matrix(val_labels, val_preds, labels=labels_idx)
 
         plt.figure(figsize=(6, 5))
         sns.heatmap(disp, annot=True, fmt='d', cmap='Blues',
