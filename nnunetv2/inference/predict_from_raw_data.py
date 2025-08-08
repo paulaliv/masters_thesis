@@ -516,7 +516,7 @@ class nnUNetPredictor(object):
                 while not proceed:
                     sleep(0.1)
                     proceed = not check_workers_alive_and_busy(export_pool, worker_list, r, allowed_num_queued=2)
-
+                self.return_features = False
                 print(f"[DEBUG] return_features is {self.return_features} (type: {type(self.return_features)})")
 
                 if self.return_features:
