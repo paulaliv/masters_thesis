@@ -56,7 +56,7 @@ class nnUNetPredictor(object):
                  perform_everything_on_device: bool = True,
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = True,
-                 return_features: bool = False,
+                 return_features: bool = True,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
         self.verbose = verbose
