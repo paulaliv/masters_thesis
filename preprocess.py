@@ -336,10 +336,10 @@ class ROIPreprocessor:
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 
-        plt.savefig(os.path.join(output_dir, f'{umap_type}_{self.case_id}.png'))
+        plt.savefig(os.path.join(output_dir, f'dist_map_{self.case_id}.png'))
         plt.close()
 
-    def visualize_all(self,umap, mask, img,gt, name, umap_type, output_dir,axis =0):
+    def visualize_all(self,umap, mask, img,gt, name, output_dir,axis =0):
         summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
         idx = np.argmax(summed)
         assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
@@ -380,7 +380,7 @@ class ROIPreprocessor:
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 
-        plt.savefig(os.path.join(output_dir, f'{umap_type}_mask_{self.case_id}.png'))
+        plt.savefig(os.path.join(output_dir, f'dist_map_mask_{self.case_id}.png'))
         plt.close()
 
 
@@ -716,9 +716,9 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(resampled_dist, resampled_pred, self.target_shape)
 
             self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map',
-                                         f'CROPPED_feature_distance_map', output_dir_visuals)
+                                         'feature_distance_map', output_dir_visuals)
             if resized_mask.sum() > 0:
-                self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask, output_dir_visuals)
+                self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask, f'{self.case_id}: feature distance map',output_dir_visuals)
             np.save(os.path.join(output_path, f"{self.case_id}_dist_map.npy"), resized_dist.astype(np.float32))
 
 
