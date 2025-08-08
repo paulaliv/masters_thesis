@@ -1258,6 +1258,7 @@ class nnUNetPredictor(object):
 
 
                     else:
+                        print('return_features is not active')
                         prediction = self._internal_maybe_mirror_and_predict(workon)[0]
                         if prediction.ndim == 5:
                             prediction = prediction[0]
