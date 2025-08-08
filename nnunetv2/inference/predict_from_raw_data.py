@@ -685,8 +685,17 @@ class nnUNetPredictor(object):
 
                     prediction = prediction.cpu()
                     features = features.cpu().numpy()
-                    filename = f' {ofile}_features.npy'
-                    np.save(filename, features)
+
+                    # Basic stats
+                    print("Shape:", features.shape)
+                    print("Mean per feature:", features.mean(dim=0)[:5])  # first 5 features
+                    print("Std per feature:", features.std(dim=0)[:5])
+
+
+                    filename = f' {ofile}_features.npz'
+                    ensemble_features_half = features.astype(np.float16)
+                    np.savez_compressed(filename, features=ensemble_features_half)
+
 
 
 
@@ -1664,7 +1673,7 @@ def main(input_folder, output_folder, model_dir):
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        return_features=False,
+        return_features=True,
     )
 
 
