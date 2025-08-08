@@ -1120,7 +1120,7 @@ class nnUNetPredictor(object):
         network_output = self.network(x)
         if isinstance(network_output, tuple):
             features, prediction = network_output
-            #print(f"Original features shape: {features.shape}")
+            print(f"Original features shape: {features.shape}")
         else:
             features = None
             prediction = network_output
