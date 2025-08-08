@@ -1,159 +1,70 @@
 import os
 import sys
-
+import glob
 import numpy as np
 from scipy.spatial import distance
-from sympy.solvers.diophantine.diophantine import prime_as_sum_of_two_squares
 import pandas as pd
 
+def compute_train_dist():
+    all_train_features = []
 
-def load_patient_data(patient_id):
-    """Load the features for a given patient."""
-    file_path = os.path.join(feature_dir, f"{patient_id}_features.npy")
+    for npz_file in glob.glob("path/to/train_features/*.npz"):
+        data = np.load(npz_file)
+        feats = data['features']  # shape: (num_patches, 320)
+        all_train_features.append(feats)
 
+    all_train_features = np.vstack(all_train_features)
 
-    patient = subtype[subtype['nnunet_id'] == patient_id]
-    if not patient.empty:
-        subtype_label = patient['Final_Classification'].values[0]
+    mean = np.mean(all_train_features, axis=0)  # shape: (320,)
+    cov = np.cov(all_train_features, rowvar=False)  # shape: (320, 320)
+    eps = 1e-6
+    cov += eps * np.eye(cov.shape[0])
+    cov_inv = np.linalg.inv(cov)
+    return mean, cov, cov_inv
 
-        return np.load(file_path), subtype_label  # Expecting e.g. shape (C, D, H, W) or similar
+def save_train_distribution(mean, cov, cov_inv, filepath):
+    np.savez(filepath, mean=mean, cov=cov, cov_inv=cov_inv)
 
-
-def flatten(feature_map):
-    """
-      Flatten spatial dimensions of feature map into 2D: (num_samples, feature_dim).
-      Assumes feature_map shape (C, D, H, W) or (C, H, W).
-      """
-    if feature_map.ndim == 4:
-        # e.g. (C, D, H, W)
-        C, D, H, W = feature_map.shape
-        return feature_map.reshape(C, D * H * W).T  # shape (num_samples, C)
-    elif feature_map.ndim == 3:
-        C, H, W = feature_map.shape
-        return feature_map.reshape(C, H * W).T  # shape (num_samples, C)
-    else:
-        raise ValueError(f"Unsupported feature map shape: {feature_map.shape}")
-
-
-def group_by_class(features, labels):
-    """
-       Group features by class label.
-       features_list: list of (num_samples_i, feature_dim) arrays
-       labels: corresponding list of class labels (one per feature array)
-
-       Returns:
-           dict: class_label -> concatenated features of that class (N_i, D)
-       """
-    grouped = {}
-    for features, label in zip(features, labels):
-        if label not in grouped:
-            grouped[label] = []
-        grouped[label].append(features)
-    # Concatenate all features per class
-    for k in grouped:
-        grouped[k] = np.concatenate(grouped[k], axis=0)
-    return grouped
-
-def compute_stats(flattened_features):
-    mean_vec = np.mean(flattened_features, axis=0)  # shape (D,)
-    cov_matrix = np.cov(flattened_features, rowvar=False)  # shape (D, D)
-
-    # Step 2: Invert covariance matrix
-    inv_cov_matrix = np.linalg.inv(cov_matrix)
-    return mean_vec, cov_matrix, inv_cov_matrix
-
-
-def compute_mahalanobis_distance(x, mean, inv_cov):
+def mahalanobis_distance(x, mean, cov_inv):
     delta = x - mean
-    return np.sqrt(np.dot(np.dot(delta, inv_cov), delta.T))
+    return np.sqrt(np.dot(np.dot(delta, cov_inv), delta.T))
+
+def compute_test_dist(mean, cov_inv, test_feature_dir,csv_file):
+    df = pd.read_csv(csv_file)
+
+    all_distances = []
+    subtypes_sorted = []
+
+    for case_id in df['case_id']:
+        feature_file = os.path.join(test_feature_dir, f"{case_id}_features.npz")
+
+        # Load features for this case
+        data = np.load(feature_file)
+        test_features = data['features']  # shape: (num_patches, 320)
+
+        # Compute distance per patch and average over patches for a case-level score
+        distances = [mahalanobis_distance(x, mean, cov_inv) for x in test_features]
+
+        #avg_distance = np.mean(distances)
+
+        all_distances.append(distances)
+        subtypes_sorted.append(df.loc[df['case_id'] == case_id, 'subtype'].values[0])
+
+    all_distances = np.array(all_distances)
+    return all_distances, subtypes_sorted
 
 
+def main():
+    mean, cov, cov_inv = compute_train_dist()
 
-def compute_distances(features, mean, inv_cov):
-    """
-    Compute Mahalanobis distances for all rows in features.
-    """
-    return np.array([compute_mahalanobis_distance(x, mean, inv_cov) for x in features])
+    save_train_distribution(mean, cov, cov_inv, "train_dist.npz")
 
-
-# def main():
-#     # Prepare data: load features & labels
-#     patient_ids = tabular_data['nnunet_id'].tolist()
-#     labels = tabular_data['Final_Classification'].tolist()
-#
-#     all_features = []
-#     for pid in patient_ids:
-#         feats = load_features(pid)
-#         flat_feats = flatten_feature_map(feats)
-#         all_features.append(flat_feats)
-#
-#     # Concatenate all for global stats (all training data)
-#     global_features = np.concatenate(all_features, axis=0)
-#     mean_global, cov_global, inv_cov_global = compute_mean_cov_inv(global_features)
-#
-#     # Compute distances to global distribution
-#     print("Distances to global distribution:")
-#     for pid, feats in zip(patient_ids, all_features):
-#         dists = compute_distances(feats, mean_global, inv_cov_global)
-#         print(f"{pid}: mean distance {np.mean(dists):.3f}, std {np.std(dists):.3f}")
-#
-#     # Group by class and compute per-class stats
-#     grouped = group_features_by_class(all_features, labels)
-#     class_stats = {}
-#     for cls, feats in grouped.items():
-#         mean_cls, cov_cls, inv_cov_cls = compute_mean_cov_inv(feats)
-#         class_stats[cls] = (mean_cls, inv_cov_cls)
-#
-#     # Example: For each patient, compute distance to each class distribution
-#     print("\nDistances per class:")
-#     for pid, feats in zip(patient_ids, all_features):
-#         print(f"Patient {pid}:")
-#         for cls, (mean_cls, inv_cov_cls) in class_stats.items():
-#             dists = compute_distances(feats, mean_cls, inv_cov_cls)
-#             print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
-def main(feature_dir_Tr, feature_dir_Ts, tabular_data):
-    # Prepare data: load features & labels
-    patient_ids = tabular_data['nnunet_id'].tolist()
-    labels = tabular_data['Final_Classification'].tolist()
-
-    all_features = []
-    for file in os.listdir(feature_dir_Tr):
-        patient_id = file.replace('features.npy', '')
-        features, labels = load_patient_data(patient_id)
-        flat_features = flatten(features)
-        all_features.append(flat_features)
-
-    # Concatenate all for global stats (all training data)
-    global_features = np.concatenate(all_features, axis=0)
-    mean_global, cov_global, inv_cov_global = compute_stats(global_features)
-
-    # Compute distances to global distribution
-    print("Distances to global distribution:")
-    for pid, feats in zip(patient_ids, all_features):
-        dists = compute_distances(feats, mean_global, inv_cov_global)
-        print(f"{pid}: mean distance {np.mean(dists):.3f}, std {np.std(dists):.3f}")
-
-    # Group by class and compute per-class stats
-    grouped = group_by_class(all_features, labels)
-    class_stats = {}
-    for cls, feats in grouped.items():
-        mean_cls, cov_cls, inv_cov_cls = compute_stats(feats)
-        class_stats[cls] = (mean_cls, inv_cov_cls)
-
-    # Example: For each patient, compute distance to each class distribution
-    print("\nDistances per class:")
-    for pid, feats in zip(patient_ids, all_features):
-        print(f"Patient {pid}:")
-        for cls, (mean_cls, inv_cov_cls) in class_stats.items():
-            dists = compute_distances(feats, mean_cls, inv_cov_cls)
-            print(f"  to class {cls}: mean dist = {np.mean(dists):.3f}")
-
-if __name__ == "__main__":
-    # data containing patient id under nnunet_id and label under Final_Classification
-    tabular_data_dir = r'/home/bmep/plalfken/my-scratch/Downloads/WORC_data/WORC_all_with_nnunet_ids.csv'
-    tabular_data = pd.read_csv(tabular_data_dir)
-    # Feature maps stored i folder always with name patient_id_features.npy
-    feature_dir_Tr = sys.argv[0]
-    feature_dir_Ts = sys.argv[1]
-    subtype = tabular_data[['nnunet_id', 'Final_Classification']]
-    main(feature_dir_Tr,feature_dir_Ts,subtype)
+    # csv_file = "/path/to/ood_cases.csv"
+    # test_feature_dir = "/path/to/test_features"
+    #
+    # distances, subtypes = compute_test_dist(mean, cov_inv, csv_file, test_feature_dir)
+    #
+    # # Now distances and subtypes arrays are aligned by case order
+    # for dist, subtype in zip(distances, subtypes):
+    #     print(f"Subtype: {subtype}, Mahalanobis distance: {dist}")
+    #

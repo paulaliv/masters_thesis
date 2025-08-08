@@ -17,6 +17,7 @@ from acvl_utils.cropping_and_padding.padding import pad_nd_image
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.utilities.file_and_folder_operations import load_json, join, isfile, maybe_mkdir_p, isdir, subdirs, \
     save_json
+from nibabel.brikhead import filepath
 from sympy.solvers.diophantine.diophantine import reconstruct
 from torch import nn
 from torch._dynamo import OptimizedModule
@@ -57,11 +58,13 @@ class nnUNetPredictor(object):
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = True,
                  return_features: bool = True,
+                 compute_train_info: bool = True,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
         self.verbose = verbose
 
         self.return_features = return_features
+        self.compute_train_info = compute_train_info
 
         self.verbose_preprocessing = verbose_preprocessing
         self.allow_tqdm = allow_tqdm
@@ -438,211 +441,46 @@ class nnUNetPredictor(object):
     #
     #     return full_feature_volume
 
-    def _smart_crop(self, volume, mask, target_shape, debug=False):
+    def mahalanobis_distance(self, x, mean, cov_inv):
+        delta = x - mean
+        return np.sqrt(np.dot(np.dot(delta, cov_inv), delta.T))
+
+    def get_patch_distances(self,test_features, mean, cov_inv):
+
+        distances = [self.mahalanobis_distance(x, mean, cov_inv) for x in test_features]
+        return distances
+
+    def create_distance_map(self, patch_distances, patch_positions, image_shape, patch_size):
         """
-        Crop a C‑Z‑Y‑X volume (torch or np) and its mask to `target_shape`
-        while guaranteeing that at least part of the tumour remains.
+        Args:
+            patch_distances: List or array of shape (num_patches,) with scalar Mahalanobis distances per patch.
+            patch_positions: List or array of shape (num_patches, 3) with patch start coordinates (z,y,x).
+            image_shape: Tuple (Z, Y, X) of full image size.
+            patch_size: Tuple (pz, py, px) size of each patch.
 
-        Parameters
-        ----------
-        volume : np.ndarray | torch.Tensor
-            Shape (C, Z, Y, X)
-        mask   : np.ndarray  (binary)
-            Shape (Z, Y, X)
-        target_shape : tuple(int, int, int)
-            Desired (dz, dy, dx)
-        debug : bool
-            If True prints crop indices and tumour stats.
+        Returns:
+            distance_map: np.array of shape image_shape with averaged Mahalanobis distances per voxel.
         """
-        # --- shapes ---
-        Z, Y, X = volume.shape
-        dz, dy, dx = target_shape
 
-        # --- bounding box of tumour ---
-        zz, yy, xx = np.where(mask == 1)
-        z_min, z_max = zz.min(), zz.max()
-        y_min, y_max = yy.min(), yy.max()
-        x_min, x_max = xx.min(), xx.max()
+        distance_sum = np.zeros(image_shape, dtype=np.float32)
+        counts = np.zeros(image_shape, dtype=np.int32)
 
-        def get_start(min_c, max_c, win, total):
-            """Return start index so [start, start+win) keeps tumour inside."""
-            size = max_c - min_c + 1
-            if size >= win:  # tumour larger than window
-                # keep centre of tumour inside
-                centre = (min_c + max_c) // 2
-                start = centre - win // 2
-            else:
-                # put tumour roughly in the middle, then adjust if near borders
-                pad_left = (win - size) // 2
-                pad_right = win - size - pad_left
-                start = min_c - pad_left
-            # clip to valid range
-            return int(np.clip(start, 0, total - win))
+        pz, py, px = patch_size
 
-        s_z = get_start(z_min, z_max, dz, Z)
-        s_y = get_start(y_min, y_max, dy, Y)
-        s_x = get_start(x_min, x_max, dx, X)
+        for dist, (z_start, y_start, x_start) in zip(patch_distances, patch_positions):
+            # Add distance to the patch region in the map
+            distance_sum[z_start:z_start + pz, y_start:y_start + py, x_start:x_start + px] += dist
+            counts[z_start:z_start + pz, y_start:y_start + py, x_start:x_start + px] += 1
 
-        # --- crop ---
-        vol_crop = volume[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
-        mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
+        # Avoid division by zero
+        counts[counts == 0] = 1
 
-        # --- safety fallback: if tumour lost, recrop around bbox front edge ---
-        if mask_crop.sum() == 0:
-            # Start so that bbox min corner is inside window
-            s_z = int(np.clip(z_min, 0, Z - dz))
-            s_y = int(np.clip(y_min, 0, Y - dy))
-            s_x = int(np.clip(x_min, 0, X - dx))
+        distance_map = distance_sum / counts
 
-            vol_crop = volume[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
-            mask_crop = mask[s_z:s_z + dz, s_y:s_y + dy, s_x:s_x + dx]
-
-        if debug:
-            print(f"bbox z [{z_min},{z_max}] → start_z={s_z}")
-            print(f"bbox y [{y_min},{y_max}] → start_y={s_y}")
-            print(f"bbox x [{x_min},{x_max}] → start_x={s_x}")
-            print("Tumour voxels in crop =", mask_crop.sum())
-
-        assert mask_crop.sum() > 0, "Tumour lost after smart crop!"
-
-        return vol_crop, mask_crop
+        return distance_map
 
 
 
-    def reconstruct_and_crop_features(self,
-                                      full_feature_volume,
-                                      tumor_mask,
-                                      uniform_size,
-                                      context
-                                      ):
-        """
-           Crops and pads feature map and tumor mask to uniform size centered around tumor.
-
-           Args:
-               feature_map: torch.Tensor of shape (C, Z, Y, X)
-               tumor_mask: numpy array of shape (Z, Y, X)
-               uniform_size: desired output shape (Z, Y, X)
-               margin: number of voxels to extend beyond tumor bbox
-
-           Returns:
-               cropped_features: torch.Tensor of shape (C, Z, Y, X)
-               cropped_mask: np.ndarray of shape (Z, Y, X)
-           """
-
-
-        # Tumor bounding box
-        print(f'original tumor mask shape is {tumor_mask.shape}')
-        print(f'original feature map size is {full_feature_volume.shape}')
-        print(f'uniform size is {uniform_size}')
-
-        # right after you compute tumor_mask
-        unique = np.unique(tumor_mask)
-        print("Unique labels in tumor_mask:", unique)
-        print("Tumor voxels =", (tumor_mask != 0).sum())
-
-        coords = np.where(tumor_mask == 1)
-        if coords[0].size == 0:
-            print('Warning: empty mask, no tumor region found')
-            return np.zeros((full_feature_volume.shape[0], *uniform_size), dtype=np.float32), None
-
-        else:
-            z_min, y_min, x_min = np.min(coords[0]), np.min(coords[1]), np.min(coords[2])
-            z_max, y_max, x_max = np.max(coords[0]), np.max(coords[1]), np.max(coords[2])
-
-            #Extend bbox by margin, clip min coordinates at 0 and max coordinates at largest valid index
-            z_min_m = max(z_min - context[0], 0)
-            y_min_m = max(y_min - context[1], 0)
-            x_min_m = max(x_min - context[2], 0)
-            z_max_m = min(z_max + context[0], tumor_mask.shape[0] - 1)
-            y_max_m = min(y_max + context[1], tumor_mask.shape[1] - 1)
-            x_max_m = min(x_max + context[2], tumor_mask.shape[2] - 1)
-
-            # Create slices for cropping
-            z_slice = slice(z_min_m, z_max_m + 1)
-            y_slice = slice(y_min_m, y_max_m + 1)
-            x_slice = slice(x_min_m, x_max_m + 1)
-
-            # Crop features
-            cropped_features = full_feature_volume[ z_slice, y_slice, x_slice]
-            cropped_mask = tumor_mask[z_slice, y_slice, x_slice]
-
-            print(f'shape of feature map after cropping {cropped_features.shape}')
-            print(f'shape of mask after cropping {cropped_mask.shape}')
-
-            # after cropping
-            assert cropped_mask.sum() > 0, "Tumor lost during cropping!"
-            unique = np.unique(cropped_mask)
-            print("Unique labels in tumor_mask:", unique)
-            print("Tumor voxels =", (cropped_mask != 0).sum())
-
-            # ---------------- padding if too small ----------------
-            final_z, final_y, final_x = cropped_mask.shape
-            desired_z, desired_y, desired_x = uniform_size
-
-            pad_z = max(desired_z - final_z, 0)
-            pad_y = max(desired_y - final_y, 0)
-            pad_x = max(desired_x - final_x, 0)
-
-            # symmetric padding
-            pad = [(pad_z // 2, pad_z - pad_z // 2),
-                   (pad_y // 2, pad_y - pad_y // 2),
-                   (pad_x // 2, pad_x - pad_x // 2)]
-
-            if any(p > 0 for p in (pad_z, pad_y, pad_x)):
-                cropped_mask = np.pad(cropped_mask, pad, mode='constant', constant_values=0)
-                cropped_features = torch.nn.functional.pad(cropped_features,
-                                                           (pad[2][0], pad[2][1], pad[1][0], pad[1][1], pad[0][0],
-                                                            pad[0][1]),
-                                                           mode='constant', value=0)
-
-            print(f"Shape after padding: features = {cropped_features.shape}, mask = {cropped_mask.shape}")
-
-
-
-            # If cropped features are larger than uniform size, do center crop with warning
-            final_z, final_y, final_x = cropped_features.shape
-
-            # ---------- final crop if padded volume is still larger ----------
-            if any([final_z > desired_z, final_y > desired_y, final_x > desired_x]):
-                print('Warning: ROI region is larger than uniform size, image will be cropped')
-                cropped_features, cropped_mask = self._smart_crop(
-                    cropped_features, cropped_mask,
-                    (desired_z, desired_y, desired_x)
-                )
-                # # crop around tumour centre, not volume centre
-                # tz, ty, tx = np.where(cropped_mask == 1)
-                # cz_tum, cy_tum, cx_tum = int(tz.mean()), int(ty.mean()), int(tx.mean())
-                #
-                # # compute crop start indices so that tumour centre stays inside
-                # start_z = min(max(cz_tum - desired_z // 2, 0), final_z - desired_z)
-                # start_y = min(max(cy_tum - desired_y // 2, 0), final_y - desired_y)
-                # start_x = min(max(cx_tum - desired_x // 2, 0), final_x - desired_x)
-                #
-                # cropped_features = cropped_features[:, start_z:start_z + desired_z,
-                #          start_y:start_y + desired_y,
-                #          start_x:start_x + desired_x]
-                # cropped_mask = cropped_mask[start_z:start_z + desired_z,
-                #               start_y:start_y + desired_y,
-                #               start_x:start_x + desired_x]
-            print(f"Final cropped feature shape: {cropped_features.shape}")
-            print(f"Final cropped mask shape: {cropped_mask.shape}")
-            print(f"Tumor voxels after final crop = {np.sum(cropped_mask == 1)}")
-
-            assert cropped_mask.sum() > 0, "ERROR: Tumor lost after final cropping!"
-
-            assert cropped_features.shape == (desired_z, desired_y, desired_x), f"Feature map shape mismatch: {cropped_features.shape}"
-            assert cropped_mask.shape == (desired_z, desired_y, desired_x), f"Mask shape mismatch: {cropped_mask.shape}"
-            # if np.sum(padded_mask) == 0:
-            #     print("Warning: padded mask is empty — tumor might have been cropped out")
-            if np.sum(cropped_mask) == 0:
-                raise RuntimeError(
-                    "Aborting: Padded tumor mask is empty — tumor may have been cropped out or not predicted.")
-
-            # returns cropped and padded feature volume, and spatial info
-            return cropped_features
-
-    def kl_divergence(self,p, q):
-        return torch.sum(p * (torch.log(p + 1e-8) - torch.log(q + 1e-8)), dim=0)  # [H, W, D]
 
     def predict_from_data_iterator(self,
                                    data_iterator,
@@ -682,30 +520,50 @@ class nnUNetPredictor(object):
                 print(f"[DEBUG] return_features is {self.return_features} (type: {type(self.return_features)})")
 
                 if self.return_features:
-                    features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
+                    if self.compute_train_info:
+                        features, prediction, patch_locations = self.predict_logits_from_preprocessed_data(data)
 
-                    prediction = prediction.cpu()
-                    features = features.cpu().numpy()
+                        prediction = prediction.cpu()
+                        features = features.cpu().numpy()
+                        patch_locations = patch_locations.cpu().numpy()
 
-                    # Basic stats
-                    print("Shape:", features.shape)
-                    print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
-                    print("Std per feature:", features.std(axis=0)[:5])
+                        # Basic stats
+                        print(f'Patch Location shape : {patch_locations.shape}')
+                        print(patch_locations[0])
 
-
-                    filename = f'{ofile}_features.npz'
-                    ensemble_features_half = features.astype(np.float16)
-                    np.savez_compressed(filename, features=ensemble_features_half)
-
-
+                        print("Shape:", features.shape)
+                        print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
+                        print("Std per feature:", features.std(axis=0)[:5])
 
 
+                        filename = f'{ofile}_features.npz'
+                        ensemble_features_half = features.astype(np.float16)
 
+                        np.savez_compressed(filename, features=ensemble_features_half)
 
+                    else:
 
+                        train_data = np.load(train_data_info)
+                        mean, cov, cov_inv =  train_data['mean'], train_data['cov'], train_data['cov_inv']
+                        patch_distances = self.get_patch_distances(features, mean, cov_inv)
+                        patch_shape = [1, 320, 5, 5, 5]
+                        distance_map = self.create_distance_map(patch_distances, patch_locations, prediction.shape,patch_shape )
 
+                        # # Resample logits to original image shape
+                        current_spacing = self.configuration_manager.spacing if \
+                            len(self.configuration_manager.spacing) == \
+                            len(properties['shape_after_cropping_and_before_resampling']) else \
+                            [properties['spacing'][0], *self.configuration_manager.spacing]
 
+                        distance_reshaped = self.configuration_manager.resampling_fn_probabilities(
+                            distance_map,
+                            properties['shape_after_cropping_and_before_resampling'],
+                            current_spacing,
+                            properties['spacing']
+                        )
 
+                        np.savez_compressed(ofile + "_distance_map.npz",
+                                            distance=distance_reshaped)
 
                 else:
                     #currently ensemble predictions
@@ -1680,7 +1538,7 @@ def predict_entry_point():
 
 
 
-def main(input_folder, output_folder, model_dir):
+def main(input_folder, output_folder, model_dir, train_data_info):
     folds = (0,1,2,3,4)
     # Create predictor
     predictor = nnUNetPredictor(
@@ -1733,10 +1591,11 @@ if __name__ == '__main__':
     input_folder = sys.argv[1]
     output_folder = sys.argv[2]
     model_dir = sys.argv[3]
+    train_data_info = ''
 
     sys.path.insert(0, "/gpfs/home6/palfken/masters_thesis/dynamic-network-architectures/")
 
-    main(input_folder, output_folder, model_dir)
+    main(input_folder, output_folder, model_dir, train_data_info)
 
 # if __name__ == '__main__':
 #
