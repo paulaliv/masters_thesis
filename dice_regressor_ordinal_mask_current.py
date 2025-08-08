@@ -661,8 +661,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
-                #decoded_preds = corn_predict(preds)
+                #decoded_preds = decode_predictions(preds)
+                decoded_preds = corn_predict(preds)
 
                 correct += (decoded_preds == label).sum().item()
 
@@ -710,8 +710,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
-                    #decoded_preds = corn_predict(preds)
+                    #decoded_preds = decode_predictions(preds)
+                    decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
