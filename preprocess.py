@@ -686,7 +686,7 @@ class ROIPreprocessor:
 
         if self.save_dist_maps:
             data = np.load(dist_path)
-            dist_array = data['distance_reshaped']
+            dist_array = data['distance']
 
             dist_array = dist_array.astype(np.float32)  # or whichever key you want
             dist_array = np.squeeze(dist_array)
