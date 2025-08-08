@@ -562,12 +562,9 @@ class ROIPreprocessor:
                        "tumor_class": tumor_class,
                        **filtered_features}
 
-                if case_id in df['nnunet_id'].values:
-                   df.loc[df['nnunet_id'] == case_id, 'dice'] = dice
-                   print(f'Added {case_id}: {dice}')
-                else:
-                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                    print(f'Added {case_id}: {dice}')
+
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                print(f'Added {case_id}: {dice}')
 
                 df.to_csv(save_path, index=False)
 
