@@ -78,3 +78,5 @@ def main():
     # for dist, subtype in zip(distances, subtypes):
     #     print(f"Subtype: {subtype}, Mahalanobis distance: {dist}")
     #
+if __name__ == "__main__":
+    main()
