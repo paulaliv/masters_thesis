@@ -1735,6 +1735,8 @@ if __name__ == '__main__':
     output_folder = sys.argv[2]
     model_dir = sys.argv[3]
 
+    sys.path.insert(0, "/gpfs/home6/palfken/masters_thesis/dynamic-network-architectures/")
+
     main(input_folder, output_folder, model_dir)
 
 # if __name__ == '__main__':
