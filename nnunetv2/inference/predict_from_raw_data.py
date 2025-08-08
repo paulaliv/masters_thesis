@@ -525,7 +525,7 @@ class nnUNetPredictor(object):
                     prediction = prediction.cpu()
                     print(f'Prediction Shape: {prediction.shape}')
                     features = features.cpu().numpy()
-                    patch_locations = patch_locations.cpu().numpy()
+
 
                     # Basic stats
                     print(f'Patch Location shape : {patch_locations.shape}')
@@ -550,6 +550,7 @@ class nnUNetPredictor(object):
                         patch_distances = self.get_patch_distances(features, mean, cov_inv)
                         patch_shape = [1, 320, 5, 5, 5]
                         distance_map = self.create_distance_map(patch_distances, patch_locations, prediction.shape,patch_shape )
+                        print(f'distance map shape : {distance_map.shape}')
 
                         # # Resample logits to original image shape
                         current_spacing = self.configuration_manager.spacing if \
