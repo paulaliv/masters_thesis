@@ -528,8 +528,8 @@ class nnUNetPredictor(object):
 
 
                     # Basic stats
-                    print(f'Patch Location shape : {patch_locations.shape}')
-                    print(patch_locations[0])
+                    print(f'Patch Location list : {patch_locations[:1]}')
+
 
                     print("Shape:", features.shape)
                     print("Mean per feature:", features.mean(axis=0)[:5])  # first 5 features
