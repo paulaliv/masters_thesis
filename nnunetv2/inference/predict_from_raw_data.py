@@ -551,6 +551,8 @@ class nnUNetPredictor(object):
                         patch_shape = [5, 5, 5]
                         pred_shape = tuple(prediction.shape[1:])
                         distance_map = self.create_distance_map(patch_distances, patch_locations, pred_shape, patch_shape)
+                        distance_map = np.expand_dims(distance_map, axis=0)  # (1, Z, Y, X)
+                        distance_map = np.transpose(distance_map, (0, 2, 3, 1))  # (C, X, Y, Z)
                         print(f'distance map shape : {distance_map.shape}')
 
                         # # Resample logits to original image shape
