@@ -371,7 +371,7 @@ class ROIPreprocessor:
         # Right: Image + Mask
         axs[1].imshow(img_slice, cmap='gray')
         axs[1].imshow(mask_slice, cmap='Reds', alpha=0.4)
-        axs[1].imshow(gt_slice, cmap='Green', alpha=0.4)
+        axs[1].imshow(gt_slice, cmap='Greens', alpha=0.4)
         axs[1].set_title(f'Image + Ground Truth + Pred Slice {idx}')
         axs[1].axis('off')
 
