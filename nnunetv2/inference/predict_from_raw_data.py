@@ -1233,14 +1233,21 @@ class nnUNetPredictor(object):
 
                         #double check what is now being returned for features and prediction
                         if features is not None:
+
                             features = features.to(results_device)
-                            prediction = prediction[0].to(results_device)
+                            if prediction.ndim == 5:
+                                prediction = prediction[0]
+                            prediction = prediction.to(results_device)
+
                             #can only append if patches are same size!
-                            # print(f'Feature shape before concatenating: {features.shape}')
+                            print(f'Feature shape before pooling: {features.shape}')
                             # print(f'Prediction shape: {prediction.shape}')
+
+
 
                             #Global average pooling of every patch
                             pooled_features = torch.mean(features, dim=[2, 3, 4])  # shape: [1, C]
+                            print(f'pooled feature shape: {pooled_features.shape}')
                             all_patch_features.append(pooled_features.cpu().squeeze(0))  # remove batch dimension
                             starts = get_slice_starts(sl)
                             #print(f'Whole slicer output {starts}')
@@ -1252,7 +1259,12 @@ class nnUNetPredictor(object):
 
 
                     else:
-                        prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
+                        prediction = self._internal_maybe_mirror_and_predict(workon)[0]
+                        if prediction.ndim == 5:
+                            prediction = prediction[0]
+                        prediction = prediction.to(results_device)
+                        #prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
+
                     #prediction = self._internal_maybe_mirror_and_predict(workon)[0].to(results_device)
 
 
