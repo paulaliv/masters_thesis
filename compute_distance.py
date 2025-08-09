@@ -30,7 +30,7 @@ def compute_id_train_minmax_from_features(mean, cov_inv):
     all_train_features = []
     folder = "/gpfs/home6/palfken/ood_features/id_data/"
 
-    for npz_file in glob.glob(os.path.join(folder, "*.npz")):
+    for npz_file in glob.glob(os.path.join(folder, "*features.npz")):
         data = np.load(npz_file)
         feats = data['features']  # shape: (num_patches, 320)
         all_train_features.append(feats)
