@@ -12,15 +12,12 @@ import matplotlib.pyplot as plt
 
 def compute_train_dist():
     all_train_features = []
-    feature_dirs = [
-        "/gpfs/home6/palfken/ood_features/output",
-        "/gpfs/home6/palfken/ood_features/output1"
-    ]
-    for folder in feature_dirs:
-        for npz_file in glob.glob(os.path.join(folder,"*.npz")):
-            data = np.load(npz_file)
-            feats = data['features']  # shape: (num_patches, 320)
-            all_train_features.append(feats)
+    folder = "/gpfs/home6/palfken/ood_features/id_data/"
+
+    for npz_file in glob.glob(os.path.join(folder,"*.npz")):
+        data = np.load(npz_file)
+        feats = data['features']  # shape: (num_patches, 320)
+        all_train_features.append(feats)
 
     all_train_features = np.vstack(all_train_features)
 
