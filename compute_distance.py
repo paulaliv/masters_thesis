@@ -153,8 +153,8 @@ def main():
             print(f'Case id {case_id}: no subtype in csv file!')
 
 
-        data = np.load(npz_file)
-        dist = data['dists']
+        dist = np.load(npz_file)
+
         score = subject_level_score(dist, id_min, id_max)
         print(f'Score: {score}')
 
