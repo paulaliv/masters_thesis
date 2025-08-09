@@ -4,6 +4,11 @@ import glob
 import numpy as np
 from scipy.spatial import distance
 import pandas as pd
+import matplotlib.pyplot as plt
+
+
+
+
 
 def compute_train_dist():
     all_train_features = []
@@ -43,8 +48,31 @@ def compute_id_train_minmax_from_features(mean, cov_inv):
     id_max = dists.max()
     return id_min, id_max
 
-def normalize_score(score, id_min, id_max):
-    return (score - id_min) / (2 * id_max - id_min)
+
+def subject_level_score(voxel_map, id_train_min, id_train_max):
+    """
+    Compute subject-level OOD score from voxel-wise values.
+
+    voxel_map: np.ndarray, 3D uncertainty/distance map
+    mask: np.ndarray, binary predicted mask (same shape as voxel_map)
+    id_train_min: float, min score from ID training data
+    id_train_max: float, max score from ID training data
+
+    Returns: float (normalized subject-level score)
+    """
+
+
+    if voxel_map.sum(0) > 0:
+
+        mean_value = voxel_map.mean()
+    else:
+        return 0.0
+
+    # 3. Normalize: min to doubled max from ID data
+    norm_score = (mean_value - id_train_min) / (2 * id_train_max - id_train_min)
+    norm_score = np.clip(norm_score, 0, None)  # no negatives
+
+    return norm_score
 
 
 def save_train_distribution(mean, cov, cov_inv, filepath):
@@ -78,6 +106,14 @@ def compute_test_dist(mean, cov_inv, test_feature_dir,csv_file):
     all_distances = np.array(all_distances)
     return all_distances, subtypes_sorted
 
+from sklearn.metrics import roc_auc_score, roc_curve
+
+def tpr_at_fpr(scores, labels, target_fpr=0.05):
+    fpr, tpr, thresholds = roc_curve(labels, scores)
+    # Find closest FPR index
+    idx = np.argmin(np.abs(fpr - target_fpr))
+    return tpr[idx], thresholds[idx]
+
 
 def main():
     # mean, cov, cov_inv = compute_train_dist()
@@ -86,18 +122,74 @@ def main():
     # print(f'COV: {cov}')
     # print(f'COV_INV: {cov_inv}')
     #
-    maps_dir =  "/gpfs/home6/palfken/ood_features/"
+    maps_dir =  "/gpfs/home6/palfken/ood_features/maps"
+    subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
+    subtypes_df = pd.read_csv(subtypes_csv)
+
 
     #
     # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
     train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
     mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
+    scores = []
+    labels = []
+
+    for npz_file in glob.glob(os.path.join(maps_dir, "*dist_map.npy")):
+        case_id = os.path.basename(npz_file).replace('_dist_map.npy', '')
+        print(case_id)
+
+        subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
+        if not subtype_row.empty:
+            tumor_class = subtype_row.iloc[0]['Final_Classification']
+            tumor_class = tumor_class.strip()
+            print(f'Tumor type: {tumor_class}')
+            if tumor_class == 'Lipoma':
+                tumor_class = 'OOD'
+            else:
+                tumor_class = 'ID'
+            print(f'Data label: {tumor_class}')
+        else:
+            tumor_class = 'Unknown'
+            print(f'Case id {case_id}: no subtype in csv file!')
+
+
+        data = np.load(npz_file)
+        dist = data['dists']
+        score = subject_level_score(dist, id_min, id_max)
+        print(f'Score: {score}')
+
+        scores.append(score)
+        labels.append(tumor_class)
+
+    labels_array = np.array(labels)
+
+    auc = roc_auc_score(labels_array, scores)
+    tpr95, threshold = tpr_at_fpr(scores, labels_array, 0.05)
 
 
 
+    # Separate ID and OOD scores
+    scores = np.array(scores)
+    labels_array = np.array(labels)
 
+    id_scores = scores[labels_array == 'ID']
+    ood_scores = scores[labels_array == 'OOD']
 
+    plt.figure(figsize=(8, 6))
 
+    # Scatter plot with some jitter on y axis to avoid overlap
+    plt.scatter(np.ones_like(id_scores), id_scores, label='ID', alpha=0.7, color='blue', marker='o')
+    plt.scatter(2 * np.ones_like(ood_scores), ood_scores, label='OOD', alpha=0.7, color='red', marker='x')
+
+    # Horizontal line for threshold at TPR=0.95 or FPR=0.05
+    plt.axhline(y=threshold, color='green', linestyle='--', label=f'Threshold={threshold:.3f}')
+
+    plt.xticks([1, 2], ['ID', 'OOD'])
+    plt.ylabel('OOD Score')
+    plt.title('OOD Scores per Subject with Threshold')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
     # csv_file = "/path/to/ood_cases.csv"
     # test_feature_dir = "/path/to/test_features"
