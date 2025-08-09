@@ -86,11 +86,15 @@ def main():
     # print(f'COV: {cov}')
     # print(f'COV_INV: {cov_inv}')
     #
-    # save_loc = "/gpfs/home6/palfken/ood_features/"
+    maps_dir =  "/gpfs/home6/palfken/ood_features/"
+
     #
     # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
     train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
     mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
+
+
+
 
 
 

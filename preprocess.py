@@ -648,43 +648,11 @@ class ROIPreprocessor:
         resampled_affine = self.compute_affine_with_origin_shift(
             original_spacing, original_origin, original_direction, crop_start_index
         )
-
-
-
-        if resampled_pred.sum() > 0:
-
-            slices = self.get_roi_bbox(resampled_pred)
-            for s in slices:
-                print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
-
-            cropped_img = self.crop_to_roi(resampled_img,slices)
-            cropped_pred = self.crop_to_roi(resampled_pred, slices)
-            cropped_mask = self.crop_to_roi(resampled_mask, slices)
-
-
-
-
-            img_pp = self.normalize(cropped_img)
-            resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
-            print('Adjusting GT Mask!!')
-            _,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
-
-            if self.case_id == 'DES_0149':
-                self.visualize_img_and_mask(resized_img, resized_mask, output_dir_visuals, gt=True)
-                self.visualize_img_and_mask(resized_img, resized_pred, output_dir_visuals, gt=False)
-
-        else:
-            print('WARNING:Prediction is empty, defaulting to center crop')
-            self.empty_masks.append(self.case_id)
-            img_pp = self.normalize(resampled_img)
-            resized_img, resized_pred= self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
-
-
-
         if self.save_dist_maps:
             data = np.load(dist_path)
             dist_array = data['distance']
-            print(f"Initial distance shape: {dist_array.shape}, dtype: {dist_array.dtype}, min: {dist_array.min()}, max: {dist_array.max()}, sum: {dist_array.sum()}")
+            print(
+                f"Initial distance shape: {dist_array.shape}, dtype: {dist_array.dtype}, min: {dist_array.min()}, max: {dist_array.max()}, sum: {dist_array.sum()}")
 
             dist_array = dist_array.astype(np.float32)  # or whichever key you want
 
@@ -715,19 +683,48 @@ class ROIPreprocessor:
             print(
                 f"Final resampled dist -> shape: {resampled_dist.shape}, min: {resampled_dist.min()}, max: {resampled_dist.max()}, sum: {resampled_dist.sum()}")
 
-            if resampled_pred.sum() > 0:
+
+
+        if resampled_pred.sum() > 0:
+
+            slices = self.get_roi_bbox(resampled_pred)
+            for s in slices:
+                print(f"Start: {s.start}, Stop: {s.stop}, Length: {s.stop - s.start}")
+
+            cropped_img = self.crop_to_roi(resampled_img,slices)
+            cropped_pred = self.crop_to_roi(resampled_pred, slices)
+            cropped_mask = self.crop_to_roi(resampled_mask, slices)
+
+
+
+
+            img_pp = self.normalize(cropped_img)
+            resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
+            print('Adjusting GT Mask!!')
+            _,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
+
+
+            if self.save_dist_maps:
                 cropped_dist = self.crop_to_roi(resampled_dist, slices)
 
                 resized_dist, _ = self.adjust_to_shape(cropped_dist, cropped_pred, self.target_shape)
 
-            else:
-                resized_umap, _ = self.adjust_to_shape(resampled_dist, resampled_pred, self.target_shape)
 
-            self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map',
-                                         'feature_distance_map', output_dir_visuals)
-            if resized_mask.sum() > 0:
+        else:
+            print('WARNING:Prediction is empty, defaulting to center crop')
+            self.empty_masks.append(self.case_id)
+            img_pp = self.normalize(resampled_img)
+            resized_img, resized_pred= self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
+
+            if self.save_dist_maps:
+                resized_dist, _ = self.adjust_to_shape(resampled_dist, resampled_pred, self.target_shape)
+
+        self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map','feature_distance_map', output_dir_visuals)
+
+        if resized_mask.sum() > 0:
                 self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask, f'{self.case_id}: feature distance map',output_dir_visuals)
-            np.save(os.path.join(output_path, f"{self.case_id}_dist_map.npy"), resized_dist.astype(np.float32))
+
+
 
 
         #
@@ -804,6 +801,7 @@ class ROIPreprocessor:
             np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
             np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
             np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+            np.save(os.path.join(output_path, f"{self.case_id}_dist_map.npy"), resized_dist.astype(np.float32))
 
 
         print(f'Processed {self.case_id}')
