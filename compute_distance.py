@@ -204,7 +204,8 @@ def main():
     plt.title('OOD Scores per Subject with Threshold')
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.show()
+
+    plt.savefig('/gpfs/home6/palfken/ood_features/ood_scatterplot.png')
 
     # csv_file = "/path/to/ood_cases.csv"
     # test_feature_dir = "/path/to/test_features"
