@@ -132,7 +132,7 @@ def main():
 
 
     id_min, id_max = compute_id_train_minmax_from_features(mean, cov_inv)
-    maps_id = "/gpfs/home6/palfken/ood_features/id_data60/"
+    maps_id = "/gpfs/home6/palfken/ood_features/id_data_60/"
     maps_dir =  "/gpfs/home6/palfken/ood_features/features"
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
