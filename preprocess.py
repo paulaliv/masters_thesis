@@ -801,7 +801,7 @@ class ROIPreprocessor:
 
         else:
             np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
             np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
             np.save(os.path.join(output_path, f"{self.case_id}_dist_map.npy"), resized_dist.astype(np.float32))
 
