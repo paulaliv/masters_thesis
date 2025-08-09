@@ -57,8 +57,8 @@ class nnUNetPredictor(object):
                  perform_everything_on_device: bool = True,
                  device: torch.device = torch.device('cuda'),
                  verbose: bool = True,
-                 return_features: bool = False,
-                 compute_train_info: bool = False,
+                 return_features: bool = True,
+                 compute_train_info: bool = True,
                  verbose_preprocessing: bool = False,
                  allow_tqdm: bool = True):
         self.verbose = verbose
@@ -524,7 +524,8 @@ class nnUNetPredictor(object):
                 while not proceed:
                     sleep(0.1)
                     proceed = not check_workers_alive_and_busy(export_pool, worker_list, r, allowed_num_queued=2)
-                self.return_features = False
+                self.return_features = True
+                self.compute_train_info = True
                 print(f"[DEBUG] return_features is {self.return_features} (type: {type(self.return_features)})")
 
                 if self.return_features:
@@ -1557,8 +1558,8 @@ def main(input_folder, output_folder, model_dir):
     # Create predictor
     predictor = nnUNetPredictor(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        return_features=False,
-        compute_train_info=False
+        return_features=True,
+        compute_train_info=True
     )
 
 

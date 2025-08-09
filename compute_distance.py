@@ -90,19 +90,7 @@ def main():
     #
     # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
     train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
-    mean, cov, cov_inv = train_data['mean'], train_data['cov'], train_data['cov_inv']
-    id_min, id_max = compute_id_train_minmax_from_features(mean, cov_inv)
-
-    # Save everything back to npz (overwrite)
-    np.savez("/gpfs/home6/palfken/ood_features/train_dist.npz",
-        mean=mean,
-        cov=cov,
-        cov_inv=cov_inv,
-        id_min=id_min,
-        id_max=id_max
-    )
-
-    print(f"Updated file with id_min={id_min}, id_max={id_max}")
+    mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
 
 
 
