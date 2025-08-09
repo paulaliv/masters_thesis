@@ -119,7 +119,8 @@ def compute_test_dist(mean, cov_inv, test_feature_dir,csv_file):
 from sklearn.metrics import roc_auc_score, roc_curve
 
 def tpr_at_fpr(scores, labels, target_fpr=0.05):
-    fpr, tpr, thresholds = roc_curve(labels, scores)
+    labels_binary = np.where(labels == 'OOD', 1, 0)
+    fpr, tpr, thresholds = roc_curve(labels_binary, scores)
     # Find closest FPR index
     idx = np.argmin(np.abs(fpr - target_fpr))
     return tpr[idx], thresholds[idx]
