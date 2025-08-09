@@ -72,6 +72,9 @@ def subject_level_score(voxel_map, id_train_min, id_train_max):
     norm_score = (mean_value - id_train_min) / (2 * id_train_max - id_train_min)
     norm_score = np.clip(norm_score, 0, None)  # no negatives
 
+    print(f"norm_score (before clip): {(mean_value - id_train_min) / (2 * id_train_max - id_train_min)}")
+    print(f"norm_score (after clip): {norm_score}")
+
     return norm_score
 
 
