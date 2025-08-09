@@ -61,9 +61,8 @@ def subject_level_score(voxel_map, id_train_min, id_train_max):
     Returns: float (normalized subject-level score)
     """
 
-
-    if voxel_map.sum(0) > 0:
-
+    # Check if any voxel has a positive value
+    if np.any(voxel_map > 0):
         mean_value = voxel_map.mean()
     else:
         return 0.0
