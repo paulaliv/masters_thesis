@@ -68,6 +68,8 @@ def subject_level_score(voxel_map, id_train_min, id_train_max):
         print('Map is empty')
         return 0.0
 
+    print(f"mean_value: {mean_value}, id_train_min: {id_train_min}, id_train_max: {id_train_max}")
+
     # 3. Normalize: min to doubled max from ID data
     norm_score = (mean_value - id_train_min) / (2 * id_train_max - id_train_min)
     norm_score = np.clip(norm_score, 0, None)  # no negatives
