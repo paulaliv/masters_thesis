@@ -121,7 +121,7 @@ def main():
     # print(f'COV: {cov}')
     # print(f'COV_INV: {cov_inv}')
     #
-    maps_dir =  "/gpfs/home6/palfken/ood_features/maps"
+    maps_dir =  "/gpfs/home6/palfken/ood_features/output"
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
 
@@ -133,8 +133,8 @@ def main():
     scores = []
     labels = []
 
-    for npz_file in glob.glob(os.path.join(maps_dir, "*dist_map.npy")):
-        case_id = os.path.basename(npz_file).replace('_dist_map.npy', '')
+    for npz_file in glob.glob(os.path.join(maps_dir, "*distance_map.npz")):
+        case_id = os.path.basename(npz_file).replace('_distance_map.npz', '')
         print(case_id)
 
         subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
@@ -152,7 +152,9 @@ def main():
             print(f'Case id {case_id}: no subtype in csv file!')
 
 
-        dist = np.load(npz_file)
+        data= np.load(npz_file)
+        dist = data['distance']
+
 
         score = subject_level_score(dist, id_min, id_max)
         print(f'Score: {score}')
