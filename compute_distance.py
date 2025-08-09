@@ -65,6 +65,7 @@ def subject_level_score(voxel_map, id_train_min, id_train_max):
     if np.any(voxel_map > 0):
         mean_value = voxel_map.mean()
     else:
+        print('Map is empty')
         return 0.0
 
     # 3. Normalize: min to doubled max from ID data
