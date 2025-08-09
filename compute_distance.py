@@ -49,7 +49,7 @@ def compute_id_train_minmax_from_features(mean, cov_inv):
     return id_min, id_max
 
 
-def subject_level_score(voxel_map, id_train_min, id_train_max):
+def subject_level_score(patch_features,mean, cov_inv, id_train_min, id_train_max):
     """
     Compute subject-level OOD score from voxel-wise values.
 
@@ -61,9 +61,14 @@ def subject_level_score(voxel_map, id_train_min, id_train_max):
     Returns: float (normalized subject-level score)
     """
 
+    # Compute distance per patch
+    patch_distances = [mahalanobis_distance(feat, mean, cov_inv)
+                       for feat in patch_features]
+
+
     # Check if any voxel has a positive value
-    if np.any(voxel_map > 0):
-        mean_value = voxel_map.mean()
+    if np.sum(patch_distances) >0:
+        mean_value =  np.mean(patch_distances)
     else:
         print('Map is empty')
         return 0.0
@@ -127,7 +132,7 @@ def main():
     # print(f'COV: {cov}')
     # print(f'COV_INV: {cov_inv}')
     #
-    maps_dir =  "/gpfs/home6/palfken/ood_features/output"
+    maps_dir =  "/gpfs/home6/palfken/ood_features/features"
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
 
@@ -139,8 +144,8 @@ def main():
     scores = []
     labels = []
 
-    for npz_file in glob.glob(os.path.join(maps_dir, "*distance_map.npz")):
-        case_id = os.path.basename(npz_file).replace('_distance_map.npz', '')
+    for npz_file in glob.glob(os.path.join(maps_dir, "*features.npz")):
+        case_id = os.path.basename(npz_file).replace('_features.npz', '')
         print(case_id)
 
         subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
@@ -159,7 +164,7 @@ def main():
 
 
         data= np.load(npz_file)
-        dist = data['distance']
+        dist = data['features']
 
 
         score = subject_level_score(dist, id_min, id_max)
