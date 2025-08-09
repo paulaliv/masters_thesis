@@ -187,20 +187,22 @@ def main():
     id_scores = scores[labels_array == 'ID']
     ood_scores = scores[labels_array == 'OOD']
 
+
+    # Small jitter on x for visibility
+    id_x = np.ones_like(id_scores) + np.random.uniform(-0.05, 0.05, size=len(id_scores))
+    ood_x = 2 * np.ones_like(ood_scores) + np.random.uniform(-0.05, 0.05, size=len(ood_scores))
+
     plt.figure(figsize=(8, 6))
+    plt.scatter(id_x, id_scores, label='ID', alpha=0.7, color='blue', marker='o')
+    plt.scatter(ood_x, ood_scores, label='OOD', alpha=0.7, color='red', marker='x')
 
-    # Scatter plot with some jitter on y axis to avoid overlap
-    plt.scatter(np.ones_like(id_scores), id_scores, label='ID', alpha=0.7, color='blue', marker='o')
-    plt.scatter(2 * np.ones_like(ood_scores), ood_scores, label='OOD', alpha=0.7, color='red', marker='x')
-
-    # Horizontal line for threshold at TPR=0.95 or FPR=0.05
     plt.axhline(y=threshold, color='green', linestyle='--', label=f'Threshold={threshold:.3f}')
 
     plt.xticks([1, 2], ['ID', 'OOD'])
     plt.ylabel('OOD Score')
     plt.title('OOD Scores per Subject with Threshold')
     plt.legend()
-    plt.grid(True)
+    plt.grid(True, linestyle='--', alpha=0.6)
     plt.show()
 
     # csv_file = "/path/to/ood_cases.csv"
