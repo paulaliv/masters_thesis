@@ -709,6 +709,9 @@ class ROIPreprocessor:
 
                 resized_dist, _ = self.adjust_to_shape(cropped_dist, cropped_pred, self.target_shape)
 
+                self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask,
+                                   f'{self.case_id}: feature distance map', output_dir_visuals)
+
 
         else:
             print('WARNING:Prediction is empty, defaulting to center crop')
@@ -721,8 +724,7 @@ class ROIPreprocessor:
 
         self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map','feature_distance_map', output_dir_visuals)
 
-        if resized_mask.sum() > 0:
-                self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask, f'{self.case_id}: feature distance map',output_dir_visuals)
+
 
 
 
