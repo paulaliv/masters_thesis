@@ -26,6 +26,27 @@ def compute_train_dist():
     cov_inv = np.linalg.inv(cov)
     return mean, cov, cov_inv
 
+def compute_id_train_minmax_from_features(mean, cov_inv):
+    all_train_features = []
+    folder = "/gpfs/home6/palfken/ood_features/id_data/"
+
+    for npz_file in glob.glob(os.path.join(folder, "*.npz")):
+        data = np.load(npz_file)
+        feats = data['features']  # shape: (num_patches, 320)
+        all_train_features.append(feats)
+
+    all_train_features = np.vstack(all_train_features)
+
+    diffs = all_train_features - mean
+    dists = np.sqrt(np.sum(diffs @ cov_inv * diffs, axis=1))
+    id_min = dists.min()
+    id_max = dists.max()
+    return id_min, id_max
+
+def normalize_score(score, id_min, id_max):
+    return (score - id_min) / (2 * id_max - id_min)
+
+
 def save_train_distribution(mean, cov, cov_inv, filepath):
     np.savez(filepath, mean=mean, cov=cov, cov_inv=cov_inv)
 
@@ -59,15 +80,32 @@ def compute_test_dist(mean, cov_inv, test_feature_dir,csv_file):
 
 
 def main():
-    mean, cov, cov_inv = compute_train_dist()
+    # mean, cov, cov_inv = compute_train_dist()
+    #
+    # print(f'MEAN: {mean}')
+    # print(f'COV: {cov}')
+    # print(f'COV_INV: {cov_inv}')
+    #
+    # save_loc = "/gpfs/home6/palfken/ood_features/"
+    #
+    # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
+    train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
+    mean, cov, cov_inv = train_data['mean'], train_data['cov'], train_data['cov_inv']
+    id_min, id_max = compute_id_train_minmax_from_features(mean, cov_inv)
 
-    print(f'MEAN: {mean}')
-    print(f'COV: {cov}')
-    print(f'COV_INV: {cov_inv}')
+    # Save everything back to npz (overwrite)
+    np.savez("/gpfs/home6/palfken/ood_features/train_dist.npz",
+        mean=mean,
+        cov=cov,
+        cov_inv=cov_inv,
+        id_min=id_min,
+        id_max=id_max
+    )
 
-    save_loc = "/gpfs/home6/palfken/ood_features/"
+    print(f"Updated file with id_min={id_min}, id_max={id_max}")
 
-    save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
+
+
 
     # csv_file = "/path/to/ood_cases.csv"
     # test_feature_dir = "/path/to/test_features"
