@@ -127,12 +127,14 @@ def tpr_at_fpr(scores, labels, target_fpr=0.05):
 
 
 def main():
-    # mean, cov, cov_inv = compute_train_dist()
-    #
-    # print(f'MEAN: {mean}')
-    # print(f'COV: {cov}')
-    # print(f'COV_INV: {cov_inv}')
-    #
+    mean, cov, cov_inv = compute_train_dist()
+
+    print(f'MEAN: {mean}')
+    print(f'COV: {cov}')
+    print(f'COV_INV: {cov_inv}')
+
+
+    id_min, id_max = compute_id_train_minmax_from_features(mean, cov_inv)
     maps_dir =  "/gpfs/home6/palfken/ood_features/features"
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
@@ -140,8 +142,8 @@ def main():
 
     #
     # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
-    train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
-    mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
+    #train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
+    #mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
     scores = []
     labels = []
 
