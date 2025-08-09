@@ -167,7 +167,7 @@ def main():
         dist = data['features']
 
 
-        score = subject_level_score(dist, id_min, id_max)
+        score = subject_level_score(dist,mean, cov_inv, id_min, id_max)
         print(f'Score: {score}')
 
         scores.append(score)
