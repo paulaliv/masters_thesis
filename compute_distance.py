@@ -132,12 +132,30 @@ def main():
 
 
     id_min, id_max = compute_id_train_minmax_from_features(mean, cov_inv)
+    maps_id = "/gpfs/home6/palfken/ood_features/id_data60/"
     maps_dir =  "/gpfs/home6/palfken/ood_features/features"
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
 
+    scores_id = []
+    for npz_file in glob.glob(os.path.join(maps_id, "*features.npz")):
+        case_id = os.path.basename(npz_file).replace('_features.npz', '')
+        print(case_id)
 
-    #
+        data = np.load(npz_file)
+        dist = data['features']
+
+        score = subject_level_score(dist, mean, cov_inv, id_min, id_max)
+        print(f'Score: {score}')
+
+        scores_id.append(score)
+
+
+
+    # Choose percentile threshold (e.g., 5th percentile for low-score=OOD)
+    percentile = 5
+    threshold = np.percentile(scores_id, percentile)
+
     # save_train_distribution(mean, cov, cov_inv, os.path.join(save_loc,"train_dist.npz"))
     #train_data = np.load("/gpfs/home6/palfken/ood_features/train_dist.npz")
     #mean, cov, cov_inv,id_min, id_max = train_data['mean'], train_data['cov'], train_data['cov_inv'], train_data['id_min'], train_data['id_max']
@@ -173,12 +191,6 @@ def main():
         scores.append(score)
         labels.append(tumor_class)
 
-    labels_array = np.array(labels)
-
-    auc = roc_auc_score(labels_array, scores)
-    tpr95, threshold = tpr_at_fpr(scores, labels_array, 0.05)
-
-
 
     # Separate ID and OOD scores
     scores = np.array(scores)
@@ -187,22 +199,43 @@ def main():
     id_scores = scores[labels_array == 'ID']
     ood_scores = scores[labels_array == 'OOD']
 
-
-    # Small jitter on x for visibility
-    id_x = np.ones_like(id_scores) + np.random.uniform(-0.05, 0.05, size=len(id_scores))
-    ood_x = 2 * np.ones_like(ood_scores) + np.random.uniform(-0.05, 0.05, size=len(ood_scores))
+    id_x = id_scores
+    ood_x = ood_scores
+    id_y = np.random.normal(0, 0.02, size=len(id_x))  # small vertical jitter
+    ood_y = np.random.normal(0, 0.02, size=len(ood_x))
 
     plt.figure(figsize=(8, 6))
-    plt.scatter(id_x, id_scores, label='ID', alpha=0.7, color='blue', marker='o')
-    plt.scatter(ood_x, ood_scores, label='OOD', alpha=0.7, color='red', marker='x')
 
-    plt.axhline(y=threshold, color='green', linestyle='--', label=f'Threshold={threshold:.3f}')
+    # Plot ID and OOD horizontally
+    plt.scatter(id_x, id_y, label='ID', alpha=0.7, color='blue', marker='o')
+    plt.scatter(ood_x, ood_y, label='OOD', alpha=0.7, color='red', marker='x')
 
-    plt.xticks([1, 2], ['ID', 'OOD'])
-    plt.ylabel('OOD Score')
+    # Vertical threshold line
+    plt.axvline(x=threshold, color='green', linestyle='--', label=f'Threshold={threshold:.3f}')
+
+    plt.xlabel('OOD Score')
+    plt.ylabel('Samples (jittered)')
     plt.title('OOD Scores per Subject with Threshold')
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.grid(True)
+
+    #
+    #
+    # # Small jitter on x for visibility
+    # id_x = np.ones_like(id_scores) + np.random.uniform(-0.05, 0.05, size=len(id_scores))
+    # ood_x = 2 * np.ones_like(ood_scores) + np.random.uniform(-0.05, 0.05, size=len(ood_scores))
+    #
+    # plt.figure(figsize=(8, 6))
+    # plt.scatter(id_x, id_scores, label='ID', alpha=0.7, color='blue', marker='o')
+    # plt.scatter(ood_x, ood_scores, label='OOD', alpha=0.7, color='red', marker='x')
+    #
+    # plt.axhline(y=threshold, color='green', linestyle='--', label=f'Threshold={threshold:.3f}')
+    #
+    # plt.xticks([1, 2], ['ID', 'OOD'])
+    # plt.ylabel('OOD Score')
+    # plt.title('OOD Scores per Subject with Threshold')
+    # plt.legend()
+    # plt.grid(True, linestyle='--', alpha=0.6)
 
     plt.savefig('/gpfs/home6/palfken/ood_features/ood_scatterplot.png')
 
