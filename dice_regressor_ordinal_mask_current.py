@@ -17,7 +17,7 @@ import time
 import sys
 import json
 from sklearn.metrics import accuracy_score, roc_auc_score
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import umap
@@ -584,7 +584,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
     #
     # # Step 2: Cosine Annealing after warmup
-    scheduler = CosineAnnealingLR(optimizer, T_max=35)  # 45 = total_epochs - warmup_epochs
+    scheduler = ReduceLROnPlateau(optimizer,
+                                  mode='min',  # 'min' if you want to reduce LR when monitored metric stops decreasing
+                                  factor=0.1,  # factor by which the LR will be reduced. new_lr = old_lr * factor
+                                  patience=5,  # number of epochs with no improvement after which LR will be reduced
+                                  verbose=True,  # print messages when LR is reduced
+                                  min_lr=1e-6,  # lower bound on the learning rate
+                                  cooldown=0)
+    #scheduler = CosineAnnealingLR(optimizer, T_max=35)  # 45 = total_epochs - warmup_epochs
 
     # Combine them
     #scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
@@ -605,22 +612,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     train_losses = []
     val_losses = []
 
-    f1_history = defaultdict(list)
-
     #Kappa variables
     best_kappa = -1.0
     best_kappa_cm = None
     best_kappa_epoch = -1
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
-
-    all_labels = []
-    for _,_,labels,_ in train_loader:
-        all_labels.extend(labels.cpu().numpy().tolist())
-
-    # dist = compute_class_distribution(all_labels)
-    # print("Global class distribution:", dist)
-
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
@@ -647,6 +644,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+
+            # Warmup scheduler step per batch
+            if epoch < warmup_epochs:
+                warmup_scheduler.step()
 
             running_loss += loss.item() * image.size(0)
             total += label.size(0)
@@ -761,19 +762,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             zero_division=0
         )
 
-
-        for class_name in class_names:
-            f1_history[class_name].append(report_dict[class_name]["f1-score"])
-
-
-        #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
-        # After each validation epoch:
-
-        # Step the appropriate scheduler
-        if epoch < warmup_epochs:
-            warmup_scheduler.step()
-            print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
-        else:
+        #
+        # # Step the appropriate scheduler
+        # if epoch < warmup_epochs:
+        #     warmup_scheduler.step()
+        #     print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        if epoch >= warmup_epochs:
             scheduler.step(epoch_val_loss)
             print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
