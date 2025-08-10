@@ -395,8 +395,6 @@ class QADataset(Dataset):
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
-        if uncertainty.sum() == 0:
-            print(f'{case_id} has empty map!')
 
         # Map dice score to category
 
@@ -642,7 +640,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 # print(f'model Output Shape : {preds.shape}')
                 #targets = encode_ordinal_targets(label).to(preds.device)
-                #print(f'Tagets shape: {targets.shape}')
+
                 loss = criterion(preds, label)
 
 
@@ -679,8 +677,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         val_preds_list.clear()
         val_labels_list.clear()
         val_subtypes_list.clear()
-
-        print(f'Train label distribution: {label_counts}')
 
 
         with torch.no_grad():
@@ -785,7 +781,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         if kappa_quadratic > best_kappa:
             print(f'New Best Kappa: {kappa_quadratic}!')
-            best_kappa = kappa_quadratic
+            best_kappa_quad = kappa_quadratic
+            best_kappa_lin = kappa_linear
 
 
             present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
@@ -824,7 +821,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ = {best_kappa_lin:.3f}, κ² = {best_kappa_quad:.3f})")
     plt.tight_layout()
     plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
@@ -842,7 +839,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
 
-    return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
+    return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa_quad, best_kappa_lin
 
 
 def pad_to_max_length(loss_lists):
@@ -868,11 +865,12 @@ def main(data_dir, plot_dir, folds,df):
 
         all_train_losses = []
         all_val_losses = []
-        all_kappas = []
+        all_kappas_quad = []
+        all_kappas_lin = []
 
         for fold in range(5):
             start = time.time()
-            train_losses, val_losses, val_preds, val_labels, best_kappa= train_one_fold(
+            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
                 fold,
                 data_dir=data_dir,
                 df=df,
@@ -886,7 +884,8 @@ def main(data_dir, plot_dir, folds,df):
             all_val_labels.append(val_labels)
             all_train_losses.append(train_losses)
             all_val_losses.append(val_losses)
-            all_kappas.append(best_kappa)
+            all_kappas_quad.append(best_kappa_quad)
+            all_kappas_lin.append(best_kappa_lin)
 
 
         end = time.time()
@@ -906,8 +905,11 @@ def main(data_dir, plot_dir, folds,df):
 
 
 
-        avg_kappa = np.mean(all_kappas)
-        print(f'Average Kappa across all 5 folds: {avg_kappa}')
+        avg_kappa_quad = np.mean(all_kappas_quad)
+        print(f'Average Quadratic Kappa across all 5 folds: {avg_kappa_quad}')
+
+        avg_kappa_lin = np.mean(all_kappas_lin)
+        print(f'Average Linear Kappa across all 5 folds: {avg_kappa_lin}')
 
         plt.figure(figsize=(10, 6))
         plt.plot(avg_train_losses, label='Train Loss', marker='o')
@@ -948,7 +950,7 @@ def main(data_dir, plot_dir, folds,df):
                     xticklabels=class_names, yticklabels=class_names)
         plt.xlabel("Predicted")
         plt.ylabel("True")
-        plt.title(f"Confusion Matrix across all folds (average κ² = {avg_kappa:.3f})")
+        plt.title(f"Confusion Matrix across all folds (average κ = {avg_kappa_lin:.3f}, average κ² = {avg_kappa_quad:.3f})")
         plt.tight_layout()
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_MASK.png"))
         plt.close()
