@@ -421,9 +421,6 @@ class QADataset(Dataset):
             mask= data["mask"].float()
             uncertainty = data["uncertainty"].float()
 
-        print(f'Mask shape: {mask.shape}')
-        print(f'Uncertainty shape: {uncertainty.shape}')
-
 
         if self.want_features:
             return uncertainty, case_id, label_tensor
