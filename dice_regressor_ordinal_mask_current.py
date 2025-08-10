@@ -416,6 +416,14 @@ class QADataset(Dataset):
 
         #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
+        print("Image shape before transform:", image.shape)
+        print("Uncertainty shape before transform:", uncertainty.shape)
+        # Ensure (D, H, W) ordering for MONAI
+        if image.shape[0] != image.shape[1] and image.ndim == 3:
+            image = np.moveaxis(image, -1, 0)
+            uncertainty = np.moveaxis(uncertainty, -1, 0)
+
+
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
