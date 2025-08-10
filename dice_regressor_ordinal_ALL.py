@@ -652,7 +652,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_kappa_epoch = epoch
 
 
-            with gzip.open(f"model_fold{fold}_{uncertainty_metric}_ALL.pt.gz", 'wb') as f:
+            #with gzip.open(f"model_fold{fold}_{uncertainty_metric}_ALL.pt.gz", 'wb') as f:
                 torch.save(model.state_dict(), f, pickle_protocol=4)
 
 
@@ -661,17 +661,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             print(f'Yay, new best Val Loss: {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
-            # Save best model weights
-            # torch.save({
-            #     'model_state_dict': model.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            #     'epoch': epoch,
-            #     'val_loss': epoch_val_loss
-            # }, f"best_qa_model_fold{fold}.pt")
-            best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
-                                           zero_division=0)
-
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_ALL.npz"), preds=val_preds_np, labels=val_labels_np)
 
 
         else:
