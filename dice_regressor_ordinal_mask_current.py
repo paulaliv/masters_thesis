@@ -158,12 +158,13 @@ from monai.transforms import (
 )
 train_transforms = Compose([
 
-    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+
     RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
     RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=0),
     RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),  # flip along height axis
     RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=2),
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
     ToTensord(keys=["mask", "uncertainty"])
 ])
 val_transforms = Compose([
@@ -417,8 +418,12 @@ class QADataset(Dataset):
                 "mask": np.expand_dims(mask, 0),
                 "uncertainty":np.expand_dims(uncertainty, 0),
             })
-            mask= data["mask"]
-            uncertainty = data["uncertainty"]
+            mask= data["mask"].float()
+            uncertainty = data["uncertainty"].float()
+
+        print(f'Mask shape: {mask.shape}')
+        print(f'Uncertainty shape: {uncertainty.shape}')
+
 
         if self.want_features:
             return uncertainty, case_id, label_tensor
