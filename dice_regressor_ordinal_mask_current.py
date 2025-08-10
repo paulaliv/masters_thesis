@@ -158,24 +158,23 @@ from monai.transforms import (
 )
 train_transforms = Compose([
 
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
+    EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
     #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     RandAffined(
-        keys=["image", "uncertainty"],  # apply same affine to both
-        prob=1.0,
+        keys=["mask", "uncertainty"],  # apply same affine to both
+        spatial_size=(48, 256, 256),
+        prob=0.5,
         rotate_range=(np.pi/12, np.pi/12, np.pi/12),
         translate_range=(3, 3, 3),  # in voxels
         scale_range=(0.1, 0.1, 0.1),
-        spatial_size=(48, 256, 256),
         mode=('nearest', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
-    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
-    ToTensord(keys=["image", "uncertainty"])
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),
+    ToTensord(keys=["mask", "uncertainty"])
 ])
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    ToTensord(keys=["image", "uncertainty"])
+    EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
+    ToTensord(keys=["mask", "uncertainty"])
 ])
 
 
@@ -395,7 +394,7 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         #image = torch.from_numpy(image).float()
 
 
@@ -416,11 +415,11 @@ class QADataset(Dataset):
 
         #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
-        print("Image shape before transform:", image.shape)
+        print("Mask shape before transform:", mask.shape)
         print("Uncertainty shape before transform:", uncertainty.shape)
         # Ensure (D, H, W) ordering for MONAI
-        if image.shape[0] != image.shape[1] and image.ndim == 3:
-            image = np.moveaxis(image, -1, 0)
+        if mask.shape[0] != mask.shape[1] and mask.ndim == 3:
+            mask = np.moveaxis(mask, -1, 0)
             uncertainty = np.moveaxis(uncertainty, -1, 0)
 
 
@@ -428,16 +427,16 @@ class QADataset(Dataset):
 
         if self.transform:
             data = self.transform({
-                "image": image,
-                "uncertainty": uncertainty
+                "mask": np.expand_dims(mask, axis=0),
+                "uncertainty":np.expand_dims(uncertainty, axis=0)
             })
-            image_tensor = data["image"]
+            mask= data["mask"]
             uncertainty_tensor = data["uncertainty"]
 
         if self.want_features:
-            return uncertainty_tensor, case_id, label_tensor
+            return uncertainty, case_id, label_tensor
         else:
-            return image_tensor, uncertainty_tensor, label_tensor, subtype
+            return mask, uncertainty, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
