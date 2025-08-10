@@ -645,10 +645,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             scaler.step(optimizer)
             scaler.update()
 
-            # Warmup scheduler step per batch
-            if epoch < warmup_epochs:
-                warmup_scheduler.step()
-
             running_loss += loss.item() * image.size(0)
             total += label.size(0)
 
@@ -767,9 +763,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # if epoch < warmup_epochs:
         #     warmup_scheduler.step()
         #     print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
-        if epoch >= warmup_epochs:
-            scheduler.step(epoch_val_loss)
-            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
+        scheduler.step(epoch_val_loss)
+        print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
 
 
