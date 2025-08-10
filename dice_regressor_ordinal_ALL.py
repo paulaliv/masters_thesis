@@ -528,9 +528,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
-                print(f'Label shape {label.shape}')
+
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                print(f'model Output Shape : {preds.shape}')
+
                 #targets = encode_ordinal_targets(label).to(preds.device)
                 #print(f'Tagets shape: {targets.shape}')
                 loss = criterion(preds, label)
@@ -658,7 +658,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
-            print(f'Yay, new best : {epoch_val_loss}!')
+            print(f'Yay, new best Val Loss: {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
             # Save best model weights
