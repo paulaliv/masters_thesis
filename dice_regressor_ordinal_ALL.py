@@ -1,6 +1,5 @@
 from collections import defaultdict
-
-
+import gzip
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -296,38 +295,27 @@ class QADataset(Dataset):
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
         mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
 
-
-        image_tensor = torch.from_numpy(image).float().unsqueeze(0)
-        mask_tensor = torch.from_numpy(mask).float().unsqueeze(0)
-
-
-
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
         # Map dice score to category
 
         label = bin_dice_score(dice_score)
 
-        # print(f'Image shape {image.shape}')
-        uncertainty_tensor = torch.from_numpy(uncertainty).float()
-
-        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
-
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
             data = self.transform({
-                "image": image,
-                'mask': mask,
-                "uncertainty": uncertainty_tensor
+                "image": np.expand_dims(image, 0),
+                'mask':np.expand_dims(mask, 0),
+                "uncertainty": np.expand_dims(uncertainty, 0),
             })
             image = data["image"]
-            uncertainty_tensor = data["uncertainty"]
+            uncertainty= data["uncertainty"]
 
         if self.want_features:
-            return uncertainty_tensor, case_id, label_tensor
+            return uncertainty, case_id, label_tensor
         else:
-            return image, uncertainty_tensor, label_tensor, subtype
+            return image, uncertainty, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
@@ -403,6 +391,50 @@ def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
     return loss
 
 
+class CORNLoss(nn.Module):
+    """
+    CORN Loss for ordinal regression.
+    """
+    def __init__(self):
+        super(CORNLoss, self).__init__()
+
+    def forward(self, logits, labels):
+        """
+        logits: Tensor of shape (B, K-1), where K is the number of ordinal classes
+        labels: Tensor of shape (B,) with values in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # temperature = 0.5
+        #
+        # logits = logits/temperature
+
+        # Create binary targets: 1 if label > threshold
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Compute softmax over two classes (not raw binary classification)
+        # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
+
+
+
+
+        logits_reshaped = logits_stacked.view(-1, 2)  # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)  # [B*(K-1)]
+
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, reduction='mean')
+        return loss
+
+
+@torch.no_grad()
+def corn_predict(logits):
+    #logits shape: [B, num_thresholds]
+    probs = torch.stack([-logits, logits], dim=2)  # shape: [B, num_thresholds, 2]
+    pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
+    return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
+
 def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device):
     print(f'Training with UMAP: {uncertainty_metric}')
     print(f"Training fold {fold} ...")
@@ -445,7 +477,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = coral_loss_manual
+    criterion = CORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
@@ -485,9 +517,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
                 print(f'model Output Shape : {preds.shape}')
-                targets = encode_ordinal_targets(label).to(preds.device)
-                print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, targets)
+                #targets = encode_ordinal_targets(label).to(preds.device)
+                #print(f'Tagets shape: {targets.shape}')
+                loss = criterion(preds, label)
 
 
             scaler.scale(loss).backward()
@@ -498,7 +530,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
+                #decoded_preds = decode_predictions(preds)
+                decoded_preds = corn_predict(preds)
 
                 correct += (decoded_preds == label).sum().item()
 
@@ -525,13 +558,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
                 preds = model(image, uncertainty)
-                targets = encode_ordinal_targets(label).to(preds.device)
+                #targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, targets)
+                loss = criterion(preds, label)
                 val_running_loss += loss.item() * image.size(0)
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
+                    #decoded_preds = decode_predictions(preds)
+                    decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
@@ -586,21 +620,26 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         )
 
         scheduler.step(epoch_val_loss)
-        for class_name in class_names:
-            f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         # After each validation epoch:
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
+            best_kappa_quad = kappa_quadratic
+            best_kappa_lin = kappa_linear
+
             present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
             labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
             best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
             best_kappa_preds = val_preds_np.copy()
             best_kappa_labels = val_labels_np.copy()
-            best_kappa_report = report
+
             best_kappa_epoch = epoch
+
+
+            with gzip.open(f"model_fold{fold}_{uncertainty_metric}.pt.gz", 'wb') as f:
+                torch.save(model.state_dict(), f, pickle_protocol=4)
 
 
         # Early stopping check
@@ -643,7 +682,16 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_ALL.png"))
     plt.close()
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
+    print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
+    return train_losses, val_losses, best_kappa_preds, best_kappa_labels, best_kappa_quad, best_kappa_lin
+
+
+def pad_to_max_length(loss_lists):
+    max_len = max(len(lst) for lst in loss_lists)
+    padded = []
+    for lst in loss_lists:
+        padded.append(np.pad(lst, (0, max_len - len(lst)), constant_values=np.nan))
+    return np.array(padded)
 
 
 
@@ -651,93 +699,93 @@ def main(data_dir, plot_dir, folds,df):
     print('MODEL INPUT: UNCERTAINTY MAP + MASK WITH IMAGE')
     print('FUSION: LATE and EARLY for mask with image')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #for fold in range(5):
-    # Train the model and retrieve losses + predictions
 
-    metrics = ['confidence', 'entropy','mutual_info','epkl']
-    metrics = ['confidence']
+    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+
     for idx, metric in enumerate(metrics):
+        # Lists to aggregate results across folds
+        all_val_preds = []
+        all_val_labels = []
+
+        all_train_losses = []
+        all_val_losses = []
+        all_kappas_quad = []
+        all_kappas_lin = []
         start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
-            4,
-            data_dir,
-            df=df,
-            splits=folds,
-            uncertainty_metric=metric,
-            plot_dir=plot_dir,
-            device=device
-        )
+        for fold in range(5):
+
+            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
+                fold,
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device
+            )
+            # Aggregate per fold
+            all_val_preds.append(val_preds)
+            all_val_labels.append(val_labels)
+            all_train_losses.append(train_losses)
+            all_val_losses.append(val_losses)
+            all_kappas_quad.append(best_kappa_quad)
+            all_kappas_lin.append(best_kappa_lin)
 
         end = time.time()
-        print(f'Best report for {metric}:')
-        print(best_report)
+
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-        # Convert prediction outputs to numpy arrays for plotting
-        val_preds = np.array(val_preds)
-        val_labels = np.array(val_labels)
-        val_subtypes = np.array(val_subtypes)
+        # Combine folds data
+        val_preds = np.concatenate(all_val_preds, axis=0)
+        val_labels = np.concatenate(all_val_labels, axis=0)
+
+        padded_train_losses = pad_to_max_length(all_train_losses)
+        avg_train_losses = np.nanmean(padded_train_losses, axis=0)
+
+        padded_val_losses = pad_to_max_length(all_val_losses)
+        avg_val_losses = np.nanmean(padded_val_losses, axis=0)
+
+
+
+        avg_kappa_quad = np.mean(all_kappas_quad)
+        print(f'Average Quadratic Kappa across all 5 folds: {avg_kappa_quad}')
+
+        avg_kappa_lin = np.mean(all_kappas_lin)
+        print(f'Average Linear Kappa across all 5 folds: {avg_kappa_lin}')
 
         plt.figure(figsize=(10, 6))
-        for class_name, f1_scores in f1_history.items():
-            plt.plot(f1_scores, label=class_name)
-
-        plt.xlabel("Epoch")
-        plt.ylabel("F1 Score")
-        plt.title("Per-Class F1 Score Over Epochs")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}_ALL.png"), dpi=300)
-        plt.show()
-
-        # ✅ Plot loss curves
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label='Train Loss', marker='o')
-        plt.plot(val_losses, label='Validation Loss', marker='x')
+        plt.plot(avg_train_losses, label='Train Loss', marker='o')
+        plt.plot(avg_val_losses, label='Validation Loss', marker='x')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
-        plt.title('Training and Validation Loss Curves')
+        plt.title(f'Training and Validation Loss Curves - {metric}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}_ALL.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_MASK.png'))
         plt.close()
 
-        # ✅ Overall scatter plot
-        plt.figure(figsize=(8, 6))
-        plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-        plt.plot([val_labels.min(), val_labels.max()],
-                 [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
-        plt.xlabel("Actual Label")
-        plt.ylabel("Predicted Label")
-        plt.title("Overall Predicted vs. Actual Labels")
-        plt.legend()
-        plt.grid(True)
+
+
+        #confusion matrix
+        # Plot and save best confusion matrix
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+        present_labels = np.unique(np.concatenate((val_labels, val_preds)))
+        labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+
+        disp = confusion_matrix(val_labels, val_preds, labels=labels_idx)
+
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(disp, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=class_names, yticklabels=class_names)
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.title(f"Confusion Matrix: {metric}, (κ = {avg_kappa_lin:.3f}, κ² = {avg_kappa_quad:.3f})")
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_ALL.png'))
+        plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_MASK.png"))
         plt.close()
 
-        # # ✅ Per-subtype scatter plots
-        # unique_subtypes = np.unique(val_subtypes)
-        #
-        # for subtype in unique_subtypes:
-        #     mask = val_subtypes == subtype
-        #     preds_sub = val_preds[mask]
-        #     labels_sub = val_labels[mask]
-        #
-        #     plt.figure(figsize=(8, 6))
-        #     plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
-        #     plt.plot([labels_sub.min(), labels_sub.max()],
-        #              [labels_sub.min(), labels_sub.max()], 'r--')
-        #     plt.xlabel("Actual Label")
-        #     plt.ylabel("Predicted Label")
-        #     plt.title(f"Predicted vs Actual for Subtype: {subtype}")
-        #     plt.grid(True)
-        #     plt.tight_layout()
-        #
-        #     plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
-        #     plt.close()
+
 
 def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
     print(f'feature shape {train.shape}')
