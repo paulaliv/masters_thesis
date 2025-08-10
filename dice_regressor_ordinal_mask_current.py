@@ -415,8 +415,6 @@ class QADataset(Dataset):
 
         #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
-        print("Mask shape before transform:", mask.shape)
-        print("Uncertainty shape before transform:", uncertainty.shape)
         # Ensure (D, H, W) ordering for MONAI
         if mask.shape[0] != mask.shape[1] and mask.ndim == 3:
             mask = np.moveaxis(mask, -1, 0)
