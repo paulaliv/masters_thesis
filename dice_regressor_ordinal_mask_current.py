@@ -781,22 +781,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             scheduler.step(epoch_val_loss)
             print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
-            #
-        # # Early stopping check
-        if epoch_val_loss < best_val_loss:
-            print(f'YAY, new best Val loss: {epoch_val_loss}!')
-            best_val_loss = epoch_val_loss
-            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
-            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
-            best_val_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
 
-        else:
-            print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
 
         if kappa_quadratic > best_kappa:
             print(f'New Best Kappa: {kappa_quadratic}!')
             best_kappa = kappa_quadratic
-            patience_counter = 0
+
 
             present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
             labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
@@ -810,32 +800,23 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 torch.save(model.state_dict(), f, pickle_protocol=4)
 
 
-
-        #     best_val_loss = epoch_val_loss
-        #     patience_counter = 0
-        #     # Save best model weights
-        #     # torch.save({
-        #     #     'model_state_dict': model.state_dict(),
-        #     #     'optimizer_state_dict': optimizer.state_dict(),
-        #     #     'epoch': epoch,
-        #     #     'val_loss': epoch_val_loss
-        #     # }, f"best_qa_model_fold{fold}.pt")
-        #     best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
-        #                                    zero_division=0)
-        #
-        #     np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}_MASK.npz"), preds=val_preds_np, labels=val_labels_np)
-
+        # Early stopping check
+        if epoch_val_loss < best_val_loss:
+            print(f'YAY, new best Val loss: {epoch_val_loss}!')
+            best_val_loss = epoch_val_loss
+            patience_counter = 0
+            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+            best_val_epoch = epoch
+            best_val_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
 
         else:
+            print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
 
                 break
-    # file = os.path.join(plot_dir, f'best_report_{uncertainty_metric}')
-    # with open(file, "w") as f:
-    #     f.write(f"Final Classification Report for Fold {fold}:\n")
-    #     f.write(best_report)
 
     # Plot and save best confusion matrix
     plt.figure(figsize=(6, 5))
@@ -854,7 +835,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.title(f"Best Confusion Matrix (Epoch {best_val_epoch}, Validation loss = {best_val_loss:.3f})")
     plt.tight_layout()
     plt.savefig(os.path.join(plot_dir, f"val_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
@@ -862,6 +843,15 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
 
     return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa
+
+
+def pad_to_max_length(loss_lists):
+    max_len = max(len(lst) for lst in loss_lists)
+    padded = []
+    for lst in loss_lists:
+        padded.append(np.pad(lst, (0, max_len - len(lst)), constant_values=np.nan))
+    return np.array(padded)
+
 
 
 def main(data_dir, plot_dir, folds,df):
@@ -908,12 +898,16 @@ def main(data_dir, plot_dir, folds,df):
         val_preds = np.concatenate(all_val_preds, axis=0)
         val_labels = np.concatenate(all_val_labels, axis=0)
 
+        padded_train_losses = pad_to_max_length(all_train_losses)
+        avg_train_losses = np.nanmean(padded_train_losses, axis=0)
 
-        # Plot loss curves - you can average losses epoch-wise over folds similarly
-        avg_train_losses = np.mean(all_train_losses, axis=0)
-        avg_val_losses = np.mean(all_val_losses, axis=0)
+        padded_val_losses = pad_to_max_length(all_val_losses)
+        avg_val_losses = np.nanmean(padded_val_losses, axis=0)
+
+
 
         avg_kappa = np.mean(all_kappas)
+        print(f'Average Kappa across all 5 folds: {avg_kappa}')
 
         plt.figure(figsize=(10, 6))
         plt.plot(avg_train_losses, label='Train Loss', marker='o')
