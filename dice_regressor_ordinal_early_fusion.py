@@ -48,6 +48,7 @@ train_transforms = Compose([
 ])
 val_transforms = Compose([
     EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    ConcatItemsd(keys=["mask", "uncertainty"], name="merged"),
     ToTensord(keys=["mask", "uncertainty"])
 ])
 
@@ -149,7 +150,7 @@ class Light3DEncoder(nn.Module):
         #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
         # )
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
+            nn.Conv3d(2, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
             nn.MaxPool3d(2),
             nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
             nn.MaxPool3d(2),
