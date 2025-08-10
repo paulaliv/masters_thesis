@@ -169,7 +169,7 @@ train_transforms = Compose([
         rotate_range=(np.pi/12, np.pi/12, np.pi/12),
         translate_range=(3, 3, 3),  # in voxels
         scale_range=(0.1, 0.1, 0.1),
-        mode=('nearest', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
+        mode=('nearest', 'bilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
     RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),
     ToTensord(keys=["mask", "uncertainty"])
