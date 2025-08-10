@@ -570,6 +570,12 @@ class ROIPreprocessor:
         pad_width = list(zip(pad_before, pad_after))
         return np.pad(volume, pad_width, mode='constant')
 
+    def bin_dice_score(dice):
+        epsilon = 1e-8
+        dice = np.asarray(dice)
+        dice_adjusted = dice - epsilon  # Shift slightly left
+        bin_edges = [0.1, 0.5, 0.7]
+        return np.digitize(dice_adjusted, bin_edges, right=True)
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
@@ -582,7 +588,8 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
+        OOD_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
+        save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
 
         if os.path.exists(save_path):
             from_scratch = False
@@ -641,31 +648,26 @@ class ROIPreprocessor:
 
         # Load existing results if available
         if os.path.exists(save_path):
-            df = pd.read_csv(save_path)
+            df_ID = pd.read_csv(save_path)
         else:
-            df = pd.DataFrame(case_stats)
-        bin_edges = np.arange(0.0, 1.1, 0.1)
+            df_ID = pd.DataFrame(case_stats)
+
         print(f'CSV file has {len(df)} rows')
 
-        print("Global Dice Score Distribution:")
-        global_hist, _ = np.histogram(df['dice'], bins=bin_edges)
-        for i in range(len(bin_edges) - 1):
-            print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
+        df_OOD = pd.read_csv(OOD_path)
+        df = pd.concat([df_ID, df_OOD], ignore_index=True)
+
+        # Add dice bins column for all data
+        df['dice_bin'] = self.bin_dice_score(df['dice'])
 
         print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
         # Find all uncertainty-related columns
-        unc_cols = [c for c in df.columns if
-                    c.startswith("mean_unc") or c.startswith("std_unc") or c.startswith("max_unc") or c.startswith(
-                        "min_unc")]
+        unc_cols = [c for c in df.columns if c.endswith('unc')]
 
         for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
 
-            # Dice histogram
-            class_hist, _ = np.histogram(group['dice'], bins=bin_edges)
-            for i in range(len(bin_edges) - 1):
-                print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
 
             # Dice stats
             mean_dice = group['dice'].mean()
@@ -680,6 +682,28 @@ class ROIPreprocessor:
                     col_mean = group[col].mean()
                     col_std = group[col].std()
                     print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+
+                # Now print uncertainty stats by dice bin
+            print("\nUncertainty stats per Dice bin:")
+            for bin_id, bin_group in group.groupby('dice_bin'):
+                # Map bin_id to readable range
+                if bin_id == 0:
+                    bin_range = f"<= 0.1"
+                elif bin_id == 1:
+                    bin_range = "0.1 < dice <= 0.5"
+                elif bin_id == 2:
+                    bin_range = "0.5 < dice <= 0.7"
+                else:
+                    bin_range = "> 0.7"
+
+                print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
+                if len(bin_group) > 0 and unc_cols:
+                    for col in unc_cols:
+                        col_mean = bin_group[col].mean()
+                        col_std = bin_group[col].std()
+                        print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+                else:
+                    print("  No samples in this bin.")
 
         print(f'\nCSV file has {len(df)} rows')
         print(f'Cases that were cropped: {self.cropped_cases}')
@@ -834,12 +858,12 @@ class ROIPreprocessor:
 
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-
-        if resampled_pred.sum() > 0:
-            self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
-            self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
+            # else:
+            #     np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+        #
+        # if resampled_pred.sum() > 0:
+        #     self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
+        #     self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
 
         if self.save_as_nifti:
 
@@ -873,11 +897,12 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
+    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
 
-    input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+    input_folder_gt =  "/gpfs/home6/palfken/QA_imagesTs/"
 
-    predicted_mask_folder ='/gpfs/home6/palfken/ood_features/ood_uncertainty_maps/'
+
+    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_data_60/"
 
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
