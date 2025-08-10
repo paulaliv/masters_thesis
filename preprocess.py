@@ -674,7 +674,7 @@ class ROIPreprocessor:
         df = pd.concat([df_ID, df_OOD], ignore_index=True)
 
         # Add dice bins column for all data
-        df['dice_bin'] = self.bin_dice_score(df['dice'])
+        df['dice_bin'] = bin_dice_score(df['dice'])
 
         print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
