@@ -337,7 +337,7 @@ class ROIPreprocessor:
         plt.savefig(os.path.join(output_dir, f'dist_map_{self.case_id}.png'))
         plt.close()
 
-    def visualize_full_row(self, img, mask, pred, umap_dict, case_id, dice, output_dir, axis=0):
+    def visualize_full_row(self, img, mask, pred, umap_dict, dice, output_dir, axis=0):
         """
         Visualize one row of 5 plots:
         - img with mask and pred overlayed
@@ -396,15 +396,15 @@ class ROIPreprocessor:
             axs[i + 1].set_title(f'{umap_titles[i]} Map')
             axs[i + 1].axis('off')
 
-        plt.suptitle(f'Case {case_id}, Dice: {dice}', fontsize=18)
+        plt.suptitle(f'Case {self.case_id}, Dice: {dice}', fontsize=18)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         # Save figure
-        save_path = os.path.join(output_dir, f'{case_id}_full_row.png')
+        save_path = os.path.join(output_dir, f'{self.case_id}_full_row.png')
         plt.savefig(save_path)
         plt.close()
 
-    def visualize_img_pred_mask(img, pred, mask, case_id, dice, output_dir, axis=0):
+    def visualize_img_pred_mask(self,img, pred, mask,  dice, output_dir, axis=0):
         """
         Visualize original image, prediction mask, and ground truth mask side by side.
 
@@ -418,7 +418,7 @@ class ROIPreprocessor:
         """
         # Handle empty prediction
         if pred.sum() == 0:
-            print(f"Warning: Prediction is empty for case {case_id}, showing blank prediction.")
+            print(f"Warning: Prediction is empty for case {self.case_id}, showing blank prediction.")
             pred = np.zeros_like(mask)
 
         # Find slice with max mask presence
@@ -455,13 +455,13 @@ class ROIPreprocessor:
         axs[2].set_title(f'Ground Truth Mask (slice {idx})')
         axs[2].axis('off')
 
-        plt.suptitle(f'Case: {case_id}, Dice: {dice}', fontsize=16)
+        plt.suptitle(f'Case: {self.case_id}, Dice: {dice}', fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-        save_path = os.path.join(output_dir, f"{case_id}_img_pred_mask_side_by_side.png")
+        save_path = os.path.join(output_dir, f"{self.case_id}_img_pred_mask_side_by_side.png")
         plt.savefig(save_path)
         plt.close()
-        print(f"Saved visualization for case {case_id} at {save_path}")
+        print(f"Saved visualization for case {self.case_id} at {save_path}")
 
 
 
