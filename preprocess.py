@@ -652,6 +652,7 @@ class ROIPreprocessor:
             print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
 
         print("\nDice Score Distribution by Tumor Class:")
+
         for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
             class_hist, _ = np.histogram(group['dice'], bins=bin_edges)
