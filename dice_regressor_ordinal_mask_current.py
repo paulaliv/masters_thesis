@@ -157,6 +157,7 @@ from monai.transforms import (
     ToTensord
 )
 train_transforms = Compose([
+
     EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
     #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
     RandAffined(
@@ -166,7 +167,7 @@ train_transforms = Compose([
         translate_range=(3, 3, 3),  # in voxels
         scale_range=(0.1, 0.1, 0.1),
         spatial_size=(48, 256, 256),
-        mode=('trilinear', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
+        mode=('nearest', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
     ),
     RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
     ToTensord(keys=["image", "uncertainty"])
@@ -395,7 +396,7 @@ class QADataset(Dataset):
 
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
-        image = torch.from_numpy(image).float()
+        #image = torch.from_numpy(image).float()
 
         if image.ndim == 3:
             image = image.unsqueeze(0)  # Add channel dim
@@ -415,24 +416,24 @@ class QADataset(Dataset):
         #image_tensor = torch.from_numpy(image).float()
 
         # print(f'Image shape {image.shape}')
-        uncertainty_tensor = torch.from_numpy(uncertainty).float()
+        #uncertainty_tensor = torch.from_numpy(uncertainty).float()
 
-        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
+        #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
             data = self.transform({
                 "image": image,
-                "uncertainty": uncertainty_tensor
+                "uncertainty": uncertainty
             })
-            image = data["image"]
+            image_tensor = data["image"]
             uncertainty_tensor = data["uncertainty"]
 
         if self.want_features:
             return uncertainty_tensor, case_id, label_tensor
         else:
-            return image, uncertainty_tensor, label_tensor, subtype
+            return image_tensor, uncertainty_tensor, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
