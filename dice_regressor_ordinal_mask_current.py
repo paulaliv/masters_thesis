@@ -153,25 +153,17 @@ torch.backends.cudnn.benchmark = False
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
 from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
+    Compose, LoadImaged, EnsureChannelFirstd, RandRotate90d,RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
     ToTensord, EnsureTyped
 )
 train_transforms = Compose([
-
     EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
     EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
-
-    RandAffined(
-        keys=["mask", "uncertainty"],  # apply same affine to both
-        spatial_size=(48, 256, 256),
-        prob=0.5,
-        rotate_range=(np.pi/12, np.pi/12, np.pi/12),
-        translate_range=(3, 3, 3),  # in voxels
-        scale_range=(0.1, 0.1, 0.1),
-        mode=('nearest', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
-    ),
-    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=0),
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),  # flip along height axis
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=2),
     ToTensord(keys=["mask", "uncertainty"])
 ])
 val_transforms = Compose([
