@@ -157,7 +157,7 @@ from monai.transforms import (
     ToTensord, EnsureTyped
 )
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
+
     EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
     RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
@@ -409,18 +409,13 @@ class QADataset(Dataset):
 
         #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
-        # Ensure (D, H, W) ordering for MONAI
-        if mask.shape[0] != mask.shape[1] and mask.ndim == 3:
-            mask = np.moveaxis(mask, -1, 0)
-            uncertainty = np.moveaxis(uncertainty, -1, 0)
-
 
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
             data = self.transform({
-                "mask": mask,
-                "uncertainty":uncertainty
+                "mask": np.expand_dims(mask, 0),
+                "uncertainty":np.expand_dims(uncertainty, 0),
             })
             mask= data["mask"]
             uncertainty = data["uncertainty"]
