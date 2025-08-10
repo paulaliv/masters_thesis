@@ -22,7 +22,6 @@ class ROIPreprocessor:
                  target_spacing: Tuple[int, int, int] = (1,1,3),
                  safe_as_nifti = False,
                  save_umaps = False,
-                 save_dist_maps = False,
                  target_shape: Tuple[int, int, int] = (48,256,256),):
         self.case_id = None
         self.roi_context = roi_context
@@ -30,7 +29,6 @@ class ROIPreprocessor:
         self.target_spacing = target_spacing
         self.save_as_nifti = safe_as_nifti
         self.save_umaps = save_umaps
-        self.save_dist_maps = save_dist_maps
         self.cropped_cases = []
         self.empty_masks = []
         #self.extractor = featureextractor.RadiomicsFeatureExtractor()
@@ -339,51 +337,131 @@ class ROIPreprocessor:
         plt.savefig(os.path.join(output_dir, f'dist_map_{self.case_id}.png'))
         plt.close()
 
-    def visualize_all(self,umap, mask, img,gt, name, output_dir,axis =0):
-        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
-        #idx = np.argmax(summed)
-        idx = np.argmax(np.max(np.abs(umap), axis=(1, 2)))
+    def visualize_full_row(self, img, mask, pred, umap_dict, case_id, dice, output_dir, axis=0):
+        """
+        Visualize one row of 5 plots:
+        - img with mask and pred overlayed
+        - 4 uncertainty maps side-by-side from umap_dict
 
-        assert umap.shape == mask.shape, f"Shape mismatch: umap {umap.shape}, mask {mask.shape}"
+        Parameters:
+        - img: 3D np array (image)
+        - mask: 3D np array (ground truth mask)
+        - pred: 3D np array (prediction mask, can be empty)
+        - umap_dict: dict of 4 np arrays for uncertainty maps, keys: confidence, entropy, mutual_info, epkl
+        - case_id: string for saving
+        - output_dir: folder path for saving
+        - axis: axis to slice on (default 0)
+        """
+
+        # Choose slice index based on mask presence
+        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
+        idx = np.argmax(summed)
+
+        # Get slices for img, mask, pred, umaps on chosen axis
+        def get_slice(arr):
+            if axis == 0:
+                return arr[idx]
+            elif axis == 1:
+                return arr[:, idx, :]
+            elif axis == 2:
+                return arr[:, :, idx]
+            else:
+                raise ValueError("Axis must be 0, 1, or 2.")
+
+        img_slice = get_slice(img)
+        mask_slice = get_slice(mask)
+
+        # If pred empty, create empty pred overlay (zeros)
+        if pred.sum() == 0:
+            pred_slice = np.zeros_like(mask_slice)
+        else:
+            pred_slice = get_slice(pred)
+
+        # Prepare figure with 5 columns
+        fig, axs = plt.subplots(1, 5, figsize=(25, 5))
+
+        # 1) Original image with mask and pred overlay
+        axs[0].imshow(img_slice, cmap='gray')
+        axs[0].imshow(mask_slice, cmap='Greens', alpha=0.4, label='GT Mask')
+        if pred.sum() > 0:
+            axs[0].imshow(pred_slice, cmap='Reds', alpha=0.4, label='Prediction')
+        axs[0].set_title('Image + Mask + Pred')
+        axs[0].axis('off')
+
+        # 2-5) Plot uncertainty maps with same slice & colormap
+        umap_titles = ['Confidence', 'Entropy', 'Mutual Info', 'Epkl']
+        for i, key in enumerate(['confidence', 'entropy', 'mutual_info', 'epkl']):
+            umap_slice = get_slice(umap_dict[key])
+            axs[i + 1].imshow(umap_slice, cmap='viridis')
+            axs[i + 1].set_title(f'{umap_titles[i]} Map')
+            axs[i + 1].axis('off')
+
+        plt.suptitle(f'Case {case_id}, Dice: {dice}', fontsize=18)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+        # Save figure
+        save_path = os.path.join(output_dir, f'{case_id}_full_row.png')
+        plt.savefig(save_path)
+        plt.close()
+
+    def visualize_img_pred_mask(img, pred, mask, case_id, dice, output_dir, axis=0):
+        """
+        Visualize original image, prediction mask, and ground truth mask side by side.
+
+        Parameters:
+        - img: numpy array, original image volume (3D)
+        - pred: numpy array, predicted mask volume (3D)
+        - mask: numpy array, ground truth mask volume (3D)
+        - case_id: str, identifier for the case (for saving filename)
+        - output_dir: str, directory path to save the figure
+        - axis: int, axis to slice along (0, 1, or 2)
+        """
+        # Handle empty prediction
+        if pred.sum() == 0:
+            print(f"Warning: Prediction is empty for case {case_id}, showing blank prediction.")
+            pred = np.zeros_like(mask)
+
+        # Find slice with max mask presence
+        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
+        idx = np.argmax(summed)
+
+        # Extract slices along the chosen axis
         if axis == 0:
             img_slice = img[idx]
+            pred_slice = pred[idx]
             mask_slice = mask[idx]
-            umap_slice = umap[idx]
-            gt_slice = gt[idx]
         elif axis == 1:
             img_slice = img[:, idx, :]
+            pred_slice = pred[:, idx, :]
             mask_slice = mask[:, idx, :]
-            umap_slice = umap[:, idx, :]
-            gt_slice = gt[:, idx, :]
         elif axis == 2:
             img_slice = img[:, :, idx]
+            pred_slice = pred[:, :, idx]
             mask_slice = mask[:, :, idx]
-            umap_slice = umap[:, :, idx]
-            gt_slice = gt[:, :, idx]
         else:
             raise ValueError("Axis must be 0, 1, or 2.")
 
-        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
 
-        # Left: UMAP
-        axs[0].imshow(umap_slice, cmap='viridis')
-        axs[0].set_title(f'UMAP Slice {idx}')
+        axs[0].imshow(img_slice, cmap='gray')
+        axs[0].set_title(f'Original Image (slice {idx})')
         axs[0].axis('off')
 
-        # Right: Image + Mask
-        axs[1].imshow(img_slice, cmap='gray')
-        axs[1].imshow(mask_slice, cmap='Reds', alpha=0.4)
-        axs[1].imshow(gt_slice, cmap='Greens', alpha=0.4)
-        axs[1].set_title(f'Image + Ground Truth + Pred Slice {idx}')
+        axs[1].imshow(pred_slice, cmap='Reds')
+        axs[1].set_title(f'Prediction (slice {idx})')
         axs[1].axis('off')
 
-        # Add figure title here
-        plt.suptitle(name, fontsize=16)
+        axs[2].imshow(mask_slice, cmap='Greens')
+        axs[2].set_title(f'Ground Truth Mask (slice {idx})')
+        axs[2].axis('off')
+
+        plt.suptitle(f'Case: {case_id}, Dice: {dice}', fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-
-        plt.savefig(os.path.join(output_dir, f'dist_map_mask_{self.case_id}.png'))
+        save_path = os.path.join(output_dir, f"{case_id}_img_pred_mask_side_by_side.png")
+        plt.savefig(save_path)
         plt.close()
+        print(f"Saved visualization for case {case_id} at {save_path}")
 
 
 
@@ -492,7 +570,7 @@ class ROIPreprocessor:
         return np.pad(volume, pad_width, mode='constant')
 
 
-    def preprocess_folder(self, image_dir, mask_dir, gt_dir, dist_map_dir, output_dir, output_dir_visuals):
+    def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
@@ -516,7 +594,7 @@ class ROIPreprocessor:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             self.case_id = case_id
 
-            mask_path = os.path.join(dist_map_dir, f"{case_id}.nii.gz")
+            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
             gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
             pred = nib.load(mask_path)
             gt = nib.load(gt_path)
@@ -533,26 +611,13 @@ class ROIPreprocessor:
                 print(f'Case id {case_id}: no subtype in csv file!')
             if os.path.exists(img_path):
                 if self.save_umaps:
-                    #umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-                    umap_path = ''
-                    if self.save_dist_maps:
-                        dist_path = os.path.join(dist_map_dir, f"{case_id}_distance_map.npz")
-                        self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dist_path=dist_path,output_path=output_dir, output_dir_visuals=output_dir_visuals)
-                        new_row = {
-                            "case_id": case_id,
-                            "tumor_class": tumor_class,
-                            "dice": dice,
-                        }
-                    else:
-                        dist_path = ''
-                        self.preprocess_uncertainty_map(img_path=img_path, umap_path=umap_path, gt_path=gt_path,
-                                                        mask_path=mask_path, dist_path=dist_path,output_path=output_dir,
-                                                        output_dir_visuals=output_dir_visuals)
-                        new_row = {
-                            "case_id": case_id,
-                            "tumor_class": tumor_class,
-                            "dice": dice,
-                        }
+                    umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
+                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    new_row = {
+                        "case_id": case_id,
+                        "tumor_class": tumor_class,
+                        "dice": dice,
+                    }
 
 
                 else:
@@ -603,7 +668,7 @@ class ROIPreprocessor:
 
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
-    def preprocess_uncertainty_map(self, img_path, umap_path, gt_path, mask_path, dist_path, output_path, output_dir_visuals):
+    def preprocess_uncertainty_map(self, img_path, umap_path, gt_path, mask_path, dice_score, output_path, output_dir_visuals):
 
         case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
@@ -648,42 +713,6 @@ class ROIPreprocessor:
         resampled_affine = self.compute_affine_with_origin_shift(
             original_spacing, original_origin, original_direction, crop_start_index
         )
-        if self.save_dist_maps:
-            data = np.load(dist_path)
-            dist_array = data['distance']
-            print(
-                f"Initial distance shape: {dist_array.shape}, dtype: {dist_array.dtype}, min: {dist_array.min()}, max: {dist_array.max()}, sum: {dist_array.sum()}")
-
-            dist_array = dist_array.astype(np.float32)  # or whichever key you want
-
-            dist_array = np.squeeze(dist_array)
-            print(f"After squeeze -> shape: {dist_array.shape}, sum: {dist_array.sum()}")
-
-            # 4. Pad to match original image shape
-
-            dist_array = self.center_pad_to_shape(dist_array, orig_img_array.shape)
-            print(f"After pad -> shape: {dist_array.shape}, expected: {orig_img_array.shape}")
-
-            # 5. Convert to SimpleITK image
-
-            orig_dist_map = sitk.GetImageFromArray(dist_array)
-            orig_dist_map.SetOrigin(orig_img.GetOrigin())
-            orig_dist_map.SetSpacing(orig_img.GetSpacing())
-            orig_dist_map.SetDirection(orig_img.GetDirection())
-
-            dist_sitk = self.resample_umap(orig_dist_map, reference=img_sitk, is_label=False)
-            print(f"After resample -> size: {dist_sitk.GetSize()} (reference: {img_sitk.GetSize()})")
-
-            assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == dist_sitk.GetSize()
-
-            dist_sitk.SetOrigin(img_sitk.GetOrigin())
-            dist_sitk.SetSpacing(img_sitk.GetSpacing())
-            dist_sitk.SetDirection(img_sitk.GetDirection())
-            resampled_dist = sitk.GetArrayFromImage(dist_sitk)
-            print(
-                f"Final resampled dist -> shape: {resampled_dist.shape}, min: {resampled_dist.min()}, max: {resampled_dist.max()}, sum: {resampled_dist.sum()}")
-
-
 
         if resampled_pred.sum() > 0:
 
@@ -695,22 +724,10 @@ class ROIPreprocessor:
             cropped_pred = self.crop_to_roi(resampled_pred, slices)
             cropped_mask = self.crop_to_roi(resampled_mask, slices)
 
-
-
-
             img_pp = self.normalize(cropped_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
             print('Adjusting GT Mask!!')
             _,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
-
-
-            if self.save_dist_maps:
-                cropped_dist = self.crop_to_roi(resampled_dist, slices)
-
-                resized_dist, _ = self.adjust_to_shape(cropped_dist, cropped_pred, self.target_shape)
-
-                self.visualize_all(resized_dist, resized_pred, resized_img, resized_mask,
-                                   f'{self.case_id}: feature distance map', output_dir_visuals)
 
 
         else:
@@ -719,67 +736,64 @@ class ROIPreprocessor:
             img_pp = self.normalize(resampled_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, resampled_pred, self.target_shape)
 
-            if self.save_dist_maps:
-                resized_dist, _ = self.adjust_to_shape(resampled_dist, resampled_pred, self.target_shape)
 
-        self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map','feature_distance_map', output_dir_visuals)
+        #self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map','feature_distance_map', output_dir_visuals)
 
 
+        umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
+        resized_umaps = {}  # dictionary to store resized UMAPs
+
+        for i, umap_type in enumerate(umap_types):
+            npz_file = np.load(umap_path)
+
+            umap_array = npz_file[umap_type]
+            umap_array = umap_array.astype(np.float32)  # or whichever key you want
+            umap_array = np.squeeze(umap_array)
+
+            umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
+
+           #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
+
+            # Convert NumPy array to SimpleITK image
+            orig_umap = sitk.GetImageFromArray(umap_array)
+            orig_umap.SetOrigin(orig_img.GetOrigin())
+            orig_umap.SetSpacing(orig_img.GetSpacing())
+            orig_umap.SetDirection(orig_img.GetDirection())
 
 
+            umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
+
+            assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
+
+            umap_sitk.SetOrigin(img_sitk.GetOrigin())
+            umap_sitk.SetSpacing(img_sitk.GetSpacing())
+            umap_sitk.SetDirection(img_sitk.GetDirection())
+            resampled_umap = sitk.GetArrayFromImage(umap_sitk)
+
+            if resampled_pred.sum() > 0:
+                cropped_umap = self.crop_to_roi(resampled_umap, slices)
+
+                resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
+
+            else:
+                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
+
+             # Store resized UMAP in the dict for later use
+            resized_umaps[umap_type] = resized_umap
 
 
-        #
-        # umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
-        # for i, umap_type in enumerate(umap_types):
-        #     npz_file = np.load(umap_path)
-        #
-        #     umap_array = npz_file[umap_type]
-        #     umap_array = umap_array.astype(np.float32)  # or whichever key you want
-        #     umap_array = np.squeeze(umap_array)
-        #
-        #     umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
-        #
-        #    #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
-        #
-        #     # Convert NumPy array to SimpleITK image
-        #     orig_umap = sitk.GetImageFromArray(umap_array)
-        #     orig_umap.SetOrigin(orig_img.GetOrigin())
-        #     orig_umap.SetSpacing(orig_img.GetSpacing())
-        #     orig_umap.SetDirection(orig_img.GetDirection())
-        #
-        #
-        #     umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
-        #
-        #     assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
-        #
-        #     umap_sitk.SetOrigin(img_sitk.GetOrigin())
-        #     umap_sitk.SetSpacing(img_sitk.GetSpacing())
-        #     umap_sitk.SetDirection(img_sitk.GetDirection())
-        #     resampled_umap = sitk.GetArrayFromImage(umap_sitk)
-        #
-        #     if resampled_pred.sum() > 0:
-        #         cropped_umap = self.crop_to_roi(resampled_umap, slices)
-        #
-        #
-        #         resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
-        #
-        #     else:
-        #         resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
-        #
-        #     self.visualize_umap_and_mask(resized_umap, resized_pred, resized_img, f'{self.case_id}: {umap_type} map',f'CROPPED_{umap_type}', output_dir_visuals )
+            if self.save_as_nifti:
+                reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
+                                                              is_mask=False)
 
+                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
 
-            # if self.save_as_nifti:
-            #     reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
-            #                                                   is_mask=False)
-            #
-            #     self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-            #                     os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            # else:
-            #     np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-
-
+        if resampled_pred.sum() > 0:
+            self.visualize_full_row(resized_img,resized_mask,resized_pred,resized_umaps, dice_score, output_dir_visuals)
+            self.visualize_img_pred_mask(resized_img,resized_pred, resized_mask, dice_score, output_dir_visuals)
 
         if self.save_as_nifti:
 
@@ -799,11 +813,10 @@ class ROIPreprocessor:
 
 
 
-        else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #else:
+            #np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
             #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
-            np.save(os.path.join(output_path, f"{self.case_id}_dist_map.npy"), resized_dist.astype(np.float32))
+            #np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
@@ -813,24 +826,24 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
-    input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
-    predicted_mask_folder = "/gpfs/home6/palfken/QA_imagesTs/output/"
-    #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
-    dist_map_folder ="/gpfs/home6/palfken/ood_features/output/"
+    input_folder_img ="/gpfs/home6/palfken/QA_imagesTr/"
+    input_folder_gt = "/gpfs/home6/palfken/QA_labelsTr/"
 
-    output_folder_data = "/gpfs/home6/palfken/ood_features/maps/"
-    output_folder_visuals = "/gpfs/home6/palfken/OOD_visuals/"
+    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
+    #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
+
+    output_folder_data = "/gpfs/home6/palfken/ood_features/maps_best_model/"
+    output_folder_visuals = "/gpfs/home6/palfken/Best_model_visuals/"
 
     os.makedirs(output_folder_data, exist_ok=True)
-    #os.makedirs(output_folder_visuals, exist_ok=True)
+    os.makedirs(output_folder_visuals, exist_ok=True)
     # # dice_scores = []
 
 
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True, save_dist_maps=True)
+    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
-    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, dist_map_folder, output_folder_data, output_folder_visuals)
+    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 if __name__ == '__main__':
     main()
