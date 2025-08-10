@@ -781,6 +781,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         if kappa_quadratic > best_kappa:
             print(f'New Best Kappa: {kappa_quadratic}!')
+            best_kappa = kappa_quadratic
             best_kappa_quad = kappa_quadratic
             best_kappa_lin = kappa_linear
 
