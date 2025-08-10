@@ -570,7 +570,7 @@ class ROIPreprocessor:
         pad_width = list(zip(pad_before, pad_after))
         return np.pad(volume, pad_width, mode='constant')
 
-    def bin_dice_score(dice):
+    def bin_dice_score(self,dice):
         epsilon = 1e-8
         dice = np.asarray(dice)
         dice_adjusted = dice - epsilon  # Shift slightly left
@@ -674,7 +674,7 @@ class ROIPreprocessor:
         df = pd.concat([df_ID, df_OOD], ignore_index=True)
 
         # Add dice bins column for all data
-        df['dice_bin'] = bin_dice_score(df['dice'])
+        df['dice_bin'] = self.bin_dice_score(df['dice'])
 
         print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
