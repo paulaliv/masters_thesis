@@ -577,14 +577,18 @@ class ROIPreprocessor:
         bin_edges = [0.1, 0.5, 0.7]
         return np.digitize(dice_adjusted, bin_edges, right=True)
 
-    def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
+    def preprocess_folder(self, image_dirs, mask_dir, gt_dirs, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         print(subtypes_df.columns)
 
+        image_paths = []
+        for idir in image_dirs:
+            image_paths.extend(glob.glob(os.path.join(idir, '*_0000.nii.gz')))
+        image_paths = sorted(image_paths)
 
-        image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
+        #image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
@@ -603,7 +607,19 @@ class ROIPreprocessor:
             self.case_id = case_id
 
             mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+            #gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+
+            # Find gt_path by searching in all gt_dirs (stop at first found)
+            gt_path = None
+            for gdir in gt_dirs:
+                candidate = os.path.join(gdir, f"{case_id}.nii.gz")
+                if os.path.exists(candidate):
+                    gt_path = candidate
+                    break
+
+            if gt_path is None:
+                print(f"Warning: GT file for case {case_id} not found in any gt_dirs, skipping")
+                continue
             pred = nib.load(mask_path)
             gt = nib.load(gt_path)
             dice = self.compute_dice(gt, pred)
@@ -897,9 +913,9 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folders_img = ["/gpfs/home6/palfken/QA_imagesTr/","/gpfs/home6/palfken/QA_imagesTr/"]
 
-    input_folder_gt =  "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folders_gt =  ["/gpfs/home6/palfken/QA_imagesTr/","/gpfs/home6/palfken/QA_labelsTr/"]
 
 
     predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_data_60/"
@@ -917,7 +933,7 @@ def main():
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
-    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
+    preprocessor.preprocess_folder(input_folders_img, predicted_mask_folder,input_folders_gt, output_folder_data, output_folder_visuals)
 
 if __name__ == '__main__':
     main()
