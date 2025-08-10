@@ -591,52 +591,52 @@ class ROIPreprocessor:
             from_scratch = True
             df = pd.DataFrame()
 
-        for img_path in image_paths:
-            case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
-            self.case_id = case_id
-
-            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-            pred = nib.load(mask_path)
-            gt = nib.load(gt_path)
-            dice = self.compute_dice(gt, pred)
-            print(f'Dice score: {dice}')
-
-
-            subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
-            if not subtype_row.empty:
-                tumor_class = subtype_row.iloc[0]['Final_Classification']
-                tumor_class = tumor_class.strip()
-            else:
-                tumor_class = 'Unknown'
-                print(f'Case id {case_id}: no subtype in csv file!')
-            self.subtype = tumor_class
-            if os.path.exists(img_path):
-                if self.save_umaps:
-                    umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
-                    new_row = {
-                        "case_id": case_id,
-                        "tumor_class": tumor_class,
-                        "dice": dice,
-                    }
-
-
-                else:
-                   features = self.preprocess_case(img_path, gt_path, output_dir)
-                   filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
-
-                   new_row = {
-                       "case_id": case_id,
-                       "tumor_class": tumor_class,
-                       **filtered_features}
-
-
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                print(f'Added {case_id}: {dice}')
-
-                df.to_csv(save_path, index=False)
-
+        # for img_path in image_paths:
+        #     case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
+        #     self.case_id = case_id
+        #
+        #     mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+        #     gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+        #     pred = nib.load(mask_path)
+        #     gt = nib.load(gt_path)
+        #     dice = self.compute_dice(gt, pred)
+        #     print(f'Dice score: {dice}')
+        #
+        #
+        #     subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
+        #     if not subtype_row.empty:
+        #         tumor_class = subtype_row.iloc[0]['Final_Classification']
+        #         tumor_class = tumor_class.strip()
+        #     else:
+        #         tumor_class = 'Unknown'
+        #         print(f'Case id {case_id}: no subtype in csv file!')
+        #     self.subtype = tumor_class
+            # if os.path.exists(img_path):
+            #     if self.save_umaps:
+            #         umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
+            #         self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+            #         new_row = {
+            #             "case_id": case_id,
+            #             "tumor_class": tumor_class,
+            #             "dice": dice,
+            #         }
+            #
+            #
+            #     else:
+            #        features = self.preprocess_case(img_path, gt_path, output_dir)
+            #        filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
+            #
+            #        new_row = {
+            #            "case_id": case_id,
+            #            "tumor_class": tumor_class,
+            #            **filtered_features}
+            #
+            #
+            #     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            #     print(f'Added {case_id}: {dice}')
+            #
+            #     df.to_csv(save_path, index=False)
+            #
 
         # Load existing results if available
         if os.path.exists(save_path):
@@ -658,6 +658,11 @@ class ROIPreprocessor:
             class_hist, _ = np.histogram(group['dice'], bins=bin_edges)
             for i in range(len(bin_edges) - 1):
                 print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
+                # Compute mean and std of dice for this tumor class
+                mean_dice = group['dice'].mean()
+                std_dice = group['dice'].std()
+                print(f"Mean Dice: {mean_dice:.3f}")
+                print(f"Std Dice: {std_dice:.3f}")
 
         print(f'CSV file has {len(df)} rows')
         # # Compute global stats
