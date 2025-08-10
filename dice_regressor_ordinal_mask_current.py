@@ -398,10 +398,6 @@ class QADataset(Dataset):
         image = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         #image = torch.from_numpy(image).float()
 
-        if image.ndim == 3:
-            image = image.unsqueeze(0)  # Add channel dim
-
-        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
