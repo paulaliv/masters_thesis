@@ -669,10 +669,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 print("Early stopping triggered")
 
                 break
-    file = os.path.join(plot_dir, f'best_report_{uncertainty_metric}')
-    with open(file, "w") as f:
-        f.write(f"Final Classification Report for Fold {fold}:\n")
-        f.write(best_report)
 
     # Plot and save best confusion matrix
     plt.figure(figsize=(6, 5))
