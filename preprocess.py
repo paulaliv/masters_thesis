@@ -383,7 +383,7 @@ class ROIPreprocessor:
 
         # 1) Original image with mask and pred overlay
         axs[0].imshow(img_slice, cmap='gray')
-        axs[0].imshow(mask_slice, cmap='Greens', alpha=0.4, label='GT Mask')
+        axs[0].imshow(mask_slice, cmap='Greens', alpha=0.6, label='GT Mask')
         if pred.sum() > 0:
             axs[0].imshow(pred_slice, cmap='Reds', alpha=0.4, label='Prediction')
         axs[0].set_title('Image + Mask + Pred')
@@ -582,7 +582,7 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/masters_thesis/OOD_dice_dist.csv"
+        save_path = "/gpfs/home6/palfken/masters_thesis/Dice_scores_BEST.csv"
 
         if os.path.exists(save_path):
             from_scratch = False
@@ -644,23 +644,21 @@ class ROIPreprocessor:
         else:
             df = pd.DataFrame(case_stats)
         bin_edges = np.arange(0.0, 1.1, 0.1)
-        #existing_df = pd.read_csv('/gpfs/home6/palfken/Dice_scores_20epochs.csv')
-        #print(f'CSV file has {len(existing_df)} rows')
-        #updated_df = pd.concat([existing_df, df], ignore_index=True)
-        #
-        # print("Global Dice Score Distribution:")
-        # global_hist, _ = np.histogram(df['dice_30'], bins=bin_edges)
-        # for i in range(len(bin_edges) - 1):
-        #     print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
-        #
-        # print("\nDice Score Distribution by Tumor Class:")
-        # for tumor_class, group in df.groupby('tumor_class'):
-        #     print(f"\nTumor Class: {tumor_class}")
-        #     class_hist, _ = np.histogram(group['dice_30'], bins=bin_edges)
-        #     for i in range(len(bin_edges) - 1):
-        #         print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
-        #
-        # print(f'CSV file has {len(df)} rows')
+        print(f'CSV file has {len(df)} rows')
+
+        print("Global Dice Score Distribution:")
+        global_hist, _ = np.histogram(df['dice'], bins=bin_edges)
+        for i in range(len(bin_edges) - 1):
+            print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
+
+        print("\nDice Score Distribution by Tumor Class:")
+        for tumor_class, group in df.groupby('tumor_class'):
+            print(f"\nTumor Class: {tumor_class}")
+            class_hist, _ = np.histogram(group['dice'], bins=bin_edges)
+            for i in range(len(bin_edges) - 1):
+                print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
+
+        print(f'CSV file has {len(df)} rows')
         # # Compute global stats
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
