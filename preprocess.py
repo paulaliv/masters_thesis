@@ -915,7 +915,7 @@ def main():
 
     input_folders_img = "/gpfs/home6/palfken/QA_imagesTr/"
 
-    input_folders_gt =  "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folders_gt =  "/gpfs/home6/palfken/QA_imagesTs/"
 
 
     predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
