@@ -30,6 +30,10 @@ from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
 from collections import Counter
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 torch.manual_seed(42)
@@ -173,9 +177,6 @@ val_transforms = Compose([
 ])
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 class DistanceAwareCORNLoss(nn.Module):
     def __init__(self, eps=1e-6, distance_power=0.5):

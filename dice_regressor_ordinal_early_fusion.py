@@ -29,52 +29,135 @@ np.random.seed(42)
 random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-
 from monai.transforms import (
-    Compose, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised,
-    ToTensord,ConcatItemsd
+    Compose, LoadImaged, EnsureChannelFirstd, RandRotate90d,RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
+    ToTensord, EnsureTyped, ConcatItemsd
 )
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image","uncertainty"], channel_dim=0),  # ensures shape: (C, H, W, D)
-    RandAffined(
-        keys=["image","uncertainty"],
-        prob=1.0,
-        rotate_range=[np.pi / 9],
-        translate_range=[0.1, 0.1],
-        scale_range=[0.1, 0.1],
-        mode=("trilinear","nearest") # single input, single interpolation mode
-    ),
-    RandFlipd(keys=["image","uncertainty"], prob=0.5, spatial_axis=1),
-    # Concatenate image and mask along the channel axis
-    ConcatItemsd(keys=["image", "uncertainty"], name="merged"),
-    ToTensord(keys="merged")
-])
 
+
+    RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
+
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=0),
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),  # flip along height axis
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=2),
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    ConcatItemsd(keys=["mask", "uncertainty"], name="merged"),
+    ToTensord(keys=["merged"])
+
+])
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    ConcatItemsd(keys=["image", "uncertainty"], name="merged"),
-    ToTensord(keys="merged")
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    ToTensord(keys=["mask", "uncertainty"])
 ])
 
+class DistanceAwareCORNLoss(nn.Module):
+    def __init__(self, eps=1e-6, distance_power=0.5):
+        super().__init__()
+        self.eps = eps
+        self.distance_power = distance_power  # use sqrt by default
+
+    def forward(self, logits, labels):
+        """
+        logits: [B, K-1] - logits for ordinal thresholds
+        labels: [B] - integer labels in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # Binary label matrix: y_bin[b, k] = 1 if label[b] > k
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Reshape logits for binary cross-entropy
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # [B, K-1, 2]
+        logits_reshaped = logits_stacked.view(-1, 2)            # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)                       # [B*(K-1)]
+
+        # Compute distance-based weights (e.g., sqrt(|label - k|))
+        label_expanded = labels.unsqueeze(1).expand(-1, K_minus_1)  # [B, K-1]
+        ks = torch.arange(K_minus_1, device=labels.device).unsqueeze(0)  # [1, K-1]
+        distances = torch.abs(label_expanded - ks).float()  # [B, K-1]
+        weights = distances ** self.distance_power          # [B, K-1]
+
+        # Normalize per-sample weights (optional but stabilizing)
+        #weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
+
+
+        # Flatten for use in loss
+        weights_flat = weights.view(-1)  # [B*(K-1)]
+
+        # Compute weighted cross-entropy loss
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, weight=None, reduction='none')
+        loss = (loss * weights_flat).mean()
+
+        return loss
+
+class CORNLoss(nn.Module):
+    """
+    CORN Loss for ordinal regression.
+    """
+    def __init__(self):
+        super(CORNLoss, self).__init__()
+
+    def forward(self, logits, labels):
+        """
+        logits: Tensor of shape (B, K-1), where K is the number of ordinal classes
+        labels: Tensor of shape (B,) with values in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # temperature = 0.5
+        #
+        # logits = logits/temperature
+
+        # Create binary targets: 1 if label > threshold
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Compute softmax over two classes (not raw binary classification)
+        # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
+
+
+
+
+        logits_reshaped = logits_stacked.view(-1, 2)  # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)  # [B*(K-1)]
+
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, reduction='mean')
+        return loss
 
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
+        # self.encoder = nn.Sequential(
+        #     nn.Conv3d(2, 16, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(16),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),  # halves each dimension
+        #
+        #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(32),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),
+        #
+        #     nn.Conv3d(32, 64, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(64),
+        #     nn.ReLU(),
+        #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        # )
         self.encoder = nn.Sequential(
-            nn.Conv3d(2, 16, kernel_size=3, padding=1),
-            nn.BatchNorm3d(16),
-            nn.ReLU(),
-            nn.MaxPool3d(2),  # halves each dimension
-
-            nn.Conv3d(16, 32, kernel_size=3, padding=1),
-            nn.BatchNorm3d(32),
-            nn.ReLU(),
+            nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
             nn.MaxPool3d(2),
-
-            nn.Conv3d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+            nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
+            nn.MaxPool3d(2),
+            nn.Conv3d(32, 64, 3, padding=1), nn.BatchNorm3d(64), nn.ReLU(),
+            nn.MaxPool3d(2),  # <- NEW BLOCK
+            nn.Conv3d(64, 128, 3, padding=1), nn.BatchNorm3d(128), nn.ReLU(),
+            nn.AdaptiveAvgPool3d((1, 1, 1))  # outputs [B, 64, 1, 1, 1]
+            # nn.AdaptiveAvgPool3d(1),
         )
 
     def forward(self, x):
@@ -90,8 +173,9 @@ class QAModel(nn.Module):
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64, 64),
+            nn.Linear(128, 64),
             nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
 
@@ -147,11 +231,9 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
-        image_tensor = torch.from_numpy(image).float().unsqueeze(0)
-        uncertainty_tensor = torch.from_numpy(uncertainty).float().unsqueeze(0)
 
         # Map dice score to category
         label = bin_dice_score(dice_score)
@@ -160,8 +242,8 @@ class QADataset(Dataset):
 
         if self.transform:
             data = self.transform({
-                "image": image_tensor,
-                'uncertainty':uncertainty_tensor
+                'mask': np.expand_dims(mask, 0),
+                "uncertainty": np.expand_dims(uncertainty, 0),
             })
             merged = data["merged"]
 
@@ -240,10 +322,26 @@ def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
         targets[:,i] = (labels > i).float()
     return targets
 
-def decode_predictions(logits):
-    probs = torch.sigmoid(logits)
 
-    return (probs > 0.5).sum(dim=1)
+def decode_predictions(logits):
+    # print("Logits mean:", logits.mean().item())
+    # print("Logits min/max:", logits.min().item(), logits.max().item())
+    #probs = torch.sigmoid(logits)
+
+    return (logits > 0).sum(dim=1)
+
+
+@torch.no_grad()
+def corn_predict(logits):
+    #logits shape: [B, num_thresholds]
+    probs = torch.stack([-logits, logits], dim=2)  # shape: [B, num_thresholds, 2]
+    pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
+    return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
+
+# def decode_predictions(logits):
+#     probs = torch.sigmoid(logits)
+#
+#     return (probs > 0.5).sum(dim=1)
 
 def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, device):
     print(f"Training fold {fold} ...")
@@ -286,7 +384,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
     # Step 4: Create the weighted loss
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = coral_loss_manual
+    criterion = CORNLoss()
 
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
@@ -314,11 +412,13 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
     val_per_class_acc = defaultdict(list)
+
     best_kappa = -1.0
     best_kappa_cm = None
     best_kappa_epoch = -1
-    for epoch in range(100):
-        print(f"Epoch {epoch + 1}/{85}")
+
+    for epoch in range(60):
+        print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -330,8 +430,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
                 preds = model(data)  # shape: [B, 3]
-                targets = encode_ordinal_targets(label).to(preds.device)
-                loss = criterion(preds, targets)
+                #targets = encode_ordinal_targets(label).to(preds.device)
+                loss = criterion(preds, label)
 
 
             scaler.scale(loss).backward()
@@ -342,7 +442,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
+                #decoded_preds = decode_predictions(preds)
+                decoded_preds = corn_predict(preds)
                 correct += (decoded_preds == label).sum().item()
 
 
@@ -369,13 +470,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 
 
                 preds = model(data)
-                targets = encode_ordinal_targets(label).to(preds.device)
+                #targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, targets)
+                loss = criterion(preds, label)
                 val_running_loss += loss.item() * data.size(0)
 
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
+                    #decoded_preds = decode_predictions(preds)
+                    decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
@@ -436,6 +538,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         if kappa_quadratic > best_kappa:
             best_kappa = kappa_quadratic
+            best_kappa_quad = kappa_quadratic
+            best_kappa_lin = kappa_linear
             labels_idx = [0, 1, 2, 3]
             #best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
             best_kappa_preds = val_preds_np.copy()
@@ -450,33 +554,27 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             patience_counter = 0
             best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
                                            zero_division=0)
-            # Save best model weights
-            # torch.save({
-            #     'model_state_dict': model.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            #     'epoch': epoch,
-            #     'val_loss': epoch_val_loss
-            # }, os.path.join(plot_dir,f"best_qa_model_fold{fold}_early_fusion.pt"))
 
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_early_fusion_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
                 break
 
-    # Plot and save best confusion matrix
-    # plt.figure(figsize=(6, 5))
-    # sns.heatmap(best_kappa_cm, annot=True, fmt='d', cmap='Blues',
-    #             xticklabels=class_names, yticklabels=class_names)
-    # plt.xlabel("Predicted")
-    # plt.ylabel("True")
-    # plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_EF.png"))
-    # plt.close()
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
+    # Plot and save best confusion matrix
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(best_kappa_cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_EARLY.png"))
+    plt.close()
+
+    print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
+    return train_losses, val_losses, best_kappa_preds, best_kappa_labels, best_kappa_quad, best_kappa_lin
 
 
 # def compute_dice(pred, gt):
@@ -489,92 +587,104 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
 #     dice = 2. * intersection / union if union > 0 else np.nan
 #
 #     return dice
+def pad_to_max_length(loss_lists):
+    max_len = max(len(lst) for lst in loss_lists)
+    padded = []
+    for lst in loss_lists:
+        padded.append(np.pad(lst, (0, max_len - len(lst)), constant_values=np.nan))
+    return np.array(padded)
 
 def main(data_dir, plot_dir, folds,df):
     print('MODEL INPUT: UNCERTAINTY MAP + IMAGE')
     print('FUSION: EARLY')
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # for fold in range(5):
-    # Train the model and retrieve losses + predictions
+    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
 
-    #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
-    metrics = ['confidence', 'entropy']
     for idx, metric in enumerate(metrics):
-        print(f'Training with metric {metric}')
+        # Lists to aggregate results across folds
+        all_val_preds = []
+        all_val_labels = []
+
+        all_train_losses = []
+        all_val_losses = []
+        all_kappas_quad = []
+        all_kappas_lin = []
         start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
-            fold=0,
-            data_dir=data_dir,
-            df=df,
-            splits=folds,
-            uncertainty_metric= metric,
-            plot_dir=plot_dir,
-            device=device
-        )
+        for fold in range(5):
+            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
+                fold,
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device
+            )
+            # Aggregate per fold
+            all_val_preds.append(val_preds)
+            all_val_labels.append(val_labels)
+            all_train_losses.append(train_losses)
+            all_val_losses.append(val_losses)
+            all_kappas_quad.append(best_kappa_quad)
+            all_kappas_lin.append(best_kappa_lin)
 
         end = time.time()
-        print(f'Best Report with metric {metric}: ')
-        print(best_report)
-        file = os.path.join(plot_dir, f'best_report_{metric}_EF')
-        with open(file, "w") as f:
-            f.write(f"Final Classification Report for Fold 0:\n")
-            f.write(best_report)
-
 
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-        # Convert prediction outputs to numpy arrays for plotting
-        val_preds = np.array(val_preds)
-        val_labels = np.array(val_labels)
-        val_subtypes = np.array(val_subtypes)
+        # Combine folds data
+        val_preds = np.concatenate(all_val_preds, axis=0)
+        val_labels = np.concatenate(all_val_labels, axis=0)
+
+        padded_train_losses = pad_to_max_length(all_train_losses)
+        avg_train_losses = np.nanmean(padded_train_losses, axis=0)
+
+        padded_val_losses = pad_to_max_length(all_val_losses)
+        avg_val_losses = np.nanmean(padded_val_losses, axis=0)
+
+        avg_kappa_quad = np.mean(all_kappas_quad)
+        print(f'Average Quadratic Kappa across all 5 folds: {avg_kappa_quad}')
+
+        avg_kappa_lin = np.mean(all_kappas_lin)
+        print(f'Average Linear Kappa across all 5 folds: {avg_kappa_lin}')
 
         plt.figure(figsize=(10, 6))
-        for class_name, f1_scores in f1_history.items():
-            plt.plot(f1_scores, label=class_name)
-
-        plt.xlabel("Epoch")
-        plt.ylabel("F1 Score")
-        plt.title("Per-Class F1 Score Over Epochs")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"f1_scores_per_class_{metric}_EF.png"), dpi=300)
-        plt.show()
-
-        # ✅ Plot loss curves
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label='Train Loss', marker='o')
-        plt.plot(val_losses, label='Validation Loss', marker='x')
+        plt.plot(avg_train_losses, label='Train Loss', marker='o')
+        plt.plot(avg_val_losses, label='Validation Loss', marker='x')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
-        plt.title('Training and Validation Loss Curves')
+        plt.title(f'Training and Validation Loss Curves - {metric}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}_EF.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_EARLY.png'))
         plt.close()
 
-        # ✅ Overall scatter plot
-        plt.figure(figsize=(8, 6))
-        plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
-        plt.plot([val_labels.min(), val_labels.max()],
-                 [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
-        plt.xlabel("Actual Label")
-        plt.ylabel("Predicted Label")
-        plt.title("Overall Predicted vs. Actual Labels")
-        plt.legend()
-        plt.grid(True)
+        # confusion matrix
+        # Plot and save best confusion matrix
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+        present_labels = np.unique(np.concatenate((val_labels, val_preds)))
+        labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+
+        disp = confusion_matrix(val_labels, val_preds, labels=labels_idx)
+
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(disp, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=class_names, yticklabels=class_names)
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.title(f"Confusion Matrix: {metric}, (κ = {avg_kappa_lin:.3f}, κ² = {avg_kappa_quad:.3f})")
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_EF.png'))
+        plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_EARLY.png"))
         plt.close()
-
 
 #metrics: confidence, entropy,mutual_info,epkl
 
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits.json', 'r') as f:
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
         splits = json.load(f)
     clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)
