@@ -38,31 +38,6 @@ random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
-    ToTensord
-)
-train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    RandAffined(
-        keys=["image", "uncertainty"],  # apply same affine to both
-        prob=1.0,
-        rotate_range=(np.pi/12, np.pi/12, np.pi/12),
-        translate_range=(3, 3, 3),  # in voxels
-        scale_range=(0.1, 0.1, 0.1),
-        spatial_size=(48, 256, 256),
-        mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
-    ),
-    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
-    ToTensord(keys=["image", "uncertainty"])
-])
-val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    ToTensord(keys=["image", "uncertainty"])
-])
-
 
 # '''ARCHITECTURE OF THE INSPO PAPER'''
 # class Light3DEncoder(nn.Module):
@@ -177,6 +152,31 @@ val_transforms = Compose([
 #     def extract_features(self, uncertainty):
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
+from monai.transforms import (
+    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
+    ToTensord
+)
+train_transforms = Compose([
+    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
+    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    RandAffined(
+        keys=["image", "uncertainty"],  # apply same affine to both
+        prob=1.0,
+        rotate_range=(np.pi/12, np.pi/12, np.pi/12),
+        translate_range=(3, 3, 3),  # in voxels
+        scale_range=(0.1, 0.1, 0.1),
+        spatial_size=(48, 256, 256),
+        mode=('trilinear', 'trilinear')  # bilinear for image, nearest for uncertainty (categorical or regression)
+    ),
+    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
+    ToTensord(keys=["image", "uncertainty"])
+])
+val_transforms = Compose([
+    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
+    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    ToTensord(keys=["image", "uncertainty"])
+])
+
 
 import torch
 import torch.nn as nn
