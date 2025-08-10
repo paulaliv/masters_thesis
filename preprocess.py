@@ -582,7 +582,7 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/masters_thesis/Dice_scores_OOD.csv"
+        save_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
 
         if os.path.exists(save_path):
             from_scratch = False
