@@ -951,7 +951,7 @@ def main(data_dir, plot_dir, folds,df):
                     xticklabels=class_names, yticklabels=class_names)
         plt.xlabel("Predicted")
         plt.ylabel("True")
-        plt.title(f"Confusion Matrix across all folds (average κ = {avg_kappa_lin:.3f}, average κ² = {avg_kappa_quad:.3f})")
+        plt.title(f"Confusion Matrix: {metric}, (κ = {avg_kappa_lin:.3f}, κ² = {avg_kappa_quad:.3f})")
         plt.tight_layout()
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_MASK.png"))
         plt.close()
