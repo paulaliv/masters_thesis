@@ -154,12 +154,14 @@ torch.backends.cudnn.benchmark = False
 #         return x.view(x.size(0), -1)
 from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
-    ToTensord
+    ToTensord, EnsureTyped
 )
 train_transforms = Compose([
 
     EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+
+
     RandAffined(
         keys=["mask", "uncertainty"],  # apply same affine to both
         spatial_size=(48, 256, 256),
@@ -425,8 +427,8 @@ class QADataset(Dataset):
 
         if self.transform:
             data = self.transform({
-                "mask": np.expand_dims(mask, axis=0),
-                "uncertainty":np.expand_dims(uncertainty, axis=0)
+                "mask": mask,
+                "uncertainty":uncertainty
             })
             mask= data["mask"]
             uncertainty_tensor = data["uncertainty"]
