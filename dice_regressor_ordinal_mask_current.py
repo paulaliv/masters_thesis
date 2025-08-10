@@ -168,7 +168,7 @@ train_transforms = Compose([
     ToTensord(keys=["mask", "uncertainty"])
 ])
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=["mask", "uncertainty"], channel_dim=0),
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
     ToTensord(keys=["mask", "uncertainty"])
 ])
 

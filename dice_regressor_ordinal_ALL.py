@@ -44,26 +44,18 @@ class PrintKeysShape(MapTransform):
         return data
 
 from monai.transforms import (
-    Compose, EnsureChannelFirstd, RandAffined, RandFlipd,
+    Compose, EnsureChannelFirstd, EnsureTyped,RandRotate90d, RandFlipd,
     ToTensord, ConcatItemsd
 )
+
 train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "mask", "uncertainty"], channel_dim=0),
     PrintKeysShape(keys=["image", "mask", "uncertainty"]),
+    RandRotate90d(keys=["image","mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
-    RandAffined(
-        keys=["image", "mask", "uncertainty"],
-        prob=1.0,
-        rotate_range=(np.pi / 9, np.pi / 9, np.pi / 9),     # 3D rotation
-        translate_range=(5, 5, 5),                          # adjust as needed, in voxels
-        scale_range=(0.1, 0.1, 0.1),
-        mode=("trilinear", "nearest", "nearest"),
-        spatial_size=(48, 256, 256),
-
-
-    ),
-
-    RandFlipd(keys=["image", "mask", "uncertainty"], prob=0.5, spatial_axis=1),
+    RandFlipd(keys=["image","mask", "uncertainty"], prob=0.5, spatial_axis=0),
+    RandFlipd(keys=["image","mask", "uncertainty"], prob=0.5, spatial_axis=1),  # flip along height axis
+    RandFlipd(keys=["image","mask", "uncertainty"], prob=0.5, spatial_axis=2),
+    EnsureTyped(keys=["image","mask", "uncertainty"], dtype=torch.float32),
 
     ConcatItemsd(keys=["image", "mask"], name="image"),
 
@@ -72,9 +64,7 @@ train_transforms = Compose([
 
 
 val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "mask","uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    # Concatenate image and mask along the channel axis
+    EnsureTyped(keys=["image", "mask", "uncertainty"], dtype=torch.float32),
     ConcatItemsd(keys=["image", "mask"], name="image"),
     ToTensord(keys=["image", "uncertainty"])
 ])
