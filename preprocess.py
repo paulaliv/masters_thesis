@@ -614,11 +614,12 @@ class ROIPreprocessor:
             if os.path.exists(img_path):
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
                     new_row = {
                         "case_id": case_id,
                         "tumor_class": tumor_class,
                         "dice": dice,
+                        **subject_stats
                     }
 
 
@@ -651,26 +652,41 @@ class ROIPreprocessor:
         for i in range(len(bin_edges) - 1):
             print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {global_hist[i]} samples")
 
-        print("\nDice Score Distribution by Tumor Class:")
+        print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
+
+        # Find all uncertainty-related columns
+        unc_cols = [c for c in df.columns if
+                    c.startswith("mean_unc") or c.startswith("std_unc") or c.startswith("max_unc") or c.startswith(
+                        "min_unc")]
 
         for tumor_class, group in df.groupby('tumor_class'):
             print(f"\nTumor Class: {tumor_class}")
+
+            # Dice histogram
             class_hist, _ = np.histogram(group['dice'], bins=bin_edges)
             for i in range(len(bin_edges) - 1):
                 print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
-                # Compute mean and std of dice for this tumor class
+
+            # Dice stats
             mean_dice = group['dice'].mean()
             std_dice = group['dice'].std()
             print(f"Mean Dice: {mean_dice:.3f}")
             print(f"Std Dice: {std_dice:.3f}")
 
-        print(f'CSV file has {len(df)} rows')
-        # # Compute global stats
+            # Uncertainty stats
+            if unc_cols:
+                print("Uncertainty statistics (mean ± std across subjects):")
+                for col in unc_cols:
+                    col_mean = group[col].mean()
+                    col_std = group[col].std()
+                    print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+
+        print(f'\nCSV file has {len(df)} rows')
         print(f'Cases that were cropped: {self.cropped_cases}')
         print(f'Total cropped images: {len(self.cropped_cases)}')
-
         print(f'Empty Predictions: {self.empty_masks}')
         print(f'Total empty preds: {len(self.empty_masks)}')
+
 
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
@@ -744,8 +760,7 @@ class ROIPreprocessor:
 
 
         #self.visualize_umap_and_mask(resized_dist, resized_pred, resized_img, f'{self.case_id}: feature distance map','feature_distance_map', output_dir_visuals)
-
-
+        stats_dict = {}
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
         resampled_umaps = {}  # dictionary to store resized UMAPs
 
@@ -786,6 +801,31 @@ class ROIPreprocessor:
 
              # Store resized UMAP in the dict for later use
             resampled_umaps[umap_type] = resampled_umap
+            gt_mask = (resampled_mask > 0)
+            pred_mask = (resampled_pred > 0)
+
+            gt_mean_unc = np.mean(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+            pred_mean_unc = np.mean(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
+            full_mean_unc = np.mean(resampled_umap)
+
+            gt_median_unc = np.median(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+            pred_median_unc = np.median(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
+
+            gt_std_unc = np.std(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+            pred_std_unc = np.std(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
+
+            # Ratio between pred-mask and GT-mask uncertainty
+            ratio_pred_gt_unc = pred_mean_unc / gt_mean_unc if gt_mean_unc and not np.isnan(gt_mean_unc) else np.nan
+
+            # ---- Store in flat dict with prefixed keys ----
+            stats_dict[f"{umap_type}_gt_mean_unc"] = gt_mean_unc
+            stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
+            stats_dict[f"{umap_type}_full_mean_unc"] = full_mean_unc
+            stats_dict[f"{umap_type}_gt_median_unc"] = gt_median_unc
+            stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
+            stats_dict[f"{umap_type}_gt_std_unc"] = gt_std_unc
+            stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
+            stats_dict[f"{umap_type}_ratio_pred_gt_unc"] = ratio_pred_gt_unc
 
 
             if self.save_as_nifti:
@@ -826,6 +866,7 @@ class ROIPreprocessor:
 
 
         print(f'Processed {self.case_id}')
+        return stats_dict
 
 
 
