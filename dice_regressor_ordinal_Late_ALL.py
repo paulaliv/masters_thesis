@@ -226,11 +226,11 @@ class QAModel(nn.Module):
         self.encoder_unc= Light3DEncoder(in_channels=1)
         self.encoder_mask = Light3DEncoder(in_channels=1)
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(256)
+        self.norm = nn.LayerNorm(384)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256, 128),
+            nn.Linear(384, 128),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(128, num_thresholds)  # Output = predicted Dice class
