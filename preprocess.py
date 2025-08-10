@@ -24,6 +24,7 @@ class ROIPreprocessor:
                  save_umaps = False,
                  target_shape: Tuple[int, int, int] = (48,256,256),):
         self.case_id = None
+        self.subtype = None
         self.roi_context = roi_context
         self.target_shape = target_shape
         self.target_spacing = target_spacing
@@ -396,7 +397,7 @@ class ROIPreprocessor:
             axs[i + 1].set_title(f'{umap_titles[i]} Map')
             axs[i + 1].axis('off')
 
-        plt.suptitle(f'Case {self.case_id}, Dice: {dice}', fontsize=18)
+        plt.suptitle(f'Subtype: {self.subtype}, Dice: {dice}', fontsize=18)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         # Save figure
@@ -572,7 +573,7 @@ class ROIPreprocessor:
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
-        subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
+        subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         print(subtypes_df.columns)
 
@@ -609,6 +610,7 @@ class ROIPreprocessor:
             else:
                 tumor_class = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
+            self.subtype = tumor_class
             if os.path.exists(img_path):
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
