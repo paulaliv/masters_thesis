@@ -653,7 +653,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
             #with gzip.open(f"model_fold{fold}_{uncertainty_metric}_ALL.pt.gz", 'wb') as f:
-                torch.save(model.state_dict(), f, pickle_protocol=4)
+            #   torch.save(model.state_dict(), f, pickle_protocol=4)
 
 
         # Early stopping check
