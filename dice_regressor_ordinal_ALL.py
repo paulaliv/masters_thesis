@@ -48,7 +48,6 @@ from monai.transforms import (
 )
 
 train_transforms = Compose([
-    PrintKeysShape(keys=["image", "mask", "uncertainty"]),
     RandRotate90d(keys=["image","mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
     RandFlipd(keys=["image","mask", "uncertainty"], prob=0.5, spatial_axis=0),
