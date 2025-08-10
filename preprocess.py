@@ -573,7 +573,7 @@ class ROIPreprocessor:
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
-        subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
+        subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         print(subtypes_df.columns)
 
@@ -582,7 +582,7 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/masters_thesis/Dice_scores_BEST.csv"
+        save_path = "/gpfs/home6/palfken/masters_thesis/Dice_scores_OOD.csv"
 
         if os.path.exists(save_path):
             from_scratch = False
@@ -591,52 +591,52 @@ class ROIPreprocessor:
             from_scratch = True
             df = pd.DataFrame()
 
-        # for img_path in image_paths:
-        #     case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
-        #     self.case_id = case_id
-        #
-        #     mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-        #     gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-        #     pred = nib.load(mask_path)
-        #     gt = nib.load(gt_path)
-        #     dice = self.compute_dice(gt, pred)
-        #     print(f'Dice score: {dice}')
-        #
-        #
-        #     subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
-        #     if not subtype_row.empty:
-        #         tumor_class = subtype_row.iloc[0]['Final_Classification']
-        #         tumor_class = tumor_class.strip()
-        #     else:
-        #         tumor_class = 'Unknown'
-        #         print(f'Case id {case_id}: no subtype in csv file!')
-        #     self.subtype = tumor_class
-            # if os.path.exists(img_path):
-            #     if self.save_umaps:
-            #         umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-            #         self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
-            #         new_row = {
-            #             "case_id": case_id,
-            #             "tumor_class": tumor_class,
-            #             "dice": dice,
-            #         }
-            #
-            #
-            #     else:
-            #        features = self.preprocess_case(img_path, gt_path, output_dir)
-            #        filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
-            #
-            #        new_row = {
-            #            "case_id": case_id,
-            #            "tumor_class": tumor_class,
-            #            **filtered_features}
-            #
-            #
-            #     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            #     print(f'Added {case_id}: {dice}')
-            #
-            #     df.to_csv(save_path, index=False)
-            #
+        for img_path in image_paths:
+            case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
+            self.case_id = case_id
+
+            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+            pred = nib.load(mask_path)
+            gt = nib.load(gt_path)
+            dice = self.compute_dice(gt, pred)
+            print(f'Dice score: {dice}')
+
+
+            subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
+            if not subtype_row.empty:
+                tumor_class = subtype_row.iloc[0]['Final_Classification']
+                tumor_class = tumor_class.strip()
+            else:
+                tumor_class = 'Unknown'
+                print(f'Case id {case_id}: no subtype in csv file!')
+            self.subtype = tumor_class
+            if os.path.exists(img_path):
+                if self.save_umaps:
+                    umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
+                    self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    new_row = {
+                        "case_id": case_id,
+                        "tumor_class": tumor_class,
+                        "dice": dice,
+                    }
+
+
+                else:
+                   features = self.preprocess_case(img_path, gt_path, output_dir)
+                   filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
+
+                   new_row = {
+                       "case_id": case_id,
+                       "tumor_class": tumor_class,
+                       **filtered_features}
+
+
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                print(f'Added {case_id}: {dice}')
+
+                df.to_csv(save_path, index=False)
+
 
         # Load existing results if available
         if os.path.exists(save_path):
@@ -832,14 +832,16 @@ class ROIPreprocessor:
 
 def main():
 
-    input_folder_img ="/gpfs/home6/palfken/QA_imagesTr/"
-    input_folder_gt = "/gpfs/home6/palfken/QA_labelsTr/"
+    input_folder_img ="/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
 
-    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
+    input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+
+    predicted_mask_folder ='/gpfs/home6/palfken/ood_features/ood_uncertainty_maps/'
+
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/ood_features/maps_best_model/"
-    output_folder_visuals = "/gpfs/home6/palfken/Best_model_visuals/"
+    output_folder_data = "/gpfs/home6/palfken/ood_features/ood_uncertainty_maps_cropped/"
+    output_folder_visuals = "/gpfs/home6/palfken/OOD_visuals/"
 
     os.makedirs(output_folder_data, exist_ok=True)
     os.makedirs(output_folder_visuals, exist_ok=True)
