@@ -659,10 +659,10 @@ class ROIPreprocessor:
             for i in range(len(bin_edges) - 1):
                 print(f"{bin_edges[i]:.1f}–{bin_edges[i + 1]:.1f}: {class_hist[i]} samples")
                 # Compute mean and std of dice for this tumor class
-                mean_dice = group['dice'].mean()
-                std_dice = group['dice'].std()
-                print(f"Mean Dice: {mean_dice:.3f}")
-                print(f"Std Dice: {std_dice:.3f}")
+            mean_dice = group['dice'].mean()
+            std_dice = group['dice'].std()
+            print(f"Mean Dice: {mean_dice:.3f}")
+            print(f"Std Dice: {std_dice:.3f}")
 
         print(f'CSV file has {len(df)} rows')
         # # Compute global stats
