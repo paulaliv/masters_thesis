@@ -397,7 +397,7 @@ class ROIPreprocessor:
             axs[i + 1].set_title(f'{umap_titles[i]} Map')
             axs[i + 1].axis('off')
 
-        plt.suptitle(f'Subtype: {self.subtype}, Dice: {dice}', fontsize=18)
+        plt.suptitle(f'Subtype: {self.subtype}, Dice: {dice:.3f}', fontsize=18)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         # Save figure
@@ -456,7 +456,7 @@ class ROIPreprocessor:
         axs[2].set_title(f'Ground Truth Mask (slice {idx})')
         axs[2].axis('off')
 
-        plt.suptitle(f'Case: {self.case_id}, Dice: {dice}', fontsize=16)
+        plt.suptitle(f'Case: {self.case_id}, Dice: {dice:.3f}', fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         save_path = os.path.join(output_dir, f"{self.case_id}_img_pred_mask_side_by_side.png")
@@ -743,7 +743,7 @@ class ROIPreprocessor:
 
 
         umap_types = ['confidence', 'entropy', 'mutual_info', 'epkl']
-        resized_umaps = {}  # dictionary to store resized UMAPs
+        resampled_umaps = {}  # dictionary to store resized UMAPs
 
         for i, umap_type in enumerate(umap_types):
             npz_file = np.load(umap_path)
@@ -781,7 +781,7 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
 
              # Store resized UMAP in the dict for later use
-            resized_umaps[umap_type] = resized_umap
+            resampled_umaps[umap_type] = resampled_umap
 
 
             if self.save_as_nifti:
@@ -794,8 +794,8 @@ class ROIPreprocessor:
                 np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
 
         if resampled_pred.sum() > 0:
-            self.visualize_full_row(resized_img,resized_mask,resized_pred,resized_umaps, dice_score, output_dir_visuals)
-            self.visualize_img_pred_mask(resized_img,resized_pred, resized_mask, dice_score, output_dir_visuals)
+            self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
+            self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
 
         if self.save_as_nifti:
 
