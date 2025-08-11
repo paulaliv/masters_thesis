@@ -98,8 +98,9 @@ def preprocess_folder(data, splits):
         all_stats[case_id] = stats_dict
 
 
-    # Add dice bins column for all data
-    df = pd.DataFrame(all_stats, orient = 'index')
+
+    df = pd.DataFrame.from_dict(all_stats, orient='index')
+
     df['dice_bin'] = bin_dice_score(df['dice'].values)
 
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
