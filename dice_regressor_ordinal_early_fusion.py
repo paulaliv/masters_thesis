@@ -232,7 +232,7 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
 
 
@@ -572,7 +572,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     plt.ylabel("True")
     plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ = {best_kappa_lin:.3f}, κ² = {best_kappa_quad:.3f})")
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_EARLY_img.png"))
     plt.close()
 
 
@@ -663,7 +663,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.title(f'Training and Validation Loss Curves - {metric}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_EARLY.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_EARLY_img.png'))
         plt.close()
 
         # confusion matrix
@@ -681,7 +681,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.ylabel("True")
         plt.title(f"Confusion Matrix: {metric}, (κ = {avg_kappa_lin:.3f}, κ² = {avg_kappa_quad:.3f})")
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_EARLY.png"))
+        plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_EARLY_img.png"))
         plt.close()
 
 #metrics: confidence, entropy,mutual_info,epkl
