@@ -1,4 +1,5 @@
-from collections import defaultdict
+
+import gzip
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -15,11 +16,13 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-from sklearn.metrics import mean_absolute_error
-from torch.optim.lr_scheduler import LambdaLR
+from sklearn.metrics import accuracy_score, roc_auc_score
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import umap
+
+from torch.optim.lr_scheduler import SequentialLR, CosineAnnealingLR, LinearLR
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -27,6 +30,10 @@ from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
 from collections import Counter
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 torch.manual_seed(42)
@@ -34,31 +41,6 @@ np.random.seed(42)
 random.seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-
-from monai.transforms import (
-    Compose, LoadImaged, EnsureChannelFirstd, RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
-    ToTensord
-)
-train_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    RandAffined(
-        keys=["image", "uncertainty"],  # apply same affine to both
-        prob=1.0,
-        rotate_range=(np.pi/12, np.pi/12, np.pi/12),
-        translate_range=(5, 5, 5),  # in voxels
-        scale_range=(0.1, 0.1, 0.1),
-
-        mode=('trilinear', 'nearest')  # bilinear for image, nearest for uncertainty (categorical or regression)
-    ),
-    RandFlipd(keys=["image", "uncertainty"], prob=0.5, spatial_axis=1),
-    ToTensord(keys=["image", "uncertainty"])
-])
-val_transforms = Compose([
-    EnsureChannelFirstd(keys=["image", "uncertainty"], channel_dim=0),
-    #NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    ToTensord(keys=["image", "uncertainty"])
-])
 
 
 # '''ARCHITECTURE OF THE INSPO PAPER'''
@@ -174,30 +156,143 @@ val_transforms = Compose([
 #     def extract_features(self, uncertainty):
 #         x = self.encoder_unc(uncertainty)
 #         return x.view(x.size(0), -1)
+from monai.transforms import (
+    Compose, LoadImaged, EnsureChannelFirstd, RandRotate90d,RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
+    ToTensord, EnsureTyped
+)
+train_transforms = Compose([
+
+
+    RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
+
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=0),
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=1),  # flip along height axis
+    RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=2),
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    ToTensord(keys=["mask", "uncertainty"])
+])
+val_transforms = Compose([
+    EnsureTyped(keys=["mask", "uncertainty"], dtype=torch.float32),
+    ToTensord(keys=["mask", "uncertainty"])
+])
+
+
+
+class DistanceAwareCORNLoss(nn.Module):
+    def __init__(self, eps=1e-6, distance_power=0.5):
+        super().__init__()
+        self.eps = eps
+        self.distance_power = distance_power  # use sqrt by default
+
+    def forward(self, logits, labels):
+        """
+        logits: [B, K-1] - logits for ordinal thresholds
+        labels: [B] - integer labels in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # Binary label matrix: y_bin[b, k] = 1 if label[b] > k
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Reshape logits for binary cross-entropy
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # [B, K-1, 2]
+        logits_reshaped = logits_stacked.view(-1, 2)            # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)                       # [B*(K-1)]
+
+        # Compute distance-based weights (e.g., sqrt(|label - k|))
+        label_expanded = labels.unsqueeze(1).expand(-1, K_minus_1)  # [B, K-1]
+        ks = torch.arange(K_minus_1, device=labels.device).unsqueeze(0)  # [1, K-1]
+        distances = torch.abs(label_expanded - ks).float()  # [B, K-1]
+        weights = distances ** self.distance_power          # [B, K-1]
+
+        # Normalize per-sample weights (optional but stabilizing)
+        #weights = weights / (weights.sum(dim=1, keepdim=True) + self.eps)
+
+
+        # Flatten for use in loss
+        weights_flat = weights.view(-1)  # [B*(K-1)]
+
+        # Compute weighted cross-entropy loss
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, weight=None, reduction='none')
+        loss = (loss * weights_flat).mean()
+
+        return loss
+
+class CORNLoss(nn.Module):
+    """
+    CORN Loss for ordinal regression.
+    """
+    def __init__(self):
+        super(CORNLoss, self).__init__()
+
+    def forward(self, logits, labels):
+        """
+        logits: Tensor of shape (B, K-1), where K is the number of ordinal classes
+        labels: Tensor of shape (B,) with values in {0, ..., K-1}
+        """
+        B, K_minus_1 = logits.shape
+
+        # temperature = 0.5
+        #
+        # logits = logits/temperature
+
+        # Create binary targets: 1 if label > threshold
+        y_bin = torch.zeros_like(logits, dtype=torch.long)
+        for k in range(K_minus_1):
+            y_bin[:, k] = (labels > k).long()
+
+        # Compute softmax over two classes (not raw binary classification)
+        # Each logit becomes a 2-class classification: [P(class <= k), P(class > k)]
+        logits_stacked = torch.stack([-logits, logits], dim=2)  # shape: [B, K-1, 2]
+
+
+
+
+        logits_reshaped = logits_stacked.view(-1, 2)  # [B*(K-1), 2]
+        targets_reshaped = y_bin.view(-1)  # [B*(K-1)]
+
+        loss = F.cross_entropy(logits_reshaped, targets_reshaped, reduction='mean')
+        return loss
 
 class Light3DEncoder(nn.Module):
     def __init__(self):
         super().__init__()
+        # self.encoder = nn.Sequential(
+        #     nn.Conv3d(1, 16, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(16),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),  # halves each dimension
+        #
+        #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(32),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(2),
+        #
+        #     nn.Conv3d(32, 64, kernel_size=3, padding=1),
+        #     nn.BatchNorm3d(64),
+        #     nn.ReLU(),
+        #     nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+        # )
+
         self.encoder = nn.Sequential(
-            nn.Conv3d(1, 16, kernel_size=3, padding=1),
-            nn.BatchNorm3d(16),
-            nn.ReLU(),
-            nn.MaxPool3d(2),  # halves each dimension
-
-            nn.Conv3d(16, 32, kernel_size=3, padding=1),
-            nn.BatchNorm3d(32),
-            nn.ReLU(),
+            nn.Conv3d(1, 16, 3, padding=1), nn.BatchNorm3d(16), nn.ReLU(),
             nn.MaxPool3d(2),
-
-            nn.Conv3d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
+            nn.Conv3d(16, 32, 3, padding=1), nn.BatchNorm3d(32), nn.ReLU(),
+            nn.MaxPool3d(2),
+            nn.Conv3d(32, 64, 3, padding=1), nn.BatchNorm3d(64), nn.ReLU(),
+            nn.MaxPool3d(2),  # <- NEW BLOCK
+            nn.Conv3d(64, 128, 3, padding=1), nn.BatchNorm3d(128), nn.ReLU(),
+            nn.AdaptiveAvgPool3d((1, 1, 1))  # outputs [B, 64, 1, 1, 1]
+            #nn.AdaptiveAvgPool3d(1),
         )
+        #Output would now be [B, 128]
 
     def forward(self, x):
         x = self.encoder(x)
         return x.view(x.size(0), -1)  # Flatten to [B, 64]
+
 
 
 class QAModel(nn.Module):
@@ -207,13 +302,14 @@ class QAModel(nn.Module):
         self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
-        self.norm = nn.LayerNorm(128)
+        self.norm = nn.LayerNorm(256)
 
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(128, 64),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(64, num_thresholds)  # Output = predicted Dice class
+            nn.Dropout(0.3),
+            nn.Linear(128, num_thresholds)  # Output = predicted Dice class
         )
         #self.biases = nn.Parameter(torch.zeros(num_thresholds))
 
@@ -242,6 +338,17 @@ def bin_dice_score(dice):
     dice_adjusted = dice - epsilon  # Shift slightly left
     bin_edges = [0.1, 0.5, 0.7]  # Same as before
     return np.digitize(dice_adjusted, bin_edges, right=True)  # right=True = (a <= x)
+
+
+def compute_class_distribution(labels):
+    """
+    labels: list or 1D numpy array or tensor of ordinal class labels (e.g., from 0 to 3)
+    """
+    counter = Counter(labels)
+    total = sum(counter.values())
+    distribution = {k: v / total for k, v in sorted(counter.items())}
+    return distribution
+
 
 
 class QADataset(Dataset):
@@ -284,20 +391,11 @@ class QADataset(Dataset):
         subtype = subtype.strip()
 
 
-        image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        mask = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
+        #image = torch.from_numpy(image).float()
 
-
-        image = torch.from_numpy(image).float()
-
-        if image.ndim == 3:
-            image = image.unsqueeze(0)  # Add channel dim
-
-        assert image.ndim == 4 and image.shape[0] == 1, f"Expected shape (1, H, W, D), but got {image.shape}"
 
         uncertainty = np.load(os.path.join(self.data_dir, f'{case_id}_{self.uncertainty_metric}.npy'))
-
-        if uncertainty.sum() == 0:
-            print(f'{case_id} map is empty')
 
 
         # Map dice score to category
@@ -308,24 +406,26 @@ class QADataset(Dataset):
         #image_tensor = torch.from_numpy(image).float()
 
         # print(f'Image shape {image.shape}')
-        uncertainty_tensor = torch.from_numpy(uncertainty).float()
+        #uncertainty_tensor = torch.from_numpy(uncertainty).float()
 
-        uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
+        #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
+
 
         label_tensor = torch.tensor(label).long()
 
         if self.transform:
             data = self.transform({
-                "image": image,
-                "uncertainty": uncertainty_tensor
+                "mask": np.expand_dims(mask, 0),
+                "uncertainty":np.expand_dims(uncertainty, 0),
             })
-            image = data["image"]
-            uncertainty_tensor = data["uncertainty"]
+            mask= data["mask"].float()
+            uncertainty = data["uncertainty"].float()
+
 
         if self.want_features:
-            return uncertainty_tensor, case_id, label_tensor
+            return uncertainty, case_id, label_tensor
         else:
-            return image, uncertainty_tensor, label_tensor, subtype
+            return mask, uncertainty, label_tensor, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
@@ -364,6 +464,12 @@ def encode_ordinal_targets(labels, num_thresholds= 3): #K-1 thresholds
 #try: use argmax on cumulative logits
 #or logit based decoding
 
+# logit based decofing: (logits > 0).sum(dim=1)If all 3 logits > 0 → class 3
+# If first 2 > 0, last ≤ 0 → class 2
+# If only 1st > 0 → class 1
+# If all ≤ 0 → class 0
+#
+# ✅ This works well but relies heavily on raw logit thresholds at zero, which may be unstable or biased.
 def decode_predictions(logits):
     # print("Logits mean:", logits.mean().item())
     # print("Logits min/max:", logits.min().item(), logits.max().item())
@@ -371,7 +477,44 @@ def decode_predictions(logits):
 
     return (logits > 0).sum(dim=1)
 
+@torch.no_grad()
+def corn_predict(logits):
+    #logits shape: [B, num_thresholds]
+    probs = torch.stack([-logits, logits], dim=2)  # shape: [B, num_thresholds, 2]
+    pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
+    return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
 
+def evaluate_per_threshold(logits, labels):
+    """
+    logits: [N, K-1] - model outputs
+    labels: [N] - ground truth labels (ordinal, from 0 to K-1)
+    """
+    N, K_minus_1 = logits.shape
+
+    # Create binary targets per threshold
+    y_bin = np.zeros_like(logits, dtype=np.int32)
+    for k in range(K_minus_1):
+        y_bin[:, k] = (labels > k).astype(int)
+
+    metrics = {}
+    for k in range(K_minus_1):
+        prob = torch.sigmoid(logits[:, k]).cpu().numpy()
+        true_bin = y_bin[:, k]
+
+        pred_bin = (prob > 0.5).astype(int)
+
+        acc = accuracy_score(true_bin, pred_bin)
+        try:
+            auc = roc_auc_score(true_bin, prob)
+        except:
+            auc = None  # In case only one class is present
+
+        metrics[f"Threshold {k}"] = {
+            "Accuracy": acc,
+            "AUROC": auc
+        }
+
+    return metrics
 def coral_loss_manual(logits, levels, smoothing = 0.2, entropy_weight = 0.01):
     """
     logits: [B, num_classes - 1]
@@ -434,20 +577,35 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-5)
 
 
-   # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-6)
+    # Step 1: Warmup
+    warmup_epochs = 5
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
+    #
+    # # Step 2: Cosine Annealing after warmup
+    scheduler = ReduceLROnPlateau(optimizer,
+                                  mode='min',  # 'min' if you want to reduce LR when monitored metric stops decreasing
+                                  factor=0.1,  # factor by which the LR will be reduced. new_lr = old_lr * factor
+                                  patience=5,  # number of epochs with no improvement after which LR will be reduced
+                                  verbose=True,  # print messages when LR is reduced
+                                  min_lr=1e-6,  # lower bound on the learning rate
+                                  cooldown=0)
+    #scheduler = CosineAnnealingLR(optimizer, T_max=35)  # 45 = total_epochs - warmup_epochs
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
-    # warmup_scheduler = LambdaLR(optimizer, lr_lambda)
+    # Combine them
+    #scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = coral_loss_manual
+    #criterion = coral_loss_manual
+    criterion = CORNLoss()
 
     #Early stopping variables
     best_val_loss = float('inf')
-    patience = 10
+    patience = 8
     patience_counter = 0
 
     #Initiate Scaler
@@ -456,8 +614,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     train_losses = []
     val_losses = []
 
-    f1_history = defaultdict(list)
-
     #Kappa variables
     best_kappa = -1.0
     best_kappa_cm = None
@@ -465,11 +621,10 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     val_preds_list, val_labels_list, val_subtypes_list = [], [], []
 
-
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
-    for epoch in range(50):
-        print(f"Epoch {epoch + 1}/{50}")
+    for epoch in range(60):
+        print(f"Epoch {epoch + 1}/{60}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -480,12 +635,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
             optimizer.zero_grad()
             with autocast(device_type='cuda'):
-                print(f'Label shape {label.shape}')
+                # print(f'Label shape {label.shape}')
                 preds = model(image, uncertainty)  # shape: [B, 3]
-                print(f'model Output Shape : {preds.shape}')
-                targets = encode_ordinal_targets(label).to(preds.device)
-                print(f'Tagets shape: {targets.shape}')
-                loss = criterion(preds, targets)
+                # print(f'model Output Shape : {preds.shape}')
+                #targets = encode_ordinal_targets(label).to(preds.device)
+
+                loss = criterion(preds, label)
 
 
             scaler.scale(loss).backward()
@@ -496,7 +651,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             total += label.size(0)
 
             with torch.no_grad():
-                decoded_preds = decode_predictions(preds)
+                #decoded_preds = decode_predictions(preds)
+                decoded_preds = corn_predict(preds)
 
                 correct += (decoded_preds == label).sum().item()
 
@@ -510,26 +666,40 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         # Validation step
         model.eval()
         val_running_loss, val_correct, val_total = 0.0, 0, 0
+
+        empty_mask_count = 0
+        total_masks = 0
+
+        all_logits = []
+        all_labels = []
+
         val_preds_list.clear()
         val_labels_list.clear()
         val_subtypes_list.clear()
 
-        print(f'Train label distribution: {label_counts}')
-
 
         with torch.no_grad():
             for image, uncertainty, label, subtype in val_loader:
+
                 image, uncertainty, label = image.to(device), uncertainty.to(device), label.to(device)
 
+                # Count empty masks in the batch
+                batch_empty = (image.sum(dim=[1, 2, 3, 4]) == 0).sum().item()  # assumes mask shape is (B, C, D, H, W)
+                empty_mask_count += batch_empty
+                total_masks += image.size(0)
 
                 preds = model(image, uncertainty)
-                targets = encode_ordinal_targets(label).to(preds.device)
+                #targets = encode_ordinal_targets(label).to(preds.device)
 
-                loss = criterion(preds, targets)
+
+                loss = criterion(preds, label)
                 val_running_loss += loss.item() * image.size(0)
 
+
+
                 with torch.no_grad():
-                    decoded_preds = decode_predictions(preds)
+                    #decoded_preds = decode_predictions(preds)
+                    decoded_preds = corn_predict(preds)
                     val_correct += (decoded_preds == label).sum().item()
 
 
@@ -546,6 +716,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
                 val_subtypes_list.extend(subtype_list)
 
+        print(f"{empty_mask_count} out of {total_masks} masks in validation were completely empty.")
 
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
@@ -553,10 +724,16 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         for param_group in optimizer.param_groups:
             print(f"Current LR: {param_group['lr']}")
 
-
-        print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
         val_losses.append(epoch_val_loss)
-        # avg_val_loss = sum(val_losses) / len(val_losses)
+
+        # all_logits = torch.cat(all_logits, dim=0)
+        # all_labels = torch.cat(all_labels, dim=0).numpy()
+        #
+        # threshold_metrics = evaluate_per_threshold(all_logits, all_labels)
+        #
+        # for t, metric in threshold_metrics.items():
+        #     print(f"{t} => Accuracy: {metric['Accuracy']:.3f}, AUROC: {metric['AUROC']}")
+        # # avg_val_loss = sum(val_losses) / len(val_losses)
 
         val_preds_np = np.array(val_preds_list)
         val_labels_np = np.array(val_labels_list)
@@ -583,15 +760,24 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             zero_division=0
         )
 
+        #
+        # # Step the appropriate scheduler
+        # if epoch < warmup_epochs:
+        #     warmup_scheduler.step()
+        #     print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
         scheduler.step(epoch_val_loss)
-        for class_name in class_names:
-            f1_history[class_name].append(report_dict[class_name]["f1-score"])
+        print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
 
-        #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
-        # After each validation epoch:
+
         if kappa_quadratic > best_kappa:
+            print(f'New Best Kappa: {kappa_quadratic}!')
             best_kappa = kappa_quadratic
+            best_kappa_quad = kappa_quadratic
+            best_kappa_lin = kappa_linear
+
+
             present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
             labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
             best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
@@ -600,35 +786,27 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_kappa_report = report
             best_kappa_epoch = epoch
 
+            with gzip.open(f"model_fold{fold}_{uncertainty_metric}_img.pt.gz", 'wb') as f:
+                torch.save(model.state_dict(), f, pickle_protocol=4)
+
 
         # Early stopping check
         if epoch_val_loss < best_val_loss:
-            print(f'Yay, new best : {epoch_val_loss}!')
+            print(f'YAY, new best Val loss: {epoch_val_loss}!')
             best_val_loss = epoch_val_loss
             patience_counter = 0
-            # Save best model weights
-            # torch.save({
-            #     'model_state_dict': model.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            #     'epoch': epoch,
-            #     'val_loss': epoch_val_loss
-            # }, f"best_qa_model_fold{fold}.pt")
-            best_report = classification_report(val_labels_np, val_preds_np, target_names=class_names, digits=4,
-                                           zero_division=0)
-
-            np.savez(os.path.join(plot_dir, f"final_preds_fold{fold}_{uncertainty_metric}.npz"), preds=val_preds_np, labels=val_labels_np)
-
+            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+            best_val_epoch = epoch
+            best_val_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
 
         else:
+            print(f"Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.4f}")
             patience_counter += 1
             if patience_counter >= patience:
                 print("Early stopping triggered")
 
                 break
-    file = os.path.join(plot_dir, f'best_report_{uncertainty_metric}')
-    with open(file, "w") as f:
-        f.write(f"Final Classification Report for Fold {fold}:\n")
-        f.write(best_report)
 
     # Plot and save best confusion matrix
     plt.figure(figsize=(6, 5))
@@ -636,106 +814,142 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                 xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ = {best_kappa_lin:.3f}, κ² = {best_kappa_quad:.3f})")
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}.png"))
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_img.png"))
     plt.close()
 
-    return train_losses, val_losses, val_preds_list, val_labels_list, val_subtypes_list, f1_history, best_report
+
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(best_val_cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Best Confusion Matrix (Epoch {best_val_epoch}, Validation loss = {best_val_loss:.3f})")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, f"val_conf_matrix_fold{fold}_{uncertainty_metric}_img.png"))
+    plt.close()
+
+    print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
+
+    return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa_quad, best_kappa_lin
+
+
+def pad_to_max_length(loss_lists):
+    max_len = max(len(lst) for lst in loss_lists)
+    padded = []
+    for lst in loss_lists:
+        padded.append(np.pad(lst, (0, max_len - len(lst)), constant_values=np.nan))
+    return np.array(padded)
 
 
 
 def main(data_dir, plot_dir, folds,df):
-    print('MODEL INPUT: UNCERTAINTY MAP AND IMAGE')
+    print('MODEL INPUT: UNCERTAINTY MAP AND MASK')
     print('FUSION: LATE')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #for fold in range(5):
-    # Train the model and retrieve losses + predictions
 
     metrics = ['confidence', 'entropy','mutual_info','epkl']
-    metrics = ['confidence']
+
+    #metrics = ['confidence']
     for idx, metric in enumerate(metrics):
+        # Lists to aggregate results across folds
+        all_val_preds = []
+        all_val_labels = []
+
+        all_train_losses = []
+        all_val_losses = []
+        all_kappas_quad = []
+        all_kappas_lin = []
         start = time.time()
-        train_losses, val_losses, val_preds, val_labels, val_subtypes, f1_history, best_report = train_one_fold(
-            4,
-            data_dir,
-            df=df,
-            splits=folds,
-            uncertainty_metric=metric,
-            plot_dir=plot_dir,
-            device=device
-        )
+
+        for fold in range(5):
+            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
+                fold,
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device
+            )
+            # Aggregate per fold
+            all_val_preds.append(val_preds)
+            all_val_labels.append(val_labels)
+            all_train_losses.append(train_losses)
+            all_val_losses.append(val_losses)
+            all_kappas_quad.append(best_kappa_quad)
+            all_kappas_lin.append(best_kappa_lin)
+
 
         end = time.time()
-        print(f'Best report for {metric}:')
-        print(best_report)
+        # print(f'Best report for {metric}:')
+        # print(best_report)
         print(f"Total training time: {(end - start) / 60:.2f} minutes")
 
-        # Convert prediction outputs to numpy arrays for plotting
-        val_preds = np.array(val_preds)
-        val_labels = np.array(val_labels)
-        val_subtypes = np.array(val_subtypes)
+        # Combine folds data
+        val_preds = np.concatenate(all_val_preds, axis=0)
+        val_labels = np.concatenate(all_val_labels, axis=0)
+
+        padded_train_losses = pad_to_max_length(all_train_losses)
+        avg_train_losses = np.nanmean(padded_train_losses, axis=0)
+
+        padded_val_losses = pad_to_max_length(all_val_losses)
+        avg_val_losses = np.nanmean(padded_val_losses, axis=0)
+
+
+
+        avg_kappa_quad = np.mean(all_kappas_quad)
+        print(f'Average Quadratic Kappa across all 5 folds: {avg_kappa_quad}')
+
+        avg_kappa_lin = np.mean(all_kappas_lin)
+        print(f'Average Linear Kappa across all 5 folds: {avg_kappa_lin}')
 
         plt.figure(figsize=(10, 6))
-        for class_name, f1_scores in f1_history.items():
-            plt.plot(f1_scores, label=class_name)
-
-        plt.xlabel("Epoch")
-        plt.ylabel("F1 Score")
-        plt.title("Per-Class F1 Score Over Epochs")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir,f"f1_scores_per_class_{metric}.png"), dpi=300)
-        plt.show()
-
-        # ✅ Plot loss curves
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_losses, label='Train Loss', marker='o')
-        plt.plot(val_losses, label='Validation Loss', marker='x')
+        plt.plot(avg_train_losses, label='Train Loss', marker='o')
+        plt.plot(avg_val_losses, label='Validation Loss', marker='x')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
-        plt.title('Training and Validation Loss Curves')
+        plt.title(f'Training and Validation Loss Curves - {metric}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_img.png'))
         plt.close()
 
-        # ✅ Overall scatter plot
+        # Overall scatter plot
         plt.figure(figsize=(8, 6))
         plt.scatter(val_labels, val_preds, c='blue', alpha=0.6, label='Predicted vs Actual')
         plt.plot([val_labels.min(), val_labels.max()],
                  [val_labels.min(), val_labels.max()], 'r--', label='45-degree line')
         plt.xlabel("Actual Label")
         plt.ylabel("Predicted Label")
-        plt.title("Overall Predicted vs. Actual Labels")
+        plt.title(f"Overall Predicted vs. Actual Labels - {metric}")
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}.png'))
+        plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_{metric}_img.png'))
         plt.close()
 
-        # # ✅ Per-subtype scatter plots
-        # unique_subtypes = np.unique(val_subtypes)
-        #
-        # for subtype in unique_subtypes:
-        #     mask = val_subtypes == subtype
-        #     preds_sub = val_preds[mask]
-        #     labels_sub = val_labels[mask]
-        #
-        #     plt.figure(figsize=(8, 6))
-        #     plt.scatter(labels_sub, preds_sub, c='green', alpha=0.6)
-        #     plt.plot([labels_sub.min(), labels_sub.max()],
-        #              [labels_sub.min(), labels_sub.max()], 'r--')
-        #     plt.xlabel("Actual Label")
-        #     plt.ylabel("Predicted Label")
-        #     plt.title(f"Predicted vs Actual for Subtype: {subtype}")
-        #     plt.grid(True)
-        #     plt.tight_layout()
-        #
-        #     plt.savefig(os.path.join(plot_dir, f'pred_vs_actual_type_{subtype}.png'))
-        #     plt.close()
+        #confusion matrix
+        # Plot and save best confusion matrix
+        class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+        present_labels = np.unique(np.concatenate((val_labels, val_preds)))
+        labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+
+        disp = confusion_matrix(val_labels, val_preds, labels=labels_idx)
+
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(disp, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=class_names, yticklabels=class_names)
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.title(f"Confusion Matrix: {metric}, (κ = {avg_kappa_lin:.3f}, κ² = {avg_kappa_quad:.3f})")
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_img.png"))
+        plt.close()
+
+
 
 def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
     print(f'feature shape {train.shape}')

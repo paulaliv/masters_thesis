@@ -268,7 +268,7 @@ def bin_dice_score(dice):
 class QADataset(Dataset):
     def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False):
         """
-        fold: str, e.g. 'fold_0'
+        fold: str, e.g. 'fold
         preprocessed_dir: base preprocessed path with .npz images
         pred_fold_paths: dict with predicted mask folder paths per fold
         fold_paths: dict with fold folder paths containing Dice scores & case IDs
