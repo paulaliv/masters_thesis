@@ -851,6 +851,7 @@ def main(data_dir, plot_dir, folds,df):
 
     metrics = ['confidence', 'entropy','mutual_info','epkl']
 
+    metrics = ['confidence']
     for idx, metric in enumerate(metrics):
         # Lists to aggregate results across folds
         all_val_preds = []
