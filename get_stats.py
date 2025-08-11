@@ -12,6 +12,10 @@ from scipy.ndimage import label, find_objects
 import glob
 from scipy.ndimage import zoom
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import pearsonr, spearmanr
+
 
 
 def bin_dice_score( dice):
@@ -108,6 +112,43 @@ def preprocess_folder(data, splits):
     # Find all uncertainty-related columns
     unc_cols = [c for c in df.columns if c.endswith('unc')]
 
+    # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
+    unc_cols_pred = [c for c in df.columns if c.endswith('pred_mean_unc')]
+
+    # 1) Scatter plots with regression lines and correlation coeffs
+    plt.figure(figsize=(16, 12))
+    for i, col in enumerate(unc_cols_pred):
+        plt.subplot(2, 2, i + 1)
+        sns.regplot(x=df[col], y=df['dice'], scatter_kws={'alpha': 0.5})
+        plt.xlabel(col)
+        plt.ylabel('Dice Score')
+        plt.title(f'Dice vs {col}')
+
+        # Calculate correlations
+        pearson_corr, _ = pearsonr(df[col].dropna(), df.loc[df[col].notna(), 'dice'])
+        spearman_corr, _ = spearmanr(df[col].dropna(), df.loc[df[col].notna(), 'dice'])
+        plt.annotate(f'Pearson r = {pearson_corr:.2f}\nSpearman r = {spearman_corr:.2f}', xy=(0.05, 0.85),
+                     xycoords='axes fraction')
+
+    plt.tight_layout()
+
+    plt.savefig("/gpfs/home6/palfken/correlation.png")
+
+    # 2) Dice bins bar plot with error bars for uncertainty metrics
+    plt.figure(figsize=(12, 8))
+
+    for col in unc_cols_pred:
+        means = df.groupby('dice_bin')[col].mean()
+        stds = df.groupby('dice_bin')[col].std()
+
+        plt.errorbar(means.index, means.values, yerr=stds.values, label=col, capsize=5, marker='o')
+
+    plt.xlabel('Dice bin')
+    plt.ylabel('Mean Uncertainty ± std')
+    plt.title('Uncertainty metrics by Dice bins')
+    plt.legend()
+    plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
+    plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
 
     print("\nUncertainty stats per Dice bin:")
     for bin_id, bin_group in df.groupby('dice_bin'):
