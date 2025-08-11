@@ -577,7 +577,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+
 
 
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-6)
