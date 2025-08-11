@@ -41,7 +41,7 @@ def preprocess_folder(data, splits):
 
     all_stats = {}
 
-    umap_types = ["epkl", "confidence", "entropy", "mutual"]  # Your uncertainty maps
+    umap_types = ["epkl", "confidence", "entropy", "mutual_info"]  # Your uncertainty maps
 
     for case_id in case_ids:
         stats_dict = {}
