@@ -541,8 +541,9 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             best_kappa = kappa_quadratic
             best_kappa_quad = kappa_quadratic
             best_kappa_lin = kappa_linear
-            labels_idx = [0, 1, 2, 3]
-            #best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
+            present_labels = np.unique(np.concatenate((val_labels_np, val_preds_np)))
+            labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+            best_kappa_cm = confusion_matrix(val_labels_np, val_preds_np, labels=labels_idx)
             best_kappa_preds = val_preds_np.copy()
             best_kappa_labels = val_labels_np.copy()
             best_kappa_report = report
@@ -569,10 +570,12 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
                 xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ² = {best_kappa:.3f})")
+    plt.title(f"Best Confusion Matrix (Epoch {best_kappa_epoch}, κ = {best_kappa_lin:.3f}, κ² = {best_kappa_quad:.3f})")
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_EARLY.png"))
+    plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_fold{fold}_{uncertainty_metric}_MASK.png"))
     plt.close()
+
+
 
     print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
     return train_losses, val_losses, best_kappa_preds, best_kappa_labels, best_kappa_quad, best_kappa_lin
