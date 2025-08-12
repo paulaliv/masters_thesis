@@ -31,7 +31,6 @@ import random
 import torch.optim as optim
 from collections import Counter
 
-from dicer_regressor_mask_best import uncertainty
 
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
