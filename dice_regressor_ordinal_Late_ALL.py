@@ -14,6 +14,9 @@ import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import torch.nn.functional as F
 import time
+import seaborn as sns
+import plotly.graph_objects as go
+
 import sys
 import json
 from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
@@ -22,11 +25,14 @@ import seaborn as sns
 import umap
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-
+from sklearn.decomposition import PCA
 from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
 from collections import Counter
+
+from dicer_regressor_mask_best import uncertainty
+
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 torch.manual_seed(42)
@@ -249,9 +255,16 @@ class QAModel(nn.Module):
         #logits = features + self.biases  # Broadcast to [B, num_thresholds]
         return features
 
-
-    def extract_features(self, uncertainty):
+    def extract_unc_features(self, uncertainty):
         x = self.encoder_unc(uncertainty)
+        return x.view(x.size(0), -1)
+
+    def extract_img_features(self, img):
+        x = self.encoder_img(img)
+        return x.view(x.size(0), -1)
+
+    def extract_mask_features(self, mask):
+        x = self.encoder_mask(mask)
         return x.view(x.size(0), -1)
 
 
@@ -266,7 +279,7 @@ def bin_dice_score(dice):
 
 
 class QADataset(Dataset):
-    def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False):
+    def __init__(self, case_ids, data_dir, df, uncertainty_metric,transform=None, want_features = False, is_ood = False):
         """
         fold: str, e.g. 'fold
         preprocessed_dir: base preprocessed path with .npz images
@@ -286,11 +299,15 @@ class QADataset(Dataset):
 
         # List of case_ids
         self.case_ids = case_ids
+
         self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
 
 
         # Now extract dice scores and subtypes aligned with self.case_ids
-        self.dice_scores = self.df['dice_5'].tolist()
+        if is_ood:
+            self.dice_scores = self.df['dice'].tolist()
+        else:
+            self.dice_scores = self.df['dice_5'].tolist()
         self.subtypes = self.df['tumor_class'].tolist()
 
         self.transform = transform
@@ -787,10 +804,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_LATE_ALL.png"))
         plt.close()
 
-
-
-def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
-    print(f'feature shape {train.shape}')
+def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours, m, name, image_dir):
 
     reducer = umap.UMAP(
         n_components=2,
@@ -799,146 +813,374 @@ def plot_UMAP(train, y_train, model_array, neighbours, m, name, image_dir):
         metric=m,
         random_state=42
     )
-    train_umap = reducer.fit_transform(train)  # (N, 2)
-    # Apply UMAP transform to validation data
-    # val_umap = reducer.transform(val)
 
-    # all_subtypes= np.concatenate([y_train, y_val])
-    unique_labels= sorted(set(y_train))
+    # Fit on validation + OOD combined
+    X_combined = np.concatenate([X_val, X_ood])
 
-    # labels = np.array(['train'] * len(train_umap) + ['val'] * len(val_umap))
-    markers = {'5': 'o', '20': 's', '30':'v'}
 
-    idx_to_label = {
-        '5':'Model trained for 5 epochs',
-        '20':'Model trained for 20 epochs',
-        '30':'Model trained for 30 epochs',
+    y_combined = np.concatenate([y_val, y_ood])
+    subtypes_combined = np.concatenate([subtypes_val, subtypes_ood])
+
+    # Optional PCA preprocessing
+    if X_combined.shape[1] > 50:
+        pca = PCA(n_components=50, random_state=42)
+        X_combined = pca.fit_transform(X_combined)
+
+    embedding = reducer.fit_transform(X_combined)
+    tumor_to_idx = {
+        "MyxofibroSarcomas":  "MyxofibroSarcomas",
+        "LeiomyoSarcomas": "LeiomyoSarcomas",
+        "DTF": "DTF",
+        "MyxoidlipoSarcoma":  "MyxoidlipoSarcoma",
+        "WDLPS": "WDLPS",
+        "Lipoma (OOD)": "Lipoma",
 
     }
-    #class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+    idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
+
+    # Dice bin markers
+    markers = {0: 'o', 1: 's', 2: 'v', 3: 'X'}
     bin_to_score = {
         0: "Fail (0-0.1)",
         1: "Poor (0.1-0.5)",
-        2: "Moderate(0.5-0.7)",
+        2: "Moderate (0.5-0.7)",
         3: "Good (>0.7)"
-
     }
 
+    # Tumor subtype colors
+    unique_subtypes = sorted(set(subtypes_combined))
     cmap = plt.cm.tab20
-    color_lookup = {lab: cmap(i % 20) for i, lab in enumerate(unique_labels)}
-    # 7. scatter plot
-    plt.figure(figsize=(8, 6))
-    for marker_type in ['5', '20', '30']:
-        for label in unique_labels:
-            idx = [i for i in range(len(y_train)) if y_train[i] == label and model_array[i] == marker_type]
-            if not idx:
+    subtype_to_color = {subtype: cmap(i % 20) for i, subtype in enumerate(unique_subtypes)}
+
+    plt.figure(figsize=(10, 8))
+
+    for dice_bin in sorted(set(y_combined)):
+        for subtype in unique_subtypes:
+            idx = np.where((y_combined == dice_bin) & (subtypes_combined == subtype))[0]
+            if len(idx) == 0:
                 continue
             plt.scatter(
-                train_umap[idx, 0], train_umap[idx, 1],
-                s=25,
-                c=[color_lookup[label]] * len(idx),
-                marker=markers[marker_type],
+                embedding[idx, 0],
+                embedding[idx, 1],
+                c=[subtype_to_color[subtype]] * len(idx),
+                marker=markers[dice_bin],
+                label=f"{subtype}-{bin_to_score[dice_bin]}",
+                s=40,
                 alpha=0.8
             )
 
-    # Create separate legends for color (dice bin) and shape (model type)
+    # Legends
     color_handles = [
-        mpatches.Patch(color=color_lookup[lab], label=bin_to_score[lab])
-        for lab in unique_labels
+        mpatches.Patch(color=subtype_to_color[subtype], label=idx_to_tumor[subtype])
+        for subtype in unique_subtypes
     ]
 
     marker_handles = [
-        mlines.Line2D([], [], color='black', marker=markers[key], linestyle='None',
-                      markersize=6, label=idx_to_label[key])
-        for key in markers
+        mlines.Line2D([], [], color='black', marker=markers[bin_id], linestyle='None',
+                      markersize=8, label=bin_to_score[bin_id])
+        for bin_id in markers
     ]
 
-    # Plot legends
-    legend1 = plt.legend(handles=color_handles, title='Dice Quality Bin', loc='upper right')
+    legend1 = plt.legend(handles=color_handles, title='Tumor Subtype', loc='upper right')
     plt.gca().add_artist(legend1)
-    plt.legend(handles=marker_handles, title='Model Type', loc='lower right')
+    plt.legend(handles=marker_handles, title='Dice Quality Bin', loc='lower right')
 
     plt.xlabel("UMAP‑1")
     plt.ylabel("UMAP‑2")
-    plt.title("Confidence Map Features")
+    plt.title("UMAP of Dice QA Features (Subtypes & Quality)")
     plt.tight_layout()
+
+    os.makedirs(image_dir, exist_ok=True)
     image_loc = os.path.join(image_dir, name)
     plt.savefig(image_loc, dpi=300)
     plt.show()
-def visualize_features(data_dir, plot_dir, splits, df):
-    # Create datasets
+
+def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
+
+    all_unc_val, all_img_val, all_mask_val = [], [], []
+    all_unc_ood, all_img_ood, all_mask_ood = [], [], []
+
+    all_labels_val, all_labels_ood = [], []
+    all_subtypes_val, all_subtypes_ood = [], []
+    all_preds_val, all_preds_ood = [], []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = QAModel(num_thresholds=3).to(device)
-    uncertainty_metric = "confidence"
-    train_case_ids = splits[0]["train"]
-    train_dataset = QADataset(
-        case_ids=train_case_ids,
-        data_dir=data_dir,
-        df=df,
+
+    subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
+    subtypes_df = pd.read_csv(subtypes_csv)
+    dice_df ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
+
+    lipoma_ids = subtypes_df.loc[
+        subtypes_df["Final_Classification"] == "Lipoma",
+        "nnunet_id"
+    ].values
+
+    # Filter dice_df to only Lipoma rows
+    dice_df_lipoma = dice_df[dice_df["class_name"] == "Lipoma"]
+
+    ood_dataset = QADataset(
+        case_ids=lipoma_ids,
+        data_dir=ood_dir,
+        df=dice_df_lipoma,
         uncertainty_metric=uncertainty_metric,
-        transform=train_transforms,
-        want_features=True
+        transform=val_transforms,
+        want_features=True,
+        ood=True
     )
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,pin_memory=True)
+    ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
 
-    all_features_train = []
-    all_labels_train = []
-    all_model_names = []
+    fold_paths = [
+        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}.pt.gz",
 
-    with torch.no_grad():
-        for uncertainty, case_ids,labels in train_loader:
-            uncertainty = uncertainty.to(device)
-            features = model.extract_features(uncertainty).cpu().numpy()  # (B, 512)
-            all_features_train.append(features)
+    ]
 
-            batch_labels = []
-            for cid in case_ids:
-                if "20EP" in cid:
-                    model_ep = "20"
-                elif "30EP" in cid:
-                    model_ep = "30"
-                else:
-                    model_ep = "5"
-                batch_labels.append(model_ep)
+    for fold_idx, model_path in enumerate(fold_paths):
+        with gzip.open(model_path, 'rb') as f:
+            checkpoint = torch.load(f, map_location=device)
 
-            all_model_names.extend(batch_labels)
-            all_labels_train.extend(labels)
+        model = QAModel(num_thresholds=3).to(device)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
+
+        # Validation loader for this fold
+        val_case_ids = splits[fold_idx]["val"]
+        val_dataset = QADataset(
+            case_ids=val_case_ids,
+            data_dir=data_dir,
+            df=df,
+            uncertainty_metric=uncertainty_metric,
+            transform=val_transforms,
+            want_features=True,
+        )
+        val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+
+        with torch.no_grad():
+            # Validation set
+            for image, mask, uncertainty, label, subtype in val_loader:
+                image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
+
+                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
+                img_feat = model.extract_img_features(image).cpu().numpy()
+                mask_feat = model.extract_mask_features(mask).cpu().numpy()
+
+                all_unc_val.append(unc_feat)
+                all_img_val.append(img_feat)
+                all_mask_val.append(mask_feat)
+
+                all_labels_val.extend(label.cpu().numpy())
+                all_subtypes_val.extend(subtype)
+
+                preds = model(image, uncertainty)
+                decoded_preds = corn_predict(preds)
+                all_preds_val.extend(decoded_preds)
+
+            # OOD set
+            for image, mask, uncertainty, label, subtype in ood_loader:
+                image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
+
+                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
+                img_feat = model.extract_img_features(image).cpu().numpy()
+                mask_feat = model.extract_mask_features(mask).cpu().numpy()
+
+                all_unc_ood.append(unc_feat)
+                all_img_ood.append(img_feat)
+                all_mask_ood.append(mask_feat)
+
+                all_labels_ood.extend(label.cpu().numpy())
+                all_subtypes_ood.extend(subtype)
+
+                preds = model(image, uncertainty)
+                decoded_preds = corn_predict(preds)
+                all_preds_ood.extend(decoded_preds)
+
+        # Concatenate features
+    all_unc_val = np.vstack(all_unc_val)
+    all_img_val = np.vstack(all_img_val)
+    all_mask_val = np.vstack(all_mask_val)
+
+    all_unc_ood = np.vstack(all_unc_ood)
+    all_img_ood = np.vstack(all_img_ood)
+    all_mask_ood = np.vstack(all_mask_ood)
+
+    return {
+        "val": {
+            "unc": all_unc_val, "img": all_img_val, "mask": all_mask_val,
+            "labels": np.array(all_labels_val), "subtypes": np.array(all_subtypes_val),
+            "preds": np.array(all_preds_val)
+        },
+        "ood": {
+            "unc": all_unc_ood, "img": all_img_ood, "mask": all_mask_ood,
+            "labels": np.array(all_labels_ood), "subtypes": np.array(all_subtypes_ood),
+            "preds": np.array(all_preds_ood)
+        }
+    }
+
+def plot_confusion(y_true, y_pred, title, save_path):
+    class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
+    present_labels = np.unique(y_pred)
+    labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+    cm = confusion_matrix(y_true, y_pred, labels=labels_idx)
+    plt.figure(figsize=(6,5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted Bin")
+    plt.ylabel("Actual Bin")
+    plt.title(title)
+
+    plt.savefig(save_path, dpi=300)
+
+
+def plot_bin_distribution(y_true, y_pred, title):
+    bins = sorted(set(y_true) | set(y_pred))
+    df = pd.DataFrame({
+        "Actual": pd.Series(y_true).value_counts(normalize=True),
+        "Predicted": pd.Series(y_pred).value_counts(normalize=True)
+    }).fillna(0).reindex(bins)
+
+    width = 0.35
+    x = np.arange(len(bins))
+
+    plt.bar(x - width/2, df["Actual"], width, label="Actual")
+    plt.bar(x + width/2, df["Predicted"], width, label="Predicted")
+    plt.xticks(x, bins)
+    plt.ylabel("Proportion")
+    plt.title(title)
+    plt.legend()
+    plt.show()
 
 
 
-    X_train = np.concatenate(all_features_train, axis=0)
-    y_train = np.array(all_labels_train)
-    from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+def plot_sankey(y_true, y_pred, title):
+    # Ensure numpy arrays
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
 
-    # X_train: (N, 512)
-    distance_matrix = cosine_distances(X_train)  # or use euclidean_distances(X_train)
-    model_array= np.array(all_model_names)
+    bins = sorted(set(y_true) | set(y_pred))
 
-    # Ignore diagonal
-    np.fill_diagonal(distance_matrix, np.inf)
+    # Create label list: actual bins first, then predicted bins
+    labels = [f"Actual {b}" for b in bins] + [f"Pred {b}" for b in bins]
 
-    # Get top-k similar pairs (e.g., top-5 most similar pairs)
-    k = 5
-    similar_pairs = []
-    for i in range(len(distance_matrix)):
-        closest_indices = np.argsort(distance_matrix[i])[:k]
-        for j in closest_indices:
-            similar_pairs.append((i, j, distance_matrix[i][j]))
+    # Build source-target-flow lists
+    source = []
+    target = []
+    value = []
 
-    # Sort by distance
-    similar_pairs.sort(key=lambda x: x[2])
-    for i1, i2, dist in similar_pairs[:30]:
-        print(
-            f"Pair: {train_case_ids[i1]} - {train_case_ids[i2]},  Distance: {dist:.4f}")
+    for i, b_true in enumerate(bins):
+        for j, b_pred in enumerate(bins):
+            count = np.sum((y_true == b_true) & (y_pred == b_pred))
+            if count > 0:
+                source.append(i)               # actual bin index
+                target.append(len(bins) + j)   # predicted bin index (shifted)
+                value.append(count)
 
-    plot_UMAP(X_train, y_train, model_array, neighbours=5, m='cosine', name='QA_UMAP_cosine_5n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_train, y_train,model_array, neighbours=10, m='cosine', name='QA_UMAP_cosine_10n_fold0.png', image_dir=plot_dir)
-    plot_UMAP(X_train, y_train, model_array,neighbours=15, m='cosine', name='QA_UMAP_cosine_15n_fold0.png', image_dir=plot_dir)
+    # Create Sankey diagram
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=20,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=labels,
+            color=["#636EFA"]*len(bins) + ["#EF553B"]*len(bins)  # blue for actual, red for pred
+        ),
+        link=dict(
+            source=source,
+            target=target,
+            value=value
+        )
+    )])
+
+    fig.update_layout(title_text=title, font_size=12)
+    fig.show()
 
 
+def plot_distribution_kde(y_true, y_pred, title):
+    sns.histplot(y_true, color="blue", alpha=0.5, label="Actual", stat="probability", discrete=True)
+    sns.histplot(y_pred, color="red", alpha=0.5, label="Predicted", stat="probability", discrete=True)
+    plt.legend()
+    plt.title(title)
+    plt.show()
 
 
+def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
+    results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=uncertainty_metric, df= df, splits=splits)
+
+    # Run inference to get feature dicts
+    results = inference(
+        data_dir=data_dir,
+        ood_dir=ood_dir,
+        uncertainty_metric=uncertainty_metric,
+        df=df,
+        splits=splits
+    )
+
+    # Alias for val and ood sets
+    val = results["val"]
+    ood = results["ood"]
+
+    # --- 1. UMAP plots for img, unc, mask ---
+    plot_UMAP(val["img"], val["labels"], val["subtypes"],
+              ood["img"], ood["labels"], ood["subtypes"],
+              neighbours=15, m="euclidean",
+              name=os.path.join(plot_dir, "img_umap.png"))
+
+    plot_UMAP(val["unc"], val["labels"], val["subtypes"],
+              ood["unc"], ood["labels"], ood["subtypes"],
+              neighbours=15, m="euclidean",
+              name=os.path.join(plot_dir, "unc_umap.png"))
+
+    plot_UMAP(val["mask"], val["labels"], val["subtypes"],
+              ood["mask"], ood["labels"], ood["subtypes"],
+              neighbours=15, m="euclidean",
+              name=os.path.join(plot_dir, "mask_umap.png"))
+
+    # --- 2. Confusion matrix ---
+    # Use val true labels and ood predicted labels (or vice versa depending on your setup)
+    # Here I assume val labels vs ood labels as an example; adjust as needed
+    plot_confusion(ood["preds"], ood["labels"],
+                   title="Confusion Matrix - Val vs OOD",
+                   save_path=os.path.join(plot_dir, "confusion_val_vs_ood.png"))
+
+    # --- 3. Bin distribution bar plot ---
+    # Combine all labels for bins
+    combined_labels = np.concatenate([val["labels"], ood["labels"]])
+    plot_bin_distribution(combined_labels,
+                  title="Subtype Distribution Val + OOD",
+                  save_path=os.path.join(plot_dir, "bin_dist_val_ood.png"))
+
+    # --- 4. Sankey plot ---
+    plot_sankey(val["labels"], ood["labels"],
+                title="Sankey Plot Val to OOD",
+                save_path=os.path.join(plot_dir, "sankey_val_to_ood.png"))
+
+
+    #
+    # X_train = np.concatenate(all_features_train, axis=0)
+    # y_train = np.array(all_labels_train)
+    # from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+    #
+    # # X_train: (N, 512)
+    # distance_matrix = cosine_distances(X_train)  # or use euclidean_distances(X_train)
+    # model_array= np.array(all_model_names)
+    #
+    # # Ignore diagonal
+    # np.fill_diagonal(distance_matrix, np.inf)
+    #
+    # # Get top-k similar pairs (e.g., top-5 most similar pairs)
+    # k = 5
+    # similar_pairs = []
+    # for i in range(len(distance_matrix)):
+    #     closest_indices = np.argsort(distance_matrix[i])[:k]
+    #     for j in closest_indices:
+    #         similar_pairs.append((i, j, distance_matrix[i][j]))
+    #
+    # # Sort by distance
+    # similar_pairs.sort(key=lambda x: x[2])
+    # for i1, i2, dist in similar_pairs[:30]:
+    #     print(
+    #         f"Pair: {train_case_ids[i1]} - {train_case_ids[i2]},  Distance: {dist:.4f}")
 if __name__ == '__main__':
 
     with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
@@ -947,7 +1189,8 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    plot_dir = sys.argv[2]
+    ood_dir = sys.argv[2]
+    plot_dir = sys.argv[3]
 
-    main(preprocessed, plot_dir, splits, df)
-    #visualize_features(preprocessed, plot_dir, splits, df)
+    #main(preprocessed, plot_dir, splits, df)
+    visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)

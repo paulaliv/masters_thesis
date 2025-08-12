@@ -164,7 +164,7 @@ def preprocess_folder(data, splits):
 
         print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
         if len(bin_group) > 0 and unc_cols:
-            for col in unc_cols:
+            for col in unc_cols_pred:
                 col_mean = bin_group[col].mean()
                 col_std = bin_group[col].std()
                 print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
