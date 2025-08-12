@@ -701,31 +701,29 @@ class ROIPreprocessor:
 
                 # Now print uncertainty stats by dice bin
         print("\nUncertainty stats per Dice bin:")
-        for bin_id, bin_group in group.groupby('dice_bin'):
-            # Map bin_id to readable range
-            if bin_id == 0:
-                bin_range = f"<= 0.1"
-            elif bin_id == 1:
-                bin_range = "0.1 < dice <= 0.5"
-            elif bin_id == 2:
-                bin_range = "0.5 < dice <= 0.7"
-            else:
-                bin_range = "> 0.7"
+        for tumor_class, group in df.groupby('tumor_class'):
+            if tumor_class == "Lipoma":
 
-            print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
-            if len(bin_group) > 0 and unc_cols:
-                for col in unc_cols:
-                    col_mean = bin_group[col].mean()
-                    col_std = bin_group[col].std()
-                    print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
-            else:
-                print("  No samples in this bin.")
+            for bin_id, bin_group in group.groupby('dice_bin'):
+                # Map bin_id to readable range
+                if bin_id == 0:
+                    bin_range = f"<= 0.1"
+                elif bin_id == 1:
+                    bin_range = "0.1 < dice <= 0.5"
+                elif bin_id == 2:
+                    bin_range = "0.5 < dice <= 0.7"
+                else:
+                    bin_range = "> 0.7"
 
-        print(f'\nCSV file has {len(df)} rows')
-        print(f'Cases that were cropped: {self.cropped_cases}')
-        print(f'Total cropped images: {len(self.cropped_cases)}')
-        print(f'Empty Predictions: {self.empty_masks}')
-        print(f'Total empty preds: {len(self.empty_masks)}')
+                print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
+                if len(bin_group) > 0 and unc_cols:
+                    for col in unc_cols:
+                        col_mean = bin_group[col].mean()
+                        col_std = bin_group[col].std()
+                        print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+                else:
+                    print("  No samples in this bin.")
+
 
 
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
