@@ -1125,7 +1125,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
                 mask_feat = model.extract_mask_features(mask).cpu().numpy()
 
                 all_unc_val.append(unc_feat)
-                #all_img_val.append(img_feat)
+                #all_ilmg_val.append(img_feat)
                 all_mask_val.append(mask_feat)
 
                 all_labels_val.extend(label.cpu().numpy())
@@ -1283,12 +1283,12 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
     plot_UMAP(val["unc"], val["labels"], val["subtypes"],
               ood["unc"], ood["labels"], ood["subtypes"],
               neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "unc_umap.png"))
+              name="unc_umap.png", image_dir=plot_dir)
 
     plot_UMAP(val["mask"], val["labels"], val["subtypes"],
               ood["mask"], ood["labels"], ood["subtypes"],
               neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "mask_umap.png"))
+              name="mask_umap.png", image_dir=plot_dir)
 
     # --- 2. Confusion matrix ---
     # Use val true labels and ood predicted labels (or vice versa depending on your setup)
