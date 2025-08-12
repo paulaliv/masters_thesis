@@ -926,7 +926,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         uncertainty_metric=uncertainty_metric,
         transform=val_transforms,
         want_features=True,
-        ood=True
+        is_ood=True
     )
     ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
 
