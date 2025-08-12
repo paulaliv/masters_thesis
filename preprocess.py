@@ -578,7 +578,7 @@ class ROIPreprocessor:
         return np.digitize(dice_adjusted, bin_edges, right=True)
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
-        #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
+        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         print(subtypes_df.columns)
@@ -666,6 +666,7 @@ class ROIPreprocessor:
 
 
         # Load existing results if available
+
         if os.path.exists(save_path):
             df = pd.read_csv(save_path)
         else:
@@ -674,9 +675,10 @@ class ROIPreprocessor:
         df.drop(df[df.tumor_class == 'Unknown'].index, inplace=True)
         unique_case_ids = df['case_id'].unique()
 
-        # Convert it back to a DataFrame (optional, but useful for saving)
-        df = pd.DataFrame(unique_case_ids,)
-        df.to_csv(save_path, index=False)
+        df_unique = df.drop_duplicates(subset='case_id')
+
+        df_unique.to_csv(save_path, index=False)
+
 
         print(f'CSV file has {len(df)} rows')
         #
