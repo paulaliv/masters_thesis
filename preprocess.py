@@ -670,7 +670,7 @@ class ROIPreprocessor:
 
         print(f'CSV file has {len(df)} rows')
         #
-        # df_OOD = pd.read_csv(OOD_path)
+        #df_OOD = pd.read_csv(OOD_path)
         # df = pd.concat([df_ID, df_OOD], ignore_index=True)
 
         # Add dice bins column for all data
@@ -914,7 +914,7 @@ def main():
 
     input_folders_gt =  ["/gpfs/home6/palfken/QA_labelsTr/","/gpfs/home6/palfken/QA_labelsTs/"]
     input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
-    input_folder_ft = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+    input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
 
     predicted_mask_folder ="/gpfs/home6/palfken/ood_features/ood_uncertainty_maps/"
 
