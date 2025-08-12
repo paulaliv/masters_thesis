@@ -301,7 +301,7 @@ class QAModel(nn.Module):
     def __init__(self,num_thresholds):
         super().__init__()
 
-        self.mask = Light3DEncoder()
+        self.encoder_img = Light3DEncoder()
         self.encoder_unc= Light3DEncoder()
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.norm = nn.LayerNorm(256)
@@ -317,7 +317,7 @@ class QAModel(nn.Module):
 
 
     def forward(self, mask, uncertainty):
-        x1 = self.encoder_mask(mask)
+        x1 = self.encoder_img(mask)
         x2 = self.encoder_unc(uncertainty)
         merged = torch.cat((x1, x2), dim=1) #[B,128]
         merged = self.norm(merged)
@@ -332,7 +332,7 @@ class QAModel(nn.Module):
 
 
     def extract_mask_features(self, mask):
-        x = self.encoder_mask(mask)
+        x = self.encoder_img(mask)
         return x.view(x.size(0), -1)
 
 def bin_dice_score(dice):
