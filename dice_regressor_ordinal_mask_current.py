@@ -1191,7 +1191,7 @@ def plot_confusion(y_true, y_pred, title, save_path):
     plt.savefig(save_path, dpi=300)
 
 
-def plot_bin_distribution(y_true, y_pred, title):
+def plot_bin_distribution(y_true, y_pred, title, save_path):
     bins = sorted(set(y_true) | set(y_pred))
     df = pd.DataFrame({
         "Actual": pd.Series(y_true).value_counts(normalize=True),
@@ -1207,11 +1207,11 @@ def plot_bin_distribution(y_true, y_pred, title):
     plt.ylabel("Proportion")
     plt.title(title)
     plt.legend()
-    plt.show()
+    plt.savefig(save_path, dpi=300)
 
 
 
-def plot_sankey(y_true, y_pred, title):
+def plot_sankey(y_true, y_pred, title, save_path):
     # Ensure numpy arrays
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
@@ -1259,7 +1259,8 @@ def plot_distribution_kde(y_true, y_pred, title):
     sns.histplot(y_pred, color="red", alpha=0.5, label="Predicted", stat="probability", discrete=True)
     plt.legend()
     plt.title(title)
-    plt.show()
+    plt.savefig(save_path)
+
 
 
 def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
