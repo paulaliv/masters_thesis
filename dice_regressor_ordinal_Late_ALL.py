@@ -343,7 +343,7 @@ class QADataset(Dataset):
             uncertainty= data["uncertainty"]
 
         if self.want_features:
-            return uncertainty, case_id, label_tensor
+            return image, mask, uncertainty, label_tensor, subtype
         else:
             return image, mask, uncertainty, label_tensor, subtype
 
