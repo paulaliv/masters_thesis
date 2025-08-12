@@ -944,7 +944,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
             checkpoint = torch.load(f, map_location=device, weights_only=False)
 
         model = QAModel(num_thresholds=3).to(device)
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint)
         model.eval()
 
         # Validation loader for this fold
