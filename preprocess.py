@@ -659,7 +659,10 @@ class ROIPreprocessor:
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 print(f'Added {case_id}: {dice}')
 
-                df.to_csv(save_path, index=False)
+
+
+                #df.to_csv(save_path, index=False)
+
 
 
         # Load existing results if available
@@ -667,6 +670,12 @@ class ROIPreprocessor:
             df = pd.read_csv(save_path)
         else:
             df = pd.DataFrame(case_stats)
+
+        unique_case_ids = df['case_id'].unique()
+
+        # Convert it back to a DataFrame (optional, but useful for saving)
+        unique_case_ids_df = pd.DataFrame(unique_case_ids, columns=['case_id'])
+        df.to_csv(save_path, index=False)
 
         print(f'CSV file has {len(df)} rows')
         #
@@ -894,10 +903,10 @@ class ROIPreprocessor:
                 print('Saved Image and mask')
             except Exception as e:
                 print(f"Error saving image/mask for case {case_id}: {e}")
-        else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+        # else:
+        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #     #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        #     np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
