@@ -661,7 +661,7 @@ class ROIPreprocessor:
 
 
 
-                #df.to_csv(save_path, index=False)
+                df.to_csv(save_path, index=False)
 
 
 
@@ -675,7 +675,7 @@ class ROIPreprocessor:
         unique_case_ids = df['case_id'].unique()
 
         # Convert it back to a DataFrame (optional, but useful for saving)
-        df = pd.DataFrame(unique_case_ids, columns=['case_id'])
+        df = pd.DataFrame(unique_case_ids,)
         df.to_csv(save_path, index=False)
 
         print(f'CSV file has {len(df)} rows')
