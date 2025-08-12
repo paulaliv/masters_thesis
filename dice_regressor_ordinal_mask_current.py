@@ -1048,7 +1048,7 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
     os.makedirs(image_dir, exist_ok=True)
     image_loc = os.path.join(image_dir, name)
     plt.savefig(image_loc, dpi=300)
-    plt.show()
+
 
 def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
