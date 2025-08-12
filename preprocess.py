@@ -671,10 +671,11 @@ class ROIPreprocessor:
         else:
             df = pd.DataFrame(case_stats)
 
+        df.drop(df[df.tumor_class == 'Unknown'].index, inplace=True)
         unique_case_ids = df['case_id'].unique()
 
         # Convert it back to a DataFrame (optional, but useful for saving)
-        unique_case_ids_df = pd.DataFrame(unique_case_ids, columns=['case_id'])
+        df = pd.DataFrame(unique_case_ids, columns=['case_id'])
         df.to_csv(save_path, index=False)
 
         print(f'CSV file has {len(df)} rows')
