@@ -969,32 +969,38 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
         random_state=42
     )
 
-    # Fit on validation + OOD combined
+    # Combine validation and OOD data
     X_combined = np.concatenate([X_val, X_ood])
+    y_combined = np.concatenate([y_val, y_ood])  # dice bins
+    subtypes_combined = np.concatenate([subtypes_val, subtypes_ood])  # tumor subtypes
 
-
-    y_combined = np.concatenate([y_val, y_ood])
-    subtypes_combined = np.concatenate([subtypes_val, subtypes_ood])
-
-    # Optional PCA preprocessing
+    # Optional PCA if dimensions > 50
     if X_combined.shape[1] > 50:
         pca = PCA(n_components=50, random_state=42)
         X_combined = pca.fit_transform(X_combined)
 
+    # Compute UMAP embedding
     embedding = reducer.fit_transform(X_combined)
-    tumor_to_idx = {
-        "MyxofibroSarcomas":  "MyxofibroSarcomas",
-        "LeiomyoSarcomas": "LeiomyoSarcomas",
-        "DTF": "DTF",
-        "MyxoidlipoSarcoma":  "MyxoidlipoSarcoma",
-        "WDLPS": "WDLPS",
-        "Lipoma (OOD)": "Lipoma",
 
+    # Map each subtype to either ID or OOD category
+    # This dict is subtype -> ID/OOD label
+    tumor_to_idood = {
+        "MyxofibroSarcomas": "ID",
+        "LeiomyoSarcomas": "ID",
+        "DTF": "ID",
+        "MyxoidlipoSarcoma": "ID",
+        "WDLPS": "ID",
+        "Lipoma": "OOD",
+        # add other subtypes if needed
     }
-    idx_to_tumor = {v: k for k, v in tumor_to_idx.items()}
 
-    # Dice bin markers
-    markers = {0: 'o', 1: 's', 2: 'v', 3: 'X'}
+    # Map subtype labels to ID/OOD using vectorized mapping
+    dist = np.array([tumor_to_idood.get(st, 'OOD') for st in subtypes_combined])
+
+    # Define markers for ID/OOD subtypes
+    markers = {'ID': 'o', 'OOD': 's'}
+
+    # Define colors for dice bins (different colors for dice quality bins)
     bin_to_score = {
         0: "Fail (0-0.1)",
         1: "Poor (0.1-0.5)",
@@ -1002,52 +1008,58 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
         3: "Good (>0.7)"
     }
 
-    # Tumor subtype colors
-    unique_subtypes = sorted(set(subtypes_combined))
-    cmap = plt.cm.tab20
-    subtype_to_color = {subtype: cmap(i % 20) for i, subtype in enumerate(unique_subtypes)}
+    # Use a qualitative colormap for dice bins
+    cmap = plt.cm.Set1  # can choose others like tab10, tab20, etc.
+    unique_bins = sorted(set(y_combined))
+    bin_to_color = {bin_val: cmap(i % cmap.N) for i, bin_val in enumerate(unique_bins)}
 
     plt.figure(figsize=(10, 8))
 
-    for dice_bin in sorted(set(y_combined)):
-        for subtype in unique_subtypes:
-            idx = np.where((y_combined == dice_bin) & (subtypes_combined == subtype))[0]
+    # Plot each combination of dice_bin (color) and ID/OOD (marker)
+    for dice_bin in unique_bins:
+        for idood in ['ID', 'OOD']:
+            idx = np.where((y_combined == dice_bin) & (dist == idood))[0]
             if len(idx) == 0:
                 continue
             plt.scatter(
                 embedding[idx, 0],
                 embedding[idx, 1],
-                c=[subtype_to_color[subtype]] * len(idx),
-                marker=markers[dice_bin],
-                label=f"{subtype}-{bin_to_score[dice_bin]}",
+                c=[bin_to_color[dice_bin]] * len(idx),
+                marker=markers[idood],
+                label=f"{idood}-{bin_to_score[dice_bin]}",
                 s=40,
-                alpha=0.8
+                alpha=0.8,
+                edgecolors='k'  # adds black border for visibility
             )
 
-    # Legends
+    # Build legend handles for dice bin colors
     color_handles = [
-        mpatches.Patch(color=subtype_to_color[subtype], label=idx_to_tumor[subtype])
-        for subtype in unique_subtypes
+        mpatches.Patch(color=bin_to_color[bin_val], label=bin_to_score[bin_val])
+        for bin_val in unique_bins
     ]
 
+    # Build legend handles for markers (ID vs OOD)
     marker_handles = [
-        mlines.Line2D([], [], color='black', marker=markers[bin_id], linestyle='None',
-                      markersize=8, label=bin_to_score[bin_id])
-        for bin_id in markers
+        mlines.Line2D([], [], color='black', marker=markers[idood], linestyle='None',
+                      markersize=8, label=idood)
+        for idood in markers
     ]
 
-    legend1 = plt.legend(handles=color_handles, title='Tumor Subtype', loc='upper right')
+    legend1 = plt.legend(handles=color_handles, title='Dice Quality Bin', loc='upper right')
     plt.gca().add_artist(legend1)
-    plt.legend(handles=marker_handles, title='Dice Quality Bin', loc='lower right')
+    plt.legend(handles=marker_handles, title='Sample Type', loc='lower right')
 
     plt.xlabel("UMAP‑1")
     plt.ylabel("UMAP‑2")
-    plt.title("UMAP of Dice QA Features (Subtypes & Quality)")
+    plt.title("UMAP of Dice QA Features (Dice Bins as Colors, ID vs OOD as Markers)")
     plt.tight_layout()
 
     os.makedirs(image_dir, exist_ok=True)
     image_loc = os.path.join(image_dir, name)
     plt.savefig(image_loc, dpi=300)
+    plt.close()
+    # Fit on validation + OOD combined
+
 
 
 def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
@@ -1186,6 +1198,7 @@ def plot_confusion(y_true, y_pred, title, save_path):
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Bin")
     plt.ylabel("Actual Bin")
+    plt.tight_layout()
     plt.title(title)
 
     plt.savefig(save_path, dpi=300)
@@ -1294,8 +1307,8 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
     # --- 2. Confusion matrix ---
     # Use val true labels and ood predicted labels (or vice versa depending on your setup)
     # Here I assume val labels vs ood labels as an example; adjust as needed
-    plot_confusion(ood["preds"], ood["labels"],
-                   title="Confusion Matrix - Val vs OOD",
+    plot_confusion(ood["labels"],ood["preds"],
+                   title="Confusion Matrix - OOD",
                    save_path=os.path.join(plot_dir, "confusion_val_vs_ood.png"))
 
     # --- 3. Bin distribution bar plot ---
