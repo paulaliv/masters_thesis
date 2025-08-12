@@ -592,8 +592,8 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        OOD_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
-        save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
+        save_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
+        #save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
 
         if os.path.exists(save_path):
             from_scratch = False
@@ -664,14 +664,14 @@ class ROIPreprocessor:
 
         # Load existing results if available
         if os.path.exists(save_path):
-            df_ID = pd.read_csv(save_path)
+            df = pd.read_csv(save_path)
         else:
-            df_ID = pd.DataFrame(case_stats)
+            df = pd.DataFrame(case_stats)
 
         print(f'CSV file has {len(df)} rows')
-
-        df_OOD = pd.read_csv(OOD_path)
-        df = pd.concat([df_ID, df_OOD], ignore_index=True)
+        #
+        # df_OOD = pd.read_csv(OOD_path)
+        # df = pd.concat([df_ID, df_OOD], ignore_index=True)
 
         # Add dice bins column for all data
         df['dice_bin'] = self.bin_dice_score(df['dice'])
@@ -896,13 +896,10 @@ class ROIPreprocessor:
                 print('Saved Image and mask')
             except Exception as e:
                 print(f"Error saving image/mask for case {case_id}: {e}")
-
-
-
-        #else:
-            #np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
             #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-            #np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
@@ -916,9 +913,10 @@ def main():
     input_folders_img = ["/gpfs/home6/palfken/QA_imagesTr/","/gpfs/home6/palfken/QA_imagesTs/"]
 
     input_folders_gt =  ["/gpfs/home6/palfken/QA_labelsTr/","/gpfs/home6/palfken/QA_labelsTs/"]
+    input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
+    input_folder_ft = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
 
-
-    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
+    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/ood_uncertainty_maps/"
 
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
@@ -933,7 +931,7 @@ def main():
 
     preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
-    preprocessor.preprocess_folder(input_folders_img, predicted_mask_folder,input_folders_gt, output_folder_data, output_folder_visuals)
+    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 if __name__ == '__main__':
     main()
