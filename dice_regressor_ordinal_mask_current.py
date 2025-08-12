@@ -1131,7 +1131,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
                 all_labels_val.extend(label.cpu().numpy())
                 all_subtypes_val.extend(subtype)
 
-                preds = model(mask, uncertainty)
+                preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
                 all_preds_val.extend(decoded_preds)
 
@@ -1150,7 +1150,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
                 all_labels_ood.extend(label.cpu().numpy())
                 all_subtypes_ood.extend(subtype)
 
-                preds = model(mask, uncertainty)
+                preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
                 all_preds_ood.extend(decoded_preds)
 
@@ -1161,6 +1161,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     all_unc_ood = np.vstack(all_unc_ood)
 
     all_mask_ood = np.vstack(all_mask_ood)
+
 
     return {
         "val": {
