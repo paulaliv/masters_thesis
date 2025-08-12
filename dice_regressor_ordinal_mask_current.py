@@ -1254,7 +1254,7 @@ def plot_sankey(y_true, y_pred, title, save_path):
     fig.show()
 
 
-def plot_distribution_kde(y_true, y_pred, title):
+def plot_distribution_kde(y_true, y_pred, title, save_path):
     sns.histplot(y_true, color="blue", alpha=0.5, label="Actual", stat="probability", discrete=True)
     sns.histplot(y_pred, color="red", alpha=0.5, label="Predicted", stat="probability", discrete=True)
     plt.legend()
@@ -1301,14 +1301,29 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
     # --- 3. Bin distribution bar plot ---
     # Combine all labels for bins
     combined_labels = np.concatenate([val["labels"], ood["labels"]])
-    plot_bin_distribution(combined_labels,
-                  title="Subtype Distribution Val + OOD",
-                  save_path=os.path.join(plot_dir, "bin_dist_val_ood.png"))
+    plot_bin_distribution(val["labels"], val["preds"],
+                  title="Bin Distribution Val + OOD",
+                  save_path=os.path.join(plot_dir, "bin_dist_val.png"))
+    plot_bin_distribution(ood["labels"], ood["preds"],
+                          title="Bin Distribution Val + OOD",
+                          save_path=os.path.join(plot_dir, "bin_dist_ood.png"))
+
+    plot_distribution_kde(val["labels"], val["preds"], title="Bin Distribution Val + OOD",
+                  save_path=os.path.join(plot_dir, "bin_dist_kde_val.png"))
+
+    plot_distribution_kde(ood["labels"], ood["preds"],
+                          title="Bin Distribution Val + OOD",
+                          save_path=os.path.join(plot_dir, "bin_dist_kde_ood.png"))
+
 
     # --- 4. Sankey plot ---
-    plot_sankey(val["labels"], ood["labels"],
+    plot_sankey(ood["preds"], ood["preds"],
                 title="Sankey Plot Val to OOD",
-                save_path=os.path.join(plot_dir, "sankey_val_to_ood.png"))
+                save_path=os.path.join(plot_dir, "sankey_val.png"))
+
+    plot_sankey(val["preds"], val["preds"],
+                title="Sankey Plot Val to OOD",
+                save_path=os.path.join(plot_dir, "sankey_ood.png"))
 
 
     #
