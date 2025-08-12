@@ -907,7 +907,8 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
     subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
     subtypes_df = pd.read_csv(subtypes_csv)
-    dice_df ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
+    dice_dir ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
+    dice_df = pd.read_csv(dice_dir)
 
     lipoma_ids = subtypes_df.loc[
         subtypes_df["Final_Classification"] == "Lipoma",
