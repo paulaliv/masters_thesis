@@ -916,7 +916,8 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     ].values
 
     # Filter dice_df to only Lipoma rows
-    dice_df_lipoma = dice_df[dice_df["class_name"] == "Lipoma"]
+    dice_df_lipoma = dice_df[dice_df["tumor_class"] == "Lipoma"]
+    print(f"{len(lipoma_ids),len(dice_df_lipoma)} OOD cases found")
 
     ood_dataset = QADataset(
         case_ids=lipoma_ids,
