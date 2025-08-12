@@ -941,7 +941,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
     for fold_idx, model_path in enumerate(fold_paths):
         with gzip.open(model_path, 'rb') as f:
-            checkpoint = torch.load(f, map_location=device)
+            checkpoint = torch.load(f, map_location=device, weights_only=False)
 
         model = QAModel(num_thresholds=3).to(device)
         model.load_state_dict(checkpoint['state_dict'])
