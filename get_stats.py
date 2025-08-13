@@ -232,8 +232,8 @@ def main():
         plt.close()
 
         from sklearn.metrics import roc_auc_score, average_precision_score
-        y_true = np.concatenate([np.zeros(len(id_unc)), np.ones(len(ood_unc))])
-        scores = np.concatenate([id_unc, ood_unc])
+        y_true = np.concatenate([np.zeros(len(id_unc)), np.ones(len(ood_unc_clean))])
+        scores = np.concatenate([id_unc, ood_unc_clean])
 
         roc = roc_auc_score(y_true, scores)
         pr = average_precision_score(y_true, scores)
