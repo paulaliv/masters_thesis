@@ -202,7 +202,7 @@ def main():
     dice_bins = sorted(df['dice_bin'].unique())
     colors = {'In-Distribution': 'blue', 'OOD': 'red'}
     # For simplicity, if multiple pred_mean_unc columns exist, take the first
-
+    metrics = ['EPKL','Confidence','Entropy','Mutual-Info']
     for idx, metric in enumerate(unc_cols_pred):
         print(f'METRICS FOR {metric}')
         unc_col = unc_cols_pred[idx]
@@ -251,7 +251,7 @@ def main():
         plt.figure(figsize=(10, 6))
         sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot, split=True, inner='quartile',
                        palette='Set2')
-        plt.title(f'Predicted Mean Uncertainty by Dice Bin: {metric}')
+        plt.title(f'Predicted Mean {metrics[idx]} by Dice Bin')
         plt.xlabel('Dice Bin')
         plt.ylabel('Predicted Mean Uncertainty')
         plt.legend(title='Distribution')
@@ -276,7 +276,7 @@ def main():
             plt.axvline(ood_unc.mean(), color=colors['OOD'], linestyle='--')
 
             plt.title(f'Dice Bin: {bin_label}')
-            plt.xlabel('Predicted Mean Uncertainty')
+            plt.xlabel(f'Predicted Mean {metrics[idx]}')
             plt.ylabel('Density')
             if i == 0:
                 plt.legend()
