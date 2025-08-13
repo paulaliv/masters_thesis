@@ -1318,9 +1318,9 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
     # Alias for val and ood sets
     val = results["val"]
     print(f'Val preds unique: {val['preds']}')
-    print(f'OOD preds unique: {ood['preds']}')
-    ood = results["ood"]
 
+    ood = results["ood"]
+    print(f'OOD preds unique: {ood['preds']}')
     # --- 1. UMAP plots for img, unc, mask ---
 
     plot_UMAP_1(val["unc"], val["labels"],
