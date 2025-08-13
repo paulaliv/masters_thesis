@@ -90,10 +90,8 @@ def preprocess_folder(data, splits):
             ratio_pred_gt_unc = pred_mean_unc / gt_mean_unc if gt_mean_unc and not np.isnan(gt_mean_unc) else np.nan
 
             # Store with prefixed keys
-            stats_dict[f"{umap_type}_gt_mean_unc"] = gt_mean_unc
             stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
             stats_dict[f"{umap_type}_full_mean_unc"] = full_mean_unc
-            stats_dict[f"{umap_type}_gt_median_unc"] = gt_median_unc
             stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
             stats_dict[f"{umap_type}_gt_std_unc"] = gt_std_unc
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
