@@ -884,8 +884,8 @@ class ROIPreprocessor:
 
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            # else:
-            #     np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
         #
         # if resampled_pred.sum() > 0:
         #     self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
