@@ -107,6 +107,7 @@ def preprocess_folder_1(data):
     #dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
     case_ids = dice_df["case_id"].values
+    dice_scores = dice_df["dice"].values
     # image_paths = []
     # for idir in image_dirs:
     #     image_paths.extend(glob.glob(os.path.join(idir, '*_0000.nii.gz')))
@@ -116,11 +117,11 @@ def preprocess_folder_1(data):
 
     umap_types = ["epkl", "confidence", "entropy", "mutual_info"]  # Your uncertainty maps
 
-    for case_id in case_ids:
+    for idx,case_id in enumerate(case_ids):
         stats_dict = {}
 
         # Load dice score from CSV if present, else NaN
-        dice_score = dice_df.loc[case_id, 'dice']
+        dice_score = dice_scores[idx]
         print(f"{case_id}: {dice_score}")
         stats_dict['dice'] = dice_score
 
