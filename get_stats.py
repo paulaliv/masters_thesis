@@ -99,8 +99,11 @@ def preprocess_folder_1(data):
 
     #clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df = pd.read_csv(ood_dir)
-    print(df.columns)
-    dice_df = df[df['tumor_class'] == 'Lipoma']
+    df_unique = df.drop_duplicates(subset='case_id')
+
+    df_unique.to_csv(ood_dir, index=False)
+
+    dice_df = df_unique[df_unique['tumor_class'] == 'Lipoma']
     #dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
     case_ids = dice_df["case_id"].values
@@ -117,7 +120,7 @@ def preprocess_folder_1(data):
         stats_dict = {}
 
         # Load dice score from CSV if present, else NaN
-        dice_score = dice_df.loc[case_id, 'dice'] if case_id in dice_df.index else np.nan
+        dice_score = dice_df.loc[case_id, 'dice']
         stats_dict['dice'] = dice_score
 
         # Load predicted mask and ground truth mask
