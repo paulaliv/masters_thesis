@@ -175,6 +175,7 @@ def preprocess_folder_1(data):
 def main():
 
     data = "/gpfs/home6/palfken/QA_dataTr_final/"
+    data1 = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
     with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
         splits = json.load(f)
 
@@ -186,9 +187,9 @@ def main():
 
     df['dice_bin'] = bin_dice_score(df['dice'].values)
 
-    ood_stats = preprocess_folder_1(data)
+    ood_stats = preprocess_folder_1(data1)
 
-    df_ood = pd.DataFrame.from_dict(id_stats, orient='index')
+    df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
 
     df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
