@@ -213,7 +213,8 @@ def main():
 
         ood_unc = df_ood[unc_col_ood].values
         print(df_ood[unc_col_ood].isna().sum())
-        df_ood.isna().drop()
+        df_ood.dropna()
+
         print(df_ood[unc_col_ood].isna().sum())
         kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
         log_prob = kde.score_samples(ood_unc[:, None])
