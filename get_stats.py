@@ -55,14 +55,14 @@ def preprocess_folder(data, splits):
 
         # Load predicted mask and ground truth mask
         pred_path = os.path.join(data, f"{case_id}_pred.npy")
-        mask_path = os.path.join(data, f"{case_id}_mask.npy")
 
-        if not (os.path.exists(pred_path) and os.path.exists(mask_path)):
+
+        if not (os.path.exists(pred_path)):
             print(f"Missing mask or pred for case {case_id}, skipping.")
             continue
 
         resampled_pred = np.load(pred_path)
-        resampled_mask = np.load(mask_path)
+
 
         # For each uncertainty map, load and compute statistics
         for umap_type in umap_types:
@@ -73,28 +73,21 @@ def preprocess_folder(data, splits):
 
             resampled_umap = np.load(umap_path)
 
-            gt_mask = (resampled_mask > 0)
             pred_mask = (resampled_pred > 0)
 
-            gt_mean_unc = np.mean(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
             pred_mean_unc = np.mean(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
             full_mean_unc = np.mean(resampled_umap)
 
-            gt_median_unc = np.median(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+
             pred_median_unc = np.median(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
-            gt_std_unc = np.std(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
             pred_std_unc = np.std(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
-
-            ratio_pred_gt_unc = pred_mean_unc / gt_mean_unc if gt_mean_unc and not np.isnan(gt_mean_unc) else np.nan
 
             # Store with prefixed keys
             stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
             stats_dict[f"{umap_type}_full_mean_unc"] = full_mean_unc
             stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
-            stats_dict[f"{umap_type}_gt_std_unc"] = gt_std_unc
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
-            stats_dict[f"{umap_type}_ratio_pred_gt_unc"] = ratio_pred_gt_unc
 
         all_stats[case_id] = stats_dict
         return all_stats
@@ -129,14 +122,14 @@ def preprocess_folder_1(data):
 
         # Load predicted mask and ground truth mask
         pred_path = os.path.join(data, f"{case_id}_pred.npy")
-        mask_path = os.path.join(data, f"{case_id}_mask.npy")
 
-        if not (os.path.exists(pred_path) and os.path.exists(mask_path)):
+
+        if not (os.path.exists(pred_path)):
             print(f"Missing mask or pred for case {case_id}, skipping.")
             continue
 
         resampled_pred = np.load(pred_path)
-        resampled_mask = np.load(mask_path)
+
 
         # For each uncertainty map, load and compute statistics
         for umap_type in umap_types:
@@ -147,28 +140,25 @@ def preprocess_folder_1(data):
 
             resampled_umap = np.load(umap_path)
 
-            gt_mask = (resampled_mask > 0)
             pred_mask = (resampled_pred > 0)
 
-            gt_mean_unc = np.mean(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+
             pred_mean_unc = np.mean(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
             full_mean_unc = np.mean(resampled_umap)
 
-            gt_median_unc = np.median(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
+
             pred_median_unc = np.median(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
-            gt_std_unc = np.std(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
-            pred_std_unc = np.std(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
-            ratio_pred_gt_unc = pred_mean_unc / gt_mean_unc if gt_mean_unc and not np.isnan(gt_mean_unc) else np.nan
+            pred_std_unc = np.std(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
             # Store with prefixed keys
             stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
             stats_dict[f"{umap_type}_full_mean_unc"] = full_mean_unc
             stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
-            stats_dict[f"{umap_type}_gt_std_unc"] = gt_std_unc
+
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
-            stats_dict[f"{umap_type}_ratio_pred_gt_unc"] = ratio_pred_gt_unc
+
 
         all_stats[case_id] = stats_dict
         return all_stats
