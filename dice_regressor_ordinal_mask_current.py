@@ -1241,6 +1241,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
                 preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
+                print(decoded_preds.unique())
                 all_preds_ood.extend(decoded_preds)
 
 
