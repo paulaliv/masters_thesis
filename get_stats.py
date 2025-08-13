@@ -108,7 +108,7 @@ def preprocess_folder_1(data):
     df = pd.read_csv(ood_dir)
     print(df.columns)
     dice_df = df[df['tumor_class'] == 'Lipoma']
-    dice_df.set_index('case_id', inplace=True)  # for quick lookup
+    #dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
     case_ids = dice_df["case_id"].values
     # image_paths = []
