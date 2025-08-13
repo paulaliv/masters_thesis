@@ -107,7 +107,7 @@ def preprocess_folder(data, splits):
 
     ood_dir =  "/gpfs/home6/palfken/Dice_scores_OOD_30.csv"
     df_ood = pd.read_csv(ood_dir)
-    df_ood['dice_bin'] = bin_dice_score(df['dice'].values)
+    df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
     # Find all uncertainty-related columns
