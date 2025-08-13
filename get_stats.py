@@ -121,6 +121,7 @@ def preprocess_folder_1(data):
 
         # Load dice score from CSV if present, else NaN
         dice_score = dice_df.loc[case_id, 'dice']
+        print(f"{case_id}: {dice_score}")
         stats_dict['dice'] = dice_score
 
         # Load predicted mask and ground truth mask
