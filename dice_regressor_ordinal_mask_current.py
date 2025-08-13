@@ -982,6 +982,9 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
     # Compute UMAP embedding
     embedding = reducer.fit_transform(X_combined)
 
+    jitter_strength = 0.5  # tweak as needed
+    embedding += np.random.normal(scale=jitter_strength, size=embedding.shape)
+
     # Map each subtype to either ID or OOD category
     # This dict is subtype -> ID/OOD label
     tumor_to_idood = {
@@ -1052,6 +1055,80 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
     plt.xlabel("UMAP‑1")
     plt.ylabel("UMAP‑2")
     plt.title("UMAP of Dice QA Features (Dice Bins as Colors, ID vs OOD as Markers)")
+    plt.tight_layout()
+
+    os.makedirs(image_dir, exist_ok=True)
+    image_loc = os.path.join(image_dir, name)
+    plt.savefig(image_loc, dpi=300)
+    plt.close()
+    # Fit on validation + OOD combined
+
+def plot_UMAP_1(X_val, y_val, neighbours, m, name, image_dir):
+
+    reducer = umap.UMAP(
+        n_components=2,
+        n_neighbors=neighbours,
+        min_dist=0.1,
+        metric=m,
+        random_state=42
+    )
+
+
+    # Optional PCA if dimensions > 50
+    if X_val.shape[1] > 50:
+        pca = PCA(n_components=50, random_state=42)
+        X_val = pca.fit_transform(X_val)
+
+    # Compute UMAP embedding
+    embedding = reducer.fit_transform(X_val)
+
+    jitter_strength = 0.5  # tweak as needed
+    embedding +=  np.random.normal(scale=jitter_strength, size=embedding.shape)
+
+    # Define colors for dice bins (different colors for dice quality bins)
+    bin_to_score = {
+        0: "Fail (0-0.1)",
+        1: "Poor (0.1-0.5)",
+        2: "Moderate (0.5-0.7)",
+        3: "Good (>0.7)"
+    }
+
+    # Use a qualitative colormap for dice bins
+    cmap = plt.cm.Set1  # can choose others like tab10, tab20, etc.
+    unique_bins = sorted(set(y_val))
+    bin_to_color = {bin_val: cmap(i % cmap.N) for i, bin_val in enumerate(unique_bins)}
+
+    plt.figure(figsize=(10, 8))
+
+
+    # Plot each dice_bin
+    for dice_bin in unique_bins:
+        idx = np.where(y_val == dice_bin)[0]
+        if len(idx) == 0:
+            continue
+        plt.scatter(
+            embedding[idx, 0],
+            embedding[idx, 1],
+            c=[bin_to_color[dice_bin]] * len(idx),
+            label=f"{bin_to_score.get(dice_bin, dice_bin)}",
+            s=40,
+            alpha=0.8,
+            edgecolors='k'
+        )
+
+    # Build legend handles for dice bin colors
+    color_handles = [
+        mpatches.Patch(color=bin_to_color[bin_val], label=bin_to_score[bin_val])
+        for bin_val in unique_bins
+    ]
+
+    legend1 = plt.legend(handles=color_handles, title='Dice Quality Bin', loc='upper right')
+    plt.gca().add_artist(legend1)
+    plt.legend(handles=color_handles, title='Sample Type', loc='lower right')
+
+    plt.xlabel("UMAP‑1")
+    plt.ylabel("UMAP‑2")
+    plt.title("UMAP of Dice QA Features (Dice Bins as Colors)")
     plt.tight_layout()
 
     os.makedirs(image_dir, exist_ok=True)
@@ -1224,57 +1301,6 @@ def plot_bin_distribution(y_true, y_pred, title, save_path):
 
 
 
-def plot_sankey(y_true, y_pred, title, save_path):
-    # Ensure numpy arrays
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-
-    bins = sorted(set(y_true) | set(y_pred))
-
-    # Create label list: actual bins first, then predicted bins
-    labels = [f"Actual {b}" for b in bins] + [f"Pred {b}" for b in bins]
-
-    # Build source-target-flow lists
-    source = []
-    target = []
-    value = []
-
-    for i, b_true in enumerate(bins):
-        for j, b_pred in enumerate(bins):
-            count = np.sum((y_true == b_true) & (y_pred == b_pred))
-            if count > 0:
-                source.append(i)               # actual bin index
-                target.append(len(bins) + j)   # predicted bin index (shifted)
-                value.append(count)
-
-    # Create Sankey diagram
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=20,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=labels,
-            color=["#636EFA"]*len(bins) + ["#EF553B"]*len(bins)  # blue for actual, red for pred
-        ),
-        link=dict(
-            source=source,
-            target=target,
-            value=value
-        )
-    )])
-
-    fig.update_layout(title_text=title, font_size=12)
-    fig.show()
-
-
-def plot_distribution_kde(y_true, y_pred, title, save_path):
-    sns.histplot(y_true, color="blue", alpha=0.5, label="Actual", stat="probability", discrete=True)
-    sns.histplot(y_pred, color="red", alpha=0.5, label="Predicted", stat="probability", discrete=True)
-    plt.legend()
-    plt.title(title)
-    plt.savefig(save_path)
-
-
 
 def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
     results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=uncertainty_metric, df= df, splits=splits)
@@ -1294,14 +1320,22 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
 
     # --- 1. UMAP plots for img, unc, mask ---
 
+    plot_UMAP_1(val["unc"], val["labels"],
+              neighbours=15, m="cosine",
+              name="unc_umap1.png", image_dir=plot_dir)
+
+    plot_UMAP_1(val["mask"], val["labels"],
+              neighbours=15, m="cosine",
+              name="mask_umap1.png", image_dir=plot_dir)
+
     plot_UMAP(val["unc"], val["labels"], val["subtypes"],
               ood["unc"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
+              neighbours=15, m="cosine",
               name="unc_umap.png", image_dir=plot_dir)
 
     plot_UMAP(val["mask"], val["labels"], val["subtypes"],
               ood["mask"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
+              neighbours=15, m="cosine",
               name="mask_umap.png", image_dir=plot_dir)
 
     # --- 2. Confusion matrix ---
@@ -1321,25 +1355,7 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
                           title="Bin Distribution Val + OOD",
                           save_path=os.path.join(plot_dir, "bin_dist_ood.png"))
 
-    plot_distribution_kde(val["labels"], val["preds"], title="Bin Distribution Val + OOD",
-                  save_path=os.path.join(plot_dir, "bin_dist_kde_val.png"))
-
-    plot_distribution_kde(ood["labels"], ood["preds"],
-                          title="Bin Distribution Val + OOD",
-                          save_path=os.path.join(plot_dir, "bin_dist_kde_ood.png"))
-
-
-    # --- 4. Sankey plot ---
-    plot_sankey(ood["preds"], ood["preds"],
-                title="Sankey Plot Val to OOD",
-                save_path=os.path.join(plot_dir, "sankey_val.png"))
-
-    plot_sankey(val["preds"], val["preds"],
-                title="Sankey Plot Val to OOD",
-                save_path=os.path.join(plot_dir, "sankey_ood.png"))
-
-
-    #
+  #
     # X_train = np.concatenate(all_features_train, axis=0)
     # y_train = np.array(all_labels_train)
     # from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
