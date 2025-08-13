@@ -185,6 +185,7 @@ def main():
 
     df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
     print(f'OOD FOLDER: {len(df_ood)}')
+    print(df_ood.head(10))
 
     df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
