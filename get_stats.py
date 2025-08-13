@@ -118,9 +118,9 @@ def preprocess_folder(data, splits):
     dice_bins = sorted(df['dice_bin'].unique())
     colors = {'In-Distribution': 'blue', 'OOD': 'red'}
     # For simplicity, if multiple pred_mean_unc columns exist, take the first
-    for metric in enumerate(unc_cols_pred):
-        unc_col = unc_cols_pred[metric]
-        unc_col_ood = unc_cols_pred_ood[metric]
+    for idx,metric in enumerate(unc_cols_pred):
+        unc_col = unc_cols_pred[idx]
+        unc_col_ood = unc_cols_pred_ood[idx]
 
         # --- Combine for plotting ---
         df_plot = pd.concat([
@@ -138,6 +138,7 @@ def preprocess_folder(data, splits):
         plt.legend(title='Distribution')
         plt.tight_layout()
         plt.savefig(f"/gpfs/home6/palfken/violin_{metric}.png")
+        plt.close()
 
 
 
@@ -162,6 +163,7 @@ def preprocess_folder(data, splits):
 
         plt.tight_layout()
         plt.savefig(f"/gpfs/home6/palfken/hist_{metric}.png")
+        plt.close()
 
 
     # for col in unc_cols_pred:
