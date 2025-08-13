@@ -592,7 +592,7 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/Dice_scores_OOD.csv"
+        save_path = "/gpfs/home6/palfken/Dice_scores_OOD_30.csv"
         #save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
 
         if os.path.exists(save_path):
@@ -906,10 +906,10 @@ class ROIPreprocessor:
                 print('Saved Image and mask')
             except Exception as e:
                 print(f"Error saving image/mask for case {case_id}: {e}")
-        # else:
-        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-        #     #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-        #     np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
@@ -926,11 +926,11 @@ def main():
     input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
     input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
 
-    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/ood_uncertainty_maps/"
+    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/ood_umaps_30/"
 
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/ood_features/ood_uncertainty_maps_cropped/"
+    output_folder_data = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
     output_folder_visuals = "/gpfs/home6/palfken/OOD_visuals/"
 
     os.makedirs(output_folder_data, exist_ok=True)
