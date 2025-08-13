@@ -1241,7 +1241,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
                 preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
-                print(decoded_preds.unique())
+
                 all_preds_ood.extend(decoded_preds)
 
 
@@ -1317,6 +1317,8 @@ def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir
 
     # Alias for val and ood sets
     val = results["val"]
+    print(f'Val preds unique: {val['preds']}')
+    print(f'OOD preds unique: {ood['preds']}')
     ood = results["ood"]
 
     # --- 1. UMAP plots for img, unc, mask ---
