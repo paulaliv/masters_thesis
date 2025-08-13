@@ -208,16 +208,18 @@ def main():
         unc_col = unc_cols_pred[idx]
         unc_col_ood = unc_cols_pred_ood[idx]
 
+        # Extract and clean ID values
         id_unc = df[unc_col].values
-        print(df[unc_col].isna().sum())
+        print("NaNs in ID:", np.isnan(id_unc).sum())
+        id_unc_clean = id_unc[~np.isnan(id_unc)]
 
-
-        print(df_ood[unc_col_ood].isna().sum())
-        df_ood[unc_col_ood].dropna()
+        # Extract and clean OOD values
         ood_unc = df_ood[unc_col_ood].values
-        print(df_ood[unc_col_ood].isna().sum())
+        print("NaNs in OOD before cleaning:", np.isnan(ood_unc).sum())
         ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
-        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
+        print("NaNs in OOD after cleaning:", np.isnan(ood_unc_clean).sum())
+
+        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc_clean[:, None])
         log_prob = kde.score_samples(ood_unc_clean[:, None])
         log_prob_id = kde.score_samples(id_unc[:, None])
 
