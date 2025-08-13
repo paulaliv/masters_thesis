@@ -177,19 +177,17 @@ def main():
     id_stats = preprocess_folder(data, splits)
 
     df = pd.DataFrame.from_dict(id_stats, orient='index')
+    print(f'ID FOLDER: {len(df)}')
 
     df['dice_bin'] = bin_dice_score(df['dice'].values)
 
     ood_stats = preprocess_folder_1(data1)
 
     df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
+    print(f'OOD FOLDER: {len(df_ood)}')
 
     df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
-
-
-    # Find all uncertainty-related columns
-    unc_cols = [c for c in df.columns if c.endswith('unc')]
 
     # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
     unc_cols_pred = [c for c in df.columns if c.endswith('pred_mean_unc')]
@@ -205,7 +203,10 @@ def main():
         unc_col_ood = unc_cols_pred_ood[idx]
 
         id_unc = df[unc_col].values
+        print(id_unc.isna().sum())
+
         ood_unc = df_ood[unc_col_ood].values
+        print(ood_unc.isna().sum())
 
         kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
         log_prob = kde.score_samples(ood_unc[:, None])
