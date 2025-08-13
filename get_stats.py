@@ -104,7 +104,8 @@ def preprocess_folder(data, splits):
     df = pd.DataFrame.from_dict(all_stats, orient='index')
 
     df['dice_bin'] = bin_dice_score(df['dice'].values)
-
+    ood_dir =  "/gpfs/home6/palfken/Dice_scores_OOD_30.csv"
+    df_ood = pd.read_csv(ood_dir)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
     # Find all uncertainty-related columns
@@ -112,41 +113,69 @@ def preprocess_folder(data, splits):
 
     # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
     unc_cols_pred = [c for c in df.columns if c.endswith('pred_mean_unc')]
+    unc_cols_pred_ood = [c for c in df_ood.columns if c.endswith('pred_mean_unc')]
 
-    # 1) Scatter plots with regression lines and correlation coeffs
-    plt.figure(figsize=(16, 12))
-    for i, col in enumerate(unc_cols_pred):
-        plt.subplot(2, 2, i + 1)
-        sns.regplot(x=df[col], y=df['dice'], scatter_kws={'alpha': 0.5})
-        plt.xlabel(col)
-        plt.ylabel('Dice Score')
-        plt.title(f'Dice vs {col}')
+    dice_bins = sorted(df['dice_bin'].unique())
+    colors = {'In-Distribution': 'blue', 'OOD': 'red'}
+    # For simplicity, if multiple pred_mean_unc columns exist, take the first
+    for metric in enumerate(unc_cols_pred):
+        unc_col = unc_cols_pred[metric]
+        unc_col_ood = unc_cols_pred_ood[metric]
 
-        # Calculate correlations
-        pearson_corr, _ = pearsonr(df[col].dropna(), df.loc[df[col].notna(), 'dice'])
-        spearman_corr, _ = spearmanr(df[col].dropna(), df.loc[df[col].notna(), 'dice'])
-        plt.annotate(f'Pearson r = {pearson_corr:.2f}\nSpearman r = {spearman_corr:.2f}', xy=(0.05, 0.85),
-                     xycoords='axes fraction')
+        # --- Combine for plotting ---
+        df_plot = pd.concat([
+            pd.DataFrame({'uncertainty': df[unc_col], 'dice_bin': df['dice_bin'], 'dist': 'In-Distribution'}),
+            pd.DataFrame({'uncertainty': df_ood[unc_col_ood], 'dice_bin': df_ood['dice_bin'], 'dist': 'OOD'})
+        ])
 
-    plt.tight_layout()
+        # --- Plot ---
+        plt.figure(figsize=(10, 6))
+        sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot, split=True, inner='quartile',
+                       palette='Set2')
+        plt.title('Predicted Mean Uncertainty by Dice Bin')
+        plt.xlabel('Dice Bin')
+        plt.ylabel('Predicted Mean Uncertainty')
+        plt.legend(title='Distribution')
+        plt.tight_layout()
+        plt.savefig(f"/gpfs/home6/palfken/violin_{metric}.png")
 
-    plt.savefig("/gpfs/home6/palfken/correlation.png")
 
-    # 2) Dice bins bar plot with error bars for uncertainty metrics
-    plt.figure(figsize=(12, 8))
 
-    for col in unc_cols_pred:
-        means = df.groupby('dice_bin')[col].mean()
-        stds = df.groupby('dice_bin')[col].std()
+        plt.figure(figsize=(12, 6))
 
-        plt.errorbar(means.index, means.values, yerr=stds.values, label=col, capsize=5, marker='o')
+        for i, bin_label in enumerate(dice_bins):
+            plt.subplot(1, len(dice_bins), i + 1)
 
-    plt.xlabel('Dice bin')
-    plt.ylabel('Mean Uncertainty ± std')
-    plt.title('Uncertainty metrics by Dice bins')
-    plt.legend()
-    plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
-    plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
+            # Select ID and OOD samples for this bin
+            id_unc = df.loc[df['dice_bin'] == bin_label, unc_col]
+            ood_unc = df_ood.loc[df_ood['dice_bin'] == bin_label, unc_col_ood]
+
+            # Plot histograms
+            plt.hist(id_unc, bins=20, alpha=0.6, color=colors['In-Distribution'], label='ID')
+            plt.hist(ood_unc, bins=20, alpha=0.6, color=colors['OOD'], label='OOD')
+
+            plt.title(f'Dice Bin: {bin_label}')
+            plt.xlabel('Predicted Mean Uncertainty')
+            plt.ylabel('Count')
+            if i == 0:
+                plt.legend()
+
+        plt.tight_layout()
+        plt.savefig(f"/gpfs/home6/palfken/hist_{metric}.png")
+
+
+    # for col in unc_cols_pred:
+    #     means = df.groupby('dice_bin')[col].mean()
+    #     stds = df.groupby('dice_bin')[col].std()
+    #
+    #     plt.errorbar(means.index, means.values, yerr=stds.values, label=col, capsize=5, marker='o')
+    #
+    # plt.xlabel('Dice bin')
+    # plt.ylabel('Mean Uncertainty ± std')
+    # plt.title('Uncertainty metrics by Dice bins')
+    # plt.legend()
+    # plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
+    # plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
 
     print("\nUncertainty stats per Dice bin:")
     for bin_id, bin_group in df.groupby('dice_bin'):

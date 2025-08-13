@@ -602,62 +602,62 @@ class ROIPreprocessor:
             from_scratch = True
             df = pd.DataFrame()
 
-        # for img_path in image_paths:
-        #     case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
-        #     self.case_id = case_id
-        #
-        #     mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-        #     gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-        #
-        #     # # Find gt_path by searching in all gt_dirs (stop at first found)
-        #     # gt_path = None
-        #     # for gdir in gt_dirs:
-        #     #     candidate = os.path.join(gdir, f"{case_id}.nii.gz")
-        #     #     if os.path.exists(candidate):
-        #     #         gt_path = candidate
-        #     #         break
-        #     #
-        #     # if gt_path is None:
-        #     #     print(f"Warning: GT file for case {case_id} not found in any gt_dirs, skipping")
-        #     #     continue
-        #     pred = nib.load(mask_path)
-        #     gt = nib.load(gt_path)
-        #     dice = self.compute_dice(gt, pred)
-        #     print(f'Dice score: {dice}')
-        #
-        #
-        #     subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
-        #     if not subtype_row.empty:
-        #         tumor_class = subtype_row.iloc[0]['Final_Classification']
-        #         tumor_class = tumor_class.strip()
-        #     else:
-        #         tumor_class = 'Unknown'
-        #         print(f'Case id {case_id}: no subtype in csv file!')
-        #     self.subtype = tumor_class
-        #     if os.path.exists(img_path):
-        #         if self.save_umaps:
-        #             umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-        #             subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
-        #             new_row = {
-        #                 "case_id": case_id,
-        #                 "tumor_class": tumor_class,
-        #                 "dice": dice,
-        #                 **subject_stats
-        #             }
-        #
-        #
-        #         else:
-        #            features = self.preprocess_case(img_path, gt_path, output_dir)
-        #            filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
-        #
-        #            new_row = {
-        #                "case_id": case_id,
-        #                "tumor_class": tumor_class,
-        #                **filtered_features}
-        #
-        #
-        #         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        #         print(f'Added {case_id}: {dice}')
+        for img_path in image_paths:
+            case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
+            self.case_id = case_id
+
+            mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
+            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
+
+            # # Find gt_path by searching in all gt_dirs (stop at first found)
+            # gt_path = None
+            # for gdir in gt_dirs:
+            #     candidate = os.path.join(gdir, f"{case_id}.nii.gz")
+            #     if os.path.exists(candidate):
+            #         gt_path = candidate
+            #         break
+            #
+            # if gt_path is None:
+            #     print(f"Warning: GT file for case {case_id} not found in any gt_dirs, skipping")
+            #     continue
+            pred = nib.load(mask_path)
+            gt = nib.load(gt_path)
+            dice = self.compute_dice(gt, pred)
+            print(f'Dice score: {dice}')
+
+
+            subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
+            if not subtype_row.empty:
+                tumor_class = subtype_row.iloc[0]['Final_Classification']
+                tumor_class = tumor_class.strip()
+            else:
+                tumor_class = 'Unknown'
+                print(f'Case id {case_id}: no subtype in csv file!')
+            self.subtype = tumor_class
+            if os.path.exists(img_path):
+                if self.save_umaps:
+                    umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
+                    subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    new_row = {
+                        "case_id": case_id,
+                        "tumor_class": tumor_class,
+                        "dice": dice,
+                        **subject_stats
+                    }
+
+
+                else:
+                   features = self.preprocess_case(img_path, gt_path, output_dir)
+                   filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
+
+                   new_row = {
+                       "case_id": case_id,
+                       "tumor_class": tumor_class,
+                       **filtered_features}
+
+
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                print(f'Added {case_id}: {dice}')
 
 
 
