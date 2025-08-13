@@ -216,8 +216,9 @@ def main():
         df_ood[unc_col_ood].dropna()
         ood_unc = df_ood[unc_col_ood].values
         print(df_ood[unc_col_ood].isna().sum())
+        ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
         kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
-        log_prob = kde.score_samples(ood_unc[:, None])
+        log_prob = kde.score_samples(ood_unc_clean[:, None])
         log_prob_id = kde.score_samples(id_unc[:, None])
 
         plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
