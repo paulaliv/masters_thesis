@@ -109,7 +109,7 @@ def preprocess_folder_1(data):
     dice_df = df[df['tumor_class'] == 'Lipoma']
     dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
-    case_ids = dice_df["case_id"].values()
+    case_ids = dice_df["case_id"].values
     # image_paths = []
     # for idir in image_dirs:
     #     image_paths.extend(glob.glob(os.path.join(idir, '*_0000.nii.gz')))
@@ -295,7 +295,7 @@ def main():
     # plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
     # plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
 
-    print("\nUncertainty stats per Dice bin:")
+    print("\nUncertainty stats per Dice bin:ID")
     for bin_id, bin_group in df.groupby('dice_bin'):
         # Map bin_id to readable range
         if bin_id == 0:
@@ -308,8 +308,29 @@ def main():
             bin_range = "> 0.7"
 
         print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
-        if len(bin_group) > 0 and unc_cols:
+        if len(bin_group) > 0 and unc_cols_pred:
             for col in unc_cols_pred:
+                col_mean = bin_group[col].mean()
+                col_std = bin_group[col].std()
+                print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+        else:
+            print("  No samples in this bin.")
+
+    print("\nUncertainty stats per Dice bin:OOD")
+    for bin_id, bin_group in df_ood.groupby('dice_bin'):
+        # Map bin_id to readable range
+        if bin_id == 0:
+            bin_range = f"<= 0.1"
+        elif bin_id == 1:
+            bin_range = "0.1 < dice <= 0.5"
+        elif bin_id == 2:
+            bin_range = "0.5 < dice <= 0.7"
+        else:
+            bin_range = "> 0.7"
+
+        print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
+        if len(bin_group) > 0 and unc_cols_pred_ood:
+            for col in unc_cols_pred_ood:
                 col_mean = bin_group[col].mean()
                 col_std = bin_group[col].std()
                 print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
