@@ -15,8 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr, spearmanr
-
-
+from sklearn.neighbors import KernelDensity
 
 def bin_dice_score( dice):
     epsilon = 1e-8
@@ -109,32 +108,64 @@ def preprocess_folder(data, splits):
     df_ood = pd.read_csv(ood_dir)
     df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
+    df_ood_lipoma = df_ood[df_ood['tumor_class'] == 'Lipoma']
 
     # Find all uncertainty-related columns
     unc_cols = [c for c in df.columns if c.endswith('unc')]
 
     # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
     unc_cols_pred = [c for c in df.columns if c.endswith('pred_mean_unc')]
-    unc_cols_pred_ood = [c for c in df_ood.columns if c.endswith('pred_mean_unc')]
+    unc_cols_pred_ood = [c for c in df_ood_lipoma.columns if c.endswith('pred_mean_unc')]
 
     dice_bins = sorted(df['dice_bin'].unique())
     colors = {'In-Distribution': 'blue', 'OOD': 'red'}
     # For simplicity, if multiple pred_mean_unc columns exist, take the first
+
+    from sklearn.neighbors import KernelDensity
+    import numpy as np
+
+
     for idx,metric in enumerate(unc_cols_pred):
+        print(f'METRICS FOR {metric}')
         unc_col = unc_cols_pred[idx]
         unc_col_ood = unc_cols_pred_ood[idx]
+
+        id_unc = df[unc_col].values
+        ood_unc = df_ood_lipoma[unc_col_ood].values
+
+        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
+        log_prob = kde.score_samples(ood_unc[:, None])
+        log_prob_id = kde.score_samples(id_unc[:, None])
+
+
+        plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
+        plt.hist(log_prob, bins=30, alpha=0.6, label='OOD')
+        plt.xlabel('Log-Likelihood under ID KDE')
+        plt.ylabel('Count')
+        plt.legend()
+        plt.savefig(f"/gpfs/home6/palfken/log_prob_{metric}.png")
+        plt.close()
+
+        from sklearn.metrics import roc_auc_score, average_precision_score
+        y_true = np.concatenate([np.zeros(len(id_unc)), np.ones(len(ood_unc))])
+        scores = np.concatenate([id_unc, ood_unc])
+
+        roc = roc_auc_score(y_true, scores)
+        pr = average_precision_score(y_true, scores)
+
+        print(f"AUROC: {roc:.3f}, AUPR: {pr:.3f}")
 
         # --- Combine for plotting ---
         df_plot = pd.concat([
             pd.DataFrame({'uncertainty': df[unc_col], 'dice_bin': df['dice_bin'], 'dist': 'In-Distribution'}),
-            pd.DataFrame({'uncertainty': df_ood[unc_col_ood], 'dice_bin': df_ood['dice_bin'], 'dist': 'OOD'})
+            pd.DataFrame({'uncertainty': df_ood_lipoma[unc_col_ood], 'dice_bin': df_ood_lipoma['dice_bin'], 'dist': 'OOD'})
         ])
 
         # --- Plot ---
         plt.figure(figsize=(10, 6))
         sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot, split=True, inner='quartile',
                        palette='Set2')
-        plt.title('Predicted Mean Uncertainty by Dice Bin')
+        plt.title(f'Predicted Mean Uncertainty by Dice Bin: {metric}')
         plt.xlabel('Dice Bin')
         plt.ylabel('Predicted Mean Uncertainty')
         plt.legend(title='Distribution')
@@ -149,23 +180,27 @@ def preprocess_folder(data, splits):
         for i, bin_label in enumerate(dice_bins):
             plt.subplot(1, len(dice_bins), i + 1)
 
-            # Select ID and OOD samples for this bin
             id_unc = df.loc[df['dice_bin'] == bin_label, unc_col]
-            ood_unc = df_ood.loc[df_ood['dice_bin'] == bin_label, unc_col_ood]
+            ood_unc = df_ood_lipoma.loc[df_ood_lipoma['dice_bin'] == bin_label, unc_col_ood]
 
-            # Plot histograms
-            plt.hist(id_unc, bins=20, alpha=0.6, color=colors['In-Distribution'], label='ID')
-            plt.hist(ood_unc, bins=20, alpha=0.6, color=colors['OOD'], label='OOD')
+            # Smooth KDE plots
+            sns.kdeplot(id_unc, fill=True, alpha=0.4, color=colors['In-Distribution'], label='ID')
+            sns.kdeplot(ood_unc, fill=True, alpha=0.4, color=colors['OOD'], label='OOD')
+
+            # Mean lines
+            plt.axvline(id_unc.mean(), color=colors['In-Distribution'], linestyle='--')
+            plt.axvline(ood_unc.mean(), color=colors['OOD'], linestyle='--')
 
             plt.title(f'Dice Bin: {bin_label}')
             plt.xlabel('Predicted Mean Uncertainty')
-            plt.ylabel('Count')
+            plt.ylabel('Density')
             if i == 0:
                 plt.legend()
 
         plt.tight_layout()
-        plt.savefig(f"/gpfs/home6/palfken/hist_{metric}.png")
+        plt.savefig(f"/gpfs/home6/palfken/hist_kde_{metric}.png")
         plt.close()
+
 
 
     # for col in unc_cols_pred:
