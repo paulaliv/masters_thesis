@@ -106,6 +106,7 @@ def preprocess_folder_1(data):
 
     #clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df = pd.read_csv(ood_dir)
+    print(df.columns)
     dice_df = df[df['tumor_class'] == 'Lipoma']
     dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
