@@ -1270,8 +1270,8 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 def plot_confusion(y_true, y_pred, title, save_path):
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
     present_labels = np.unique(y_pred)
-    labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
-    cm = confusion_matrix(y_true, y_pred, labels=labels_idx)
+    #labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+    cm = confusion_matrix(y_true, y_pred,  labels=[0, 1, 2, 3])
     plt.figure(figsize=(6,5))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Bin")
