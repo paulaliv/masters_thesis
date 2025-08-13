@@ -90,7 +90,7 @@ def preprocess_folder(data, splits):
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
 
         all_stats[case_id] = stats_dict
-        return all_stats
+    return all_stats
 
 
 def preprocess_folder_1(data):
@@ -161,7 +161,7 @@ def preprocess_folder_1(data):
 
 
         all_stats[case_id] = stats_dict
-        return all_stats
+    return all_stats
 
 
 
