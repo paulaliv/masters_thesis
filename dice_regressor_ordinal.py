@@ -462,9 +462,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     # Initialize your QA model and optimizer
     print('Initiating Model')
     model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=lre-4, weight_decay=1e-5)
-
-
+    optimizer = optim.Adam(model.parameters(), lr=lre)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',factor=0.5, patience=5, verbose=True,min_lr=1e-6)
     # Step 1: Warmup
 
@@ -600,9 +598,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
         epoch_val_loss = val_running_loss / val_total
         epoch_val_acc = val_correct / val_total
-
-        for param_group in optimizer.param_groups:
-            print(f"Current LR: {param_group['lr']}")
 
         val_losses.append(epoch_val_loss)
 
