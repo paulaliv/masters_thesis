@@ -845,9 +845,9 @@ class ROIPreprocessor:
             if resampled_pred.sum() > 0:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
                 cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
-                cropped_umap_sitk.SetOrigin(img_sitk.GetOrigin())
-                cropped_umap_sitk.SetSpacing(img_sitk.GetSpacing())
-                cropped_umap_sitk.SetDirection(img_sitk.GetDirection())
+                cropped_umap_sitk.SetOrigin(umap_sitk.GetOrigin())
+                cropped_umap_sitk.SetSpacing(umap_sitk.GetSpacing())
+                cropped_umap_sitk.SetDirection(umap_sitk.GetDirection())
 
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
@@ -858,7 +858,7 @@ class ROIPreprocessor:
 
             else:
 
-                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
+                resized_umap, _ = self.adjust_to_shape(umap_sitk, resampled_pred, self.target_shape)
 
                 # Create a "full image" mask (all ones)
                 full_mask = np.ones_like(resampled_umap, dtype=np.uint8)
