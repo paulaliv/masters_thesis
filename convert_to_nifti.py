@@ -111,7 +111,7 @@ def convert_dicom():
         reader.SetFileNames(dicom_names)
         image = reader.Execute()
 
-        output_nii = os.path.join(output_root, f"{patient}.nii.gz")
+        output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}.nii.gz")
         sitk.WriteImage(image, output_nii)
         print(f"Converted {dicom_folder} -> {output_nii}")
 
