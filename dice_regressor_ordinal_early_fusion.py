@@ -1,5 +1,5 @@
 from collections import defaultdict
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR,ReduceLROnPlateau, LinearLR
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
 import collections
@@ -14,7 +14,7 @@ import time
 import sys
 import json
 from sklearn.metrics import cohen_kappa_score
-
+from itertools import product
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, ConcatDataset
 from sklearn.metrics import confusion_matrix
@@ -167,7 +167,7 @@ class Light3DEncoder(nn.Module):
 
 
 class QAModel(nn.Module):
-    def __init__(self,num_thresholds):
+    def __init__(self,num_thresholds, dropout_rate):
         super().__init__()
         self.encoder = Light3DEncoder()
         #self.encoder_unc= Light3DEncoder()
@@ -176,7 +176,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout_rate),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
 
@@ -344,7 +344,7 @@ def corn_predict(logits):
 #
 #     return (probs > 0.5).sum(dim=1)
 
-def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, device):
+def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device,epochs,lre,batch_size,warmup_epochs, patience, dropout):
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -366,20 +366,30 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         transform=val_transforms,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,pin_memory=True,
     collate_fn=pad_collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True,
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,pin_memory=True,
     collate_fn=pad_collate_fn)
 
 
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+    model = QAModel(num_thresholds=3, dropout_rate=dropout).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lre)
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                           factor=0.5, patience=5, verbose=True)
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
+    plateau_scheduler = ReduceLROnPlateau(optimizer,
+                                          mode='min',
+                                          # 'min' if you want to reduce LR when monitored metric stops decreasing
+                                          factor=0.1,
+                                          # factor by which the LR will be reduced. new_lr = old_lr * factor
+                                          patience=5,
+                                          # number of epochs with no improvement after which LR will be reduced
+                                          verbose=True,  # print messages when LR is reduced
+                                          min_lr=1e-6,  # lower bound on the learning rate
+                                          cooldown=0)
+
 
     # Optional: define class names for nicer output
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", "Good (>0.7)"]
@@ -390,18 +400,11 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     # Define warmup parameters
     warmup_epochs = 5  # or warmup_steps if you're doing per-step
 
-    # Linear warmup lambda
-    def lr_lambda(current_epoch):
-        if current_epoch < warmup_epochs:
-            return float(current_epoch + 1) / warmup_epochs
-        return 1.0  # Once warmup is over, keep LR constant until ReduceLROnPlateau kicks in
-
-    warmup_scheduler = LambdaLR(optimizer, lr_lambda)
 
     # Early stopping variables
     #DOUBLE CHECK THIS
     best_val_loss = float('inf')
-    patience = 10
+
     patience_counter = 0
 
     scaler = GradScaler()
@@ -418,8 +421,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
     best_kappa_cm = None
     best_kappa_epoch = -1
 
-    for epoch in range(60):
-        print(f"Epoch {epoch + 1}/{60}")
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -500,9 +503,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
         epoch_val_acc = val_correct / val_total
 
 
-        scheduler.step(epoch_val_loss)
-        for param_group in optimizer.param_groups:
-            print(f"Current LR: {param_group['lr']}")
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()  # warmup scheduler
+            print(f"[Warm Up] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+            plateau_scheduler.step(epoch_val_loss)  # ReduceLROnPlateau scheduler
+
+            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
 
 
 
@@ -533,8 +541,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric, plot_dir, devi
             output_dict=True,  # this is key
             zero_division=0
         )
-        for class_name in class_names:
-            f1_history[class_name].append(report_dict[class_name]["f1-score"])
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         if kappa_quadratic > best_kappa:
@@ -606,8 +612,61 @@ def main(data_dir, plot_dir, folds,df):
 
     metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
 
-    for idx, metric in enumerate(metrics):
-        # Lists to aggregate results across folds
+
+    param_grid = {
+        'lr': [1e-3, 3e-4, 1e-4],
+        'batch_size': [16, 32],
+        'warmup_epochs': [3, 5, 8],
+        'patience': [8, 10, 15],
+        'dropout': [0.0, 0.1, 0.2, 0.3],
+    }
+
+    best_params_per_metric = {}
+
+    for metric in metrics:
+        print(f"\n=== Tuning for metric: {metric} ===")
+
+        best_score = -float('inf')
+        best_params = None
+
+        # Step 1: Tune on just fold 0
+        for lr, bs, warmup, patience, dropout in product(
+                param_grid['lr'], param_grid['batch_size'],
+                param_grid['warmup_epochs'], param_grid['patience'], param_grid['dropout']
+        ):
+            print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}")
+
+            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+                fold=0,  # tuning only on fold 0
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device,
+                epochs=30,
+                lre=lr,
+                batch_size=bs,
+                warmup_epochs=warmup,
+                patience=patience,
+                dropout = dropout
+            )
+
+            if kappa_quad > best_score:
+                best_score = kappa_quad
+                best_params = {
+                    'lr': lr,
+                    'batch_size': bs,
+                    'warmup_epochs': warmup,
+                    'patience': patience
+                }
+
+        print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
+        best_params_per_metric[metric] = best_params
+
+        # Step 2: Full 5-fold training with best params
+        print(f"=== Running full CV for {metric} ===")
+
         all_val_preds = []
         all_val_labels = []
 
@@ -617,22 +676,27 @@ def main(data_dir, plot_dir, folds,df):
         all_kappas_lin = []
         start = time.time()
         for fold in range(5):
-            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
-                fold,
+            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+                fold=fold,
                 data_dir=data_dir,
                 df=df,
                 splits=folds,
                 uncertainty_metric=metric,
                 plot_dir=plot_dir,
-                device=device
+                device=device,
+                epochs=60,
+                lre=best_params['lr'],
+                batch_size=best_params['batch_size'],
+                warmup_epochs=best_params['warmup_epochs'],
+                patience=best_params['patience']
             )
             # Aggregate per fold
             all_val_preds.append(val_preds)
             all_val_labels.append(val_labels)
             all_train_losses.append(train_losses)
             all_val_losses.append(val_losses)
-            all_kappas_quad.append(best_kappa_quad)
-            all_kappas_lin.append(best_kappa_lin)
+            all_kappas_quad.append(kappa_quad)
+            all_kappas_lin.append(kappa_lin)
 
         end = time.time()
 
@@ -683,6 +747,11 @@ def main(data_dir, plot_dir, folds,df):
         plt.tight_layout()
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_EARLY_img.png"))
         plt.close()
+
+
+    for metric in metrics:
+        print(f"Best params for {metric}: {best_params_per_metric[metric] }")
+
 
 #metrics: confidence, entropy,mutual_info,epkl
 

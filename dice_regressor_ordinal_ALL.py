@@ -16,13 +16,13 @@ import torch.nn.functional as F
 import time
 import sys
 import json
-from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau, LinearLR
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import umap
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-
+from itertools import product
 from torch.amp import GradScaler, autocast
 import random
 import torch.optim as optim
@@ -219,7 +219,7 @@ class Light3DEncoder(nn.Module):
 
 
 class QAModel(nn.Module):
-    def __init__(self,num_thresholds):
+    def __init__(self,num_thresholds,dropout_rate):
         super().__init__()
 
         self.encoder_img = Light3DEncoder(in_channels=2)
@@ -231,7 +231,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout_rate),
             nn.Linear(128, num_thresholds)  # Output = predicted Dice class
         )
         #self.biases = nn.Parameter(torch.zeros(num_thresholds))
@@ -446,7 +446,7 @@ def corn_predict(logits):
     pred = probs.softmax(dim=2).argmax(dim=2)  # [B, num_thresholds], values in {0,1}
     return pred.sum(dim=1)  # sum of positive threshold decisions = predicted class
 
-def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device):
+def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device,epochs,lre,batch_size,warmup_epochs, patience, dropout):
     print(f'Training with UMAP: {uncertainty_metric}')
     print(f"Training fold {fold} ...")
 
@@ -471,17 +471,19 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         want_features=False,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True,pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,pin_memory=True)
 
 
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_thresholds=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=3e-4)
+    model = QAModel(num_thresholds=3, dropout_rate=dropout).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lre)
 
-    scheduler = ReduceLROnPlateau(optimizer,
+
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
+    plateau_scheduler = ReduceLROnPlateau(optimizer,
                                   mode='min',  # 'min' if you want to reduce LR when monitored metric stops decreasing
                                   factor=0.1,  # factor by which the LR will be reduced. new_lr = old_lr * factor
                                   patience=5,  # number of epochs with no improvement after which LR will be reduced
@@ -497,7 +499,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     #Early stopping variables
     best_val_loss = float('inf')
-    patience = 10
     patience_counter = 0
 
     #Initiate Scaler
@@ -516,8 +517,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
 
-    for epoch in range(60):
-        print(f"Epoch {epoch + 1}/{60}")
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
         running_loss, correct, total = 0.0, 0, 0
 
         model.train()
@@ -624,16 +625,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         print("Validation classification report:\n", report)
         print("Predicted label counts:", collections.Counter(val_preds_list))
         print("True label counts:", collections.Counter(val_labels_list))
-        report_dict = classification_report(
-            val_labels_np,
-            val_preds_np,
-            target_names=class_names,
-            digits=4,
-            output_dict=True,  # this is key
-            zero_division=0
-        )
 
-        scheduler.step(epoch_val_loss)
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()  # warmup scheduler
+            print(f"[Warm Up] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+            plateau_scheduler.step(epoch_val_loss)  # ReduceLROnPlateau scheduler
+
+            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
@@ -652,7 +651,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             best_kappa_epoch = epoch
 
 
-            #with gzip.open(f"model_fold{fold}_{uncertainty_metric}_ALL.pt.gz", 'wb') as f:
+            # with gzip.open(f"model_fold{fold}_{uncertainty_metric}_ALL.pt.gz", 'wb') as f:
             #   torch.save(model.state_dict(), f, pickle_protocol=4)
 
 
@@ -701,8 +700,61 @@ def main(data_dir, plot_dir, folds,df):
 
     metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
 
-    for idx, metric in enumerate(metrics):
-        # Lists to aggregate results across folds
+
+    param_grid = {
+        'lr': [1e-3, 3e-4, 1e-4],
+        'batch_size': [16, 32],
+        'warmup_epochs': [3, 5, 8],
+        'patience': [8, 10, 15],
+        'dropout': [0.0, 0.1, 0.2, 0.3],
+    }
+
+    best_params_per_metric = {}
+
+    for metric in metrics:
+        print(f"\n=== Tuning for metric: {metric} ===")
+
+        best_score = -float('inf')
+        best_params = None
+
+        # Step 1: Tune on just fold 0
+        for lr, bs, warmup, patience, dropout in product(
+                param_grid['lr'], param_grid['batch_size'],
+                param_grid['warmup_epochs'], param_grid['patience'], param_grid['dropout']
+        ):
+            print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}")
+
+            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+                fold=0,  # tuning only on fold 0
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device,
+                epochs=30,
+                lre=lr,
+                batch_size=bs,
+                warmup_epochs=warmup,
+                patience=patience,
+                dropout = dropout
+            )
+
+            if kappa_quad > best_score:
+                best_score = kappa_quad
+                best_params = {
+                    'lr': lr,
+                    'batch_size': bs,
+                    'warmup_epochs': warmup,
+                    'patience': patience
+                }
+
+        print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
+        best_params_per_metric[metric] = best_params
+
+        # Step 2: Full 5-fold training with best params
+        print(f"=== Running full CV for {metric} ===")
+
         all_val_preds = []
         all_val_labels = []
 
@@ -712,23 +764,27 @@ def main(data_dir, plot_dir, folds,df):
         all_kappas_lin = []
         start = time.time()
         for fold in range(5):
-
-            train_losses, val_losses, val_preds, val_labels, best_kappa_quad, best_kappa_lin = train_one_fold(
-                fold,
+            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+                fold=fold,
                 data_dir=data_dir,
                 df=df,
                 splits=folds,
                 uncertainty_metric=metric,
                 plot_dir=plot_dir,
-                device=device
+                device=device,
+                epochs=60,
+                lre=best_params['lr'],
+                batch_size=best_params['batch_size'],
+                warmup_epochs=best_params['warmup_epochs'],
+                patience=best_params['patience']
             )
             # Aggregate per fold
             all_val_preds.append(val_preds)
             all_val_labels.append(val_labels)
             all_train_losses.append(train_losses)
             all_val_losses.append(val_losses)
-            all_kappas_quad.append(best_kappa_quad)
-            all_kappas_lin.append(best_kappa_lin)
+            all_kappas_quad.append(kappa_quad)
+            all_kappas_lin.append(kappa_lin)
 
         end = time.time()
 
@@ -764,8 +820,6 @@ def main(data_dir, plot_dir, folds,df):
         plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_ALL.png'))
         plt.close()
 
-
-
         #confusion matrix
         # Plot and save best confusion matrix
         class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
@@ -783,6 +837,10 @@ def main(data_dir, plot_dir, folds,df):
         plt.tight_layout()
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_ALL.png"))
         plt.close()
+
+
+    for metric in metrics:
+        print(f"Best params for {metric}: {best_params_per_metric[metric] }")
 
 
 
