@@ -1256,5 +1256,5 @@ if __name__ == '__main__':
     #ood_dir = sys.argv[2]
     plot_dir = sys.argv[2]
 
-    #main(preprocessed, plot_dir, splits, df)
-    visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
+    main(preprocessed, plot_dir, splits, df)
+    #visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
