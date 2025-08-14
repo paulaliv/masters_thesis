@@ -792,7 +792,11 @@ class ROIPreprocessor:
             cropped_img = self.crop_to_roi(resampled_img,slices)
             cropped_pred = self.crop_to_roi(resampled_pred, slices)
             cropped_pred_sitk = sitk.GetImageFromArray(cropped_pred)
-            cropped_pred_sitk.SetSpacing(pred.GetSpacing())
+            cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
+
+
+            cropped_pred_sitk.CopyInformation(cropped_img_sitk)
+            #cropped_pred_sitk.SetSpacing(pred.GetSpacing())
 
 
             cropped_mask = self.crop_to_roi(resampled_mask, slices)
@@ -845,7 +849,12 @@ class ROIPreprocessor:
             if resampled_pred.sum() > 0:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
                 cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
-                cropped_umap_sitk.SetOrigin(umap_sitk.GetOrigin())
+                new_origin = list(umap_sitk.TransformIndexToPhysicalPoint([slices[2].start,
+                                                                           slices[1].start,
+                                                                           slices[0].start]))
+                cropped_umap_sitk.SetOrigin(new_origin)
+
+                #cropped_umap_sitk.SetOrigin(umap_sitk.GetOrigin())
                 cropped_umap_sitk.SetSpacing(umap_sitk.GetSpacing())
                 cropped_umap_sitk.SetDirection(umap_sitk.GetDirection())
 
