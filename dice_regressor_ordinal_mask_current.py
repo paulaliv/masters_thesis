@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 import os
 
+
+from itertools import product
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import torch.nn.functional as F
@@ -857,8 +859,6 @@ def pad_to_max_length(loss_lists):
         padded.append(np.pad(lst, (0, max_len - len(lst)), constant_values=np.nan))
     return np.array(padded)
 
-
-from itertools import product
 def main(data_dir, plot_dir, folds,df):
     print('MODEL INPUT: UNCERTAINTY MAP AND MASK')
     print('FUSION: LATE')
