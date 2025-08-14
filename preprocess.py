@@ -858,7 +858,7 @@ class ROIPreprocessor:
 
             else:
 
-                resized_umap, _ = self.adjust_to_shape(umap_sitk, resampled_pred, self.target_shape)
+                resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
 
                 # Create a "full image" mask (all ones)
                 full_mask = np.ones_like(resampled_umap, dtype=np.uint8)
