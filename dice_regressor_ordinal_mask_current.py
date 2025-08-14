@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
-import torch.nn as nn
-import torch
+
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import torch.nn.functional as F
