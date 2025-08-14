@@ -13,7 +13,7 @@ import glob
 from scipy.ndimage import zoom
 import pandas as pd
 
-
+from split_data import input_folder
 
 
 class ROIPreprocessor:
@@ -943,19 +943,24 @@ def main():
     input_folders_img = ["/gpfs/home6/palfken/QA_imagesTr/","/gpfs/home6/palfken/QA_imagesTs/"]
 
     input_folders_gt =  ["/gpfs/home6/palfken/QA_labelsTr/","/gpfs/home6/palfken/QA_labelsTs/"]
-    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
-    input_folder_gt = "/gpfs/home6/palfken/QA_imagesTs/"
+    #input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
+    #input_folder_gt = "/gpfs/home6/palfken/QA_imagesTs/"
 
-    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
+    #predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
 
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
-    output_folder_data = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
+    #output_folder_data = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
     output_folder_visuals = "/gpfs/home6/palfken/OOD_visuals/"
 
-    os.makedirs(output_folder_data, exist_ok=True)
-    os.makedirs(output_folder_visuals, exist_ok=True)
+    #os.makedirs(output_folder_data, exist_ok=True)
+    #os.makedirs(output_folder_visuals, exist_ok=True)
     # # dice_scores = []
+    input_folder_img = sys.argv[1]
+    input_folder_gt = sys.argv[2]
+    predicted_mask_folder = sys.argv[3]
+    output_folder_data = sys.argv[4]
+
 
 
 
