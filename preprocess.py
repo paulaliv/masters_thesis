@@ -879,7 +879,7 @@ class ROIPreprocessor:
             resampled_umaps[umap_type] = resampled_umap
             pred_mask = (resampled_pred > 0)
 
-            pred_mean_unc = np.mean(resampled_umap[pred_msask]) if pred_mask.sum() > 0 else np.nan
+            pred_mean_unc = np.mean(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
             pred_median_unc = np.median(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
