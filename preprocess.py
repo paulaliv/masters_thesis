@@ -599,7 +599,7 @@ class ROIPreprocessor:
         else:
             from_scratch = True
             df = pd.DataFrame()
-
+        print(f'PRevious number of rows: {len(df)}')
         for img_path in image_paths:
             case_id = os.path.basename(img_path).replace('_0000.nii.gz', '')
             self.case_id = case_id
@@ -660,7 +660,7 @@ class ROIPreprocessor:
 
                 df.to_csv(save_path, index=False)
 
-
+        print(f'PRevious number of rows: {len(df)}')
 
         # # Load existing results if available
         #
