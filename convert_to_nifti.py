@@ -112,6 +112,9 @@ def convert_dicom():
         image = reader.Execute()
 
         output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}.nii.gz")
+        if os.path.exists(output_nii):
+            print(f"Skipping {patient}")
+            continue
         sitk.WriteImage(image, output_nii)
         print(f"Converted {dicom_folder} -> {output_nii}")
 
