@@ -32,7 +32,7 @@ class ROIPreprocessor:
         self.save_umaps = save_umaps
         self.cropped_cases = []
         self.empty_masks = []
-        #self.extractor = featureextractor.RadiomicsFeatureExtractor()
+        self.extractor = featureextractor.RadiomicsFeatureExtractor()
 
 
     def load_nifti(self, filepath: str):
@@ -581,7 +581,7 @@ class ROIPreprocessor:
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
-        print(subtypes_df.columns)
+        #print(subtypes_df.columns)
         #
         # image_paths = []
         # for idir in image_dirs:
