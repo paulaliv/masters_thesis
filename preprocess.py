@@ -849,14 +849,16 @@ class ROIPreprocessor:
             if resampled_pred.sum() > 0:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
                 cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
-                new_origin = list(umap_sitk.TransformIndexToPhysicalPoint([slices[2].start,
-                                                                           slices[1].start,
-                                                                           slices[0].start]))
-                cropped_umap_sitk.SetOrigin(new_origin)
-
-                #cropped_umap_sitk.SetOrigin(umap_sitk.GetOrigin())
-                cropped_umap_sitk.SetSpacing(umap_sitk.GetSpacing())
-                cropped_umap_sitk.SetDirection(umap_sitk.GetDirection())
+                # new_origin = list(umap_sitk.TransformIndexToPhysicalPoint([slices[2].start,
+                #                                                            slices[1].start,
+                #                                                            slices[0].start]))
+                # cropped_umap_sitk.SetOrigin(new_origin)
+                #
+                # #cropped_umap_sitk.SetOrigin(umap_sitk.GetOrigin())
+                # cropped_umap_sitk.SetSpacing(umap_sitk.GetSpacing())
+                #
+                # cropped_umap_sitk.SetDirection(umap_sitk.GetDirection())
+                cropped_umap_sitk.CopyInformation(cropped_pred_sitk)
 
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
