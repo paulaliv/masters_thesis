@@ -512,11 +512,6 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
                                   verbose=True,  # print messages when LR is reduced
                                   min_lr=1e-6,  # lower bound on the learning rate
                                   cooldown=0)
-    scheduler = SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, plateau_scheduler],
-        milestones=[warmup_epochs]  # switch after N warmup epochs
-    )
 
 
     #criterion = nn.BCEWithLogitsLoss()
@@ -656,13 +651,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             output_dict=True,  # this is key
             zero_division=0
         )
-
         if epoch < warmup_epochs:
-            scheduler.step()  # warmup scheduler
+            warmup_scheduler.step()  # warmup scheduler
+            print(f"[Warm Up] LR: {optimizer.param_groups[0]['lr']:.6f}")
         else:
-            scheduler.step(epoch_val_loss)  # ReduceLROnPlateau scheduler
+            plateau_scheduler.step(epoch_val_loss)  # ReduceLROnPlateau scheduler
 
-        print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
 
         #print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
         # After each validation epoch:

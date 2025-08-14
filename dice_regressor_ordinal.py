@@ -43,126 +43,11 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-# '''ARCHITECTURE OF THE INSPO PAPER'''
-# class Light3DEncoder(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.encoder = nn.Sequential(
-#             nn.Conv3d(1, 64, kernel_size=3, padding=1),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(64, 64, kernel_size=3, padding=1),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(64, 32, kernel_size=3, padding=1),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(32, 32, kernel_size=3, padding=1),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(32, 16, kernel_size=3, padding=1),
-#             nn.ReLU(),
-#             nn.AdaptiveAvgPool3d(1),
-#         )
-#
-#     def forward(self, x):
-#         x = self.encoder(x)
-#         return x.view(x.size(0), -1)  # Flatten to [B, 16]
-#
-# class QAModel(nn.Module):
-#     def __init__(self,num_thresholds):
-#         super().__init__()
-#
-#         self.encoder_img = Light3DEncoder()
-#         self.encoder_unc= Light3DEncoder()
-#         self.pool = nn.AdaptiveAvgPool3d(1)
-#         self.norm = nn.LayerNorm(32)
-#
-#         self.fc = nn.Sequential(
-#             nn.Flatten(),
-#             nn.Linear(32, 128),
-#             nn.ReLU(),
-#             nn.Linear(128, 128),
-#             nn.ReLU(),
-#             nn.Linear(128, num_thresholds)  # ordinal logits
-#         )
-#
-#
-#     def forward(self, image, uncertainty):
-#         x1 = self.encoder_img(image)
-#         x2 = self.encoder_unc(uncertainty)
-#         merged = torch.cat((x1, x2), dim=1) #[B,128]
-#         merged = self.norm(merged)
-#         return self.fc(merged)
-#
-#     def extract_features(self, uncertainty):
-#         x = self.encoder_unc(uncertainty)
-#         return x.view(x.size(0), -1)
-#
-
-
-'''PREVIOUS ARCHITECTURE'''
-# class Light3DEncoder(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.encoder = nn.Sequential(
-#             nn.Conv3d(1, 16, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(16),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),  # halves each dimension
-#
-#             nn.Conv3d(16, 32, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(32),
-#             nn.ReLU(),
-#             nn.MaxPool3d(2),
-#
-#             nn.Conv3d(32, 64, kernel_size=3, padding=1),
-#             nn.BatchNorm3d(64),
-#             nn.ReLU(),
-#             nn.AdaptiveAvgPool3d((1, 1, 1)),  # outputs [B, 64, 1, 1, 1]
-#         )
-#
-#     def forward(self, x):
-#         x = self.encoder(x)
-#         return x.view(x.size(0), -1)  # Flatten to [B, 64]
-#
-# class QAModel(nn.Module):
-#     def __init__(self,num_thresholds):
-#         super().__init__()
-#
-#         self.encoder_img = Light3DEncoder()
-#         self.encoder_unc= Light3DEncoder()
-#         self.pool = nn.AdaptiveAvgPool3d(1)
-#         self.norm = nn.LayerNorm(128)
-#
-#         self.fc = nn.Sequential(
-#             nn.Flatten(),
-#             nn.Linear(128, 64),
-#             nn.ReLU(),
-#             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
-#         )
-#
-#     def forward(self, image, uncertainty):
-#         x1 = self.encoder_img(image)
-#         x2 = self.encoder_unc(uncertainty)
-#         merged = torch.cat((x1, x2), dim=1) #[B,128]
-#         merged = self.norm(merged)
-#         return self.fc(merged)
-#
-#     def extract_features(self, uncertainty):
-#         x = self.encoder_unc(uncertainty)
-#         return x.view(x.size(0), -1)
 from monai.transforms import (
     Compose, LoadImaged, EnsureChannelFirstd, RandRotate90d,RandFlipd,RandAffined, RandGaussianNoised, NormalizeIntensityd,
     ToTensord, EnsureTyped
 )
 train_transforms = Compose([
-
-
     RandRotate90d(keys=["mask", "uncertainty"], prob=0.5, max_k=3, spatial_axes=(1, 2)),
 
     RandFlipd(keys=["mask", "uncertainty"], prob=0.5, spatial_axis=0),
@@ -586,18 +471,13 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
     #
     # # Step 2: Cosine Annealing after warmup
-    scheduler = ReduceLROnPlateau(optimizer,
+    plateau_scheduler = ReduceLROnPlateau(optimizer,
                                   mode='min',  # 'min' if you want to reduce LR when monitored metric stops decreasing
                                   factor=0.1,  # factor by which the LR will be reduced. new_lr = old_lr * factor
                                   patience=5,  # number of epochs with no improvement after which LR will be reduced
                                   verbose=True,  # print messages when LR is reduced
                                   min_lr=1e-6,  # lower bound on the learning rate
                                   cooldown=0)
-    #scheduler = CosineAnnealingLR(optimizer, T_max=35)  # 45 = total_epochs - warmup_epochs
-
-    # Combine them
-    #scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     #criterion = nn.BCEWithLogitsLoss()
     #criterion = coral_loss_manual
@@ -766,8 +646,14 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
         #     warmup_scheduler.step()
         #     print(f"[Warmup] LR: {optimizer.param_groups[0]['lr']:.6f}")
 
-        scheduler.step(epoch_val_loss)
-        print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        if epoch < warmup_epochs:
+            warmup_scheduler.step()  # warmup scheduler
+            print(f"[Warm Up] LR: {optimizer.param_groups[0]['lr']:.6f}")
+        else:
+            plateau_scheduler.step(epoch_val_loss)  # ReduceLROnPlateau scheduler
+
+            print(f"[ReduceLROnPlateau] LR: {optimizer.param_groups[0]['lr']:.6f}")
+
 
 
 
