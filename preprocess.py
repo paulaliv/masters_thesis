@@ -578,8 +578,8 @@ class ROIPreprocessor:
         return np.digitize(dice_adjusted, bin_edges, right=True)
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
-        subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
-        subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
+        #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
+        subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         print(subtypes_df.columns)
         #
@@ -592,7 +592,7 @@ class ROIPreprocessor:
         case_stats = []
 
         #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/Dice_scores_OOD_30.csv"
+        save_path = "/gpfs/home6/palfken/unc_map_features.csv"
         #save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
 
         if os.path.exists(save_path):
@@ -641,7 +641,6 @@ class ROIPreprocessor:
                     new_row = {
                         "case_id": case_id,
                         "tumor_class": tumor_class,
-                        "dice": dice,
                         **subject_stats
                     }
 
@@ -665,76 +664,76 @@ class ROIPreprocessor:
 
 
 
-        # Load existing results if available
-
-        if os.path.exists(save_path):
-            df = pd.read_csv(save_path)
-        else:
-            df = pd.DataFrame(case_stats)
-
-        df.drop(df[df.tumor_class == 'Unknown'].index, inplace=True)
-        unique_case_ids = df['case_id'].unique()
-
-        df_unique = df.drop_duplicates(subset='case_id')
-
-        df_unique.to_csv(save_path, index=False)
-
-
-        print(f'CSV file has {len(df)} rows')
+        # # Load existing results if available
         #
-        #df_OOD = pd.read_csv(OOD_path)
-        # df = pd.concat([df_ID, df_OOD], ignore_index=True)
-
-        # Add dice bins column for all data
-        df['dice_bin'] = self.bin_dice_score(df['dice'])
-
-        print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
-
-        # Find all uncertainty-related columns
-        unc_cols = [c for c in df.columns if c.endswith('unc')]
-
-        for tumor_class, group in df.groupby('tumor_class'):
-            print(f"\nTumor Class: {tumor_class}")
-
-
-            # Dice stats
-            mean_dice = group['dice'].mean()
-            std_dice = group['dice'].std()
-            print(f"Mean Dice: {mean_dice:.3f}")
-            print(f"Std Dice: {std_dice:.3f}")
-
-            # Uncertainty stats
-            if unc_cols:
-                print("Uncertainty statistics (mean ± std across subjects):")
-                for col in unc_cols:
-                    col_mean = group[col].mean()
-                    col_std = group[col].std()
-                    print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
-
-                # Now print uncertainty stats by dice bin
-        print("\nUncertainty stats per Dice bin:")
-        for tumor_class, group in df.groupby('tumor_class'):
-            if tumor_class == "Lipoma":
-
-                for bin_id, bin_group in group.groupby('dice_bin'):
-                    # Map bin_id to readable range
-                    if bin_id == 0:
-                        bin_range = f"<= 0.1"
-                    elif bin_id == 1:
-                        bin_range = "0.1 < dice <= 0.5"
-                    elif bin_id == 2:
-                        bin_range = "0.5 < dice <= 0.7"
-                    else:
-                        bin_range = "> 0.7"
-
-                    print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
-                    if len(bin_group) > 0 and unc_cols:
-                        for col in unc_cols:
-                            col_mean = bin_group[col].mean()
-                            col_std = bin_group[col].std()
-                            print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
-                    else:
-                        print("  No samples in this bin.")
+        # if os.path.exists(save_path):
+        #     df = pd.read_csv(save_path)
+        # else:
+        #     df = pd.DataFrame(case_stats)
+        #
+        # df.drop(df[df.tumor_class == 'Unknown'].index, inplace=True)
+        # unique_case_ids = df['case_id'].unique()
+        #
+        # df_unique = df.drop_duplicates(subset='case_id')
+        #
+        # df_unique.to_csv(save_path, index=False)
+        #
+        #
+        # print(f'CSV file has {len(df)} rows')
+        # #
+        # #df_OOD = pd.read_csv(OOD_path)
+        # # df = pd.concat([df_ID, df_OOD], ignore_index=True)
+        #
+        # # Add dice bins column for all data
+        # df['dice_bin'] = self.bin_dice_score(df['dice'])
+        #
+        # print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
+        #
+        # # Find all uncertainty-related columns
+        # unc_cols = [c for c in df.columns if c.endswith('unc')]
+        #
+        # for tumor_class, group in df.groupby('tumor_class'):
+        #     print(f"\nTumor Class: {tumor_class}")
+        #
+        #
+        #     # Dice stats
+        #     mean_dice = group['dice'].mean()
+        #     std_dice = group['dice'].std()
+        #     print(f"Mean Dice: {mean_dice:.3f}")
+        #     print(f"Std Dice: {std_dice:.3f}")
+        #
+        #     # Uncertainty stats
+        #     if unc_cols:
+        #         print("Uncertainty statistics (mean ± std across subjects):")
+        #         for col in unc_cols:
+        #             col_mean = group[col].mean()
+        #             col_std = group[col].std()
+        #             print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+        #
+        #         # Now print uncertainty stats by dice bin
+        # print("\nUncertainty stats per Dice bin:")
+        # for tumor_class, group in df.groupby('tumor_class'):
+        #     if tumor_class == "Lipoma":
+        #
+        #         for bin_id, bin_group in group.groupby('dice_bin'):
+        #             # Map bin_id to readable range
+        #             if bin_id == 0:
+        #                 bin_range = f"<= 0.1"
+        #             elif bin_id == 1:
+        #                 bin_range = "0.1 < dice <= 0.5"
+        #             elif bin_id == 2:
+        #                 bin_range = "0.5 < dice <= 0.7"
+        #             else:
+        #                 bin_range = "> 0.7"
+        #
+        #             print(f" Dice bin {bin_id} ({bin_range}): {len(bin_group)} samples")
+        #             if len(bin_group) > 0 and unc_cols:
+        #                 for col in unc_cols:
+        #                     col_mean = bin_group[col].mean()
+        #                     col_std = bin_group[col].std()
+        #                     print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
+        #             else:
+        #                 print("  No samples in this bin.")
 
 
 
@@ -794,6 +793,10 @@ class ROIPreprocessor:
 
             cropped_img = self.crop_to_roi(resampled_img,slices)
             cropped_pred = self.crop_to_roi(resampled_pred, slices)
+            cropped_pred_sitk = sitk.GetImageFromArray(cropped_pred)
+            cropped_pred_sitk.SetSpacing(pred.GetSpacing())
+
+
             cropped_mask = self.crop_to_roi(resampled_mask, slices)
 
             img_pp = self.normalize(cropped_img)
@@ -843,39 +846,56 @@ class ROIPreprocessor:
 
             if resampled_pred.sum() > 0:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
+                cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
+                cropped_umap_sitk.SetOrigin(img_sitk.GetOrigin())
+                cropped_umap_sitk.SetSpacing(img_sitk.GetSpacing())
+                cropped_umap_sitk.SetDirection(img_sitk.GetDirection())
+
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
 
+                features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
+                empty_flag = 0
+
+
             else:
+
                 resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
+
+                # Create a "full image" mask (all ones)
+                full_mask = np.ones_like(resampled_umap, dtype=np.uint8)
+
+                # Convert to SimpleITK
+                full_mask_sitk = sitk.GetImageFromArray(full_mask)
+                full_mask_sitk.CopyInformation(img_sitk)
+
+                # Extract features from entire uncertainty map
+                features = self.extract_radiomics_features(umap_sitk, full_mask_sitk)
+                empty_flag = 1
+
+
 
              # Store resized UMAP in the dict for later use
             resampled_umaps[umap_type] = resampled_umap
-            gt_mask = (resampled_mask > 0)
             pred_mask = (resampled_pred > 0)
 
-            gt_mean_unc = np.mean(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
-            pred_mean_unc = np.mean(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
-            full_mean_unc = np.mean(resampled_umap)
+            pred_mean_unc = np.mean(resampled_umap[pred_msask]) if pred_mask.sum() > 0 else np.nan
 
-            gt_median_unc = np.median(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
             pred_median_unc = np.median(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
-            gt_std_unc = np.std(resampled_umap[gt_mask]) if gt_mask.sum() > 0 else np.nan
             pred_std_unc = np.std(resampled_umap[pred_mask]) if pred_mask.sum() > 0 else np.nan
 
-            # Ratio between pred-mask and GT-mask uncertainty
-            ratio_pred_gt_unc = pred_mean_unc / gt_mean_unc if gt_mean_unc and not np.isnan(gt_mean_unc) else np.nan
 
             # ---- Store in flat dict with prefixed keys ----
-            stats_dict[f"{umap_type}_gt_mean_unc"] = gt_mean_unc
+            # Merge radiomics features into the stats_dict with a prefix
+            for k, v in features.items():
+                stats_dict[f"{umap_type}_{k}"] = v
+
+            # Add empty_flag
+            stats_dict[f"{umap_type}_empty_flag"] = empty_flag
             stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
-            stats_dict[f"{umap_type}_full_mean_unc"] = full_mean_unc
-            stats_dict[f"{umap_type}_gt_median_unc"] = gt_median_unc
             stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
-            stats_dict[f"{umap_type}_gt_std_unc"] = gt_std_unc
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
-            stats_dict[f"{umap_type}_ratio_pred_gt_unc"] = ratio_pred_gt_unc
 
 
             if self.save_as_nifti:
@@ -884,9 +904,9 @@ class ROIPreprocessor:
 
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-            else:
-                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-        #
+        #     else:
+        #         np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+        # #
         # if resampled_pred.sum() > 0:
         #     self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
         #     self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
@@ -906,10 +926,10 @@ class ROIPreprocessor:
                 print('Saved Image and mask')
             except Exception as e:
                 print(f"Error saving image/mask for case {case_id}: {e}")
-        else:
-            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+        # else:
+        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #     #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        #     np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
 
         print(f'Processed {self.case_id}')
@@ -923,10 +943,10 @@ def main():
     input_folders_img = ["/gpfs/home6/palfken/QA_imagesTr/","/gpfs/home6/palfken/QA_imagesTs/"]
 
     input_folders_gt =  ["/gpfs/home6/palfken/QA_labelsTr/","/gpfs/home6/palfken/QA_labelsTs/"]
-    input_folder_img = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_imagesTs/"
-    input_folder_gt = "/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/COMPLETE_labelsTs/"
+    input_folder_img = "/gpfs/home6/palfken/QA_imagesTr/"
+    input_folder_gt = "/gpfs/home6/palfken/QA_imagesTs/"
 
-    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/ood_umaps_30/"
+    predicted_mask_folder ="/gpfs/home6/palfken/ood_features/id_umaps/"
 
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
