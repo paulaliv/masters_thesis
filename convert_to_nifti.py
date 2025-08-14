@@ -77,9 +77,30 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
 
         print(f"✔ Converted: {patient_id}")
 
+def convert_dicom():
+    import SimpleITK as sitk
+    import os
+
+    input_root = "/home/bmep/plalfken/my-scratch/test_data/"
+    output_root = "/home/bmep/plalfken/my-scratch/test_data_nifti/"
+    os.makedirs(output_root, exist_ok=True)
+
+    for folder_name in os.listdir(input_root):
+        dicom_folder = os.path.join(input_root, folder_name)
+        if not os.path.isdir(dicom_folder):
+            continue
+
+        reader = sitk.ImageSeriesReader()
+        dicom_names = reader.GetGDCMSeriesFileNames(dicom_folder)
+        if len(dicom_names) == 0:
+            print(f"No DICOMs found in {dicom_folder}, skipping.")
+            continue
+        reader.SetFileNames(dicom_names)
+        image = reader.Execute()
+
+        output_nii = os.path.join(output_root, f"{folder_name}.nii.gz")
+        sitk.WriteImage(image, output_nii)
+        print(f"Converted {dicom_folder} -> {output_nii}")
 
 
-data_dir = '/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Classification_Tr/'
-out_dir = '/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/COMPLETE_nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/Cropped_nifti/'
-nifti_folder =  '/gpfs/home6/palfken/nnUNetFrame/nnUNet_raw/Dataset002_SoftTissue/imagesTr'
-convert_npz_to_nii(data_dir, nifti_folder, out_dir,overwrite=True)
+convert_dicom()
