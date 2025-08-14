@@ -1461,8 +1461,8 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    ood_dir = sys.argv[2]
-    plot_dir = sys.argv[3]
+    #ood_dir = sys.argv[2]
+    plot_dir = sys.argv[2]
 
     main(preprocessed, plot_dir, splits, df)
     #visualize_features(preprocessed, ood_dir, splits, df,"confidence", plot_dir)
