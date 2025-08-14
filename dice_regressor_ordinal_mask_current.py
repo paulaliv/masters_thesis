@@ -1,4 +1,4 @@
-from collections import defaultdict
+
 import gzip
 from torch.cpu.amp import autocast
 from sklearn.metrics import classification_report
@@ -35,8 +35,6 @@ from collections import Counter
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from dicer_regressor_mask_best import warmup_epochs
 
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
@@ -879,7 +877,7 @@ def main(data_dir, plot_dir, folds,df):
         'patience': [8, 10, 15],
     }
 
-    best_score = -float('inf')
+
     best_params_per_metric = {}
 
     for metric in metrics:
