@@ -850,6 +850,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
     plt.close()
 
     print(f'Best Kappa of {best_kappa}observed after {best_kappa_epoch} epochs!')
+    del train_loader, val_loader, train_dataset, val_dataset, model, optimizer
+    torch.cuda.empty_cache()  # frees GPU memory
 
     return train_losses, val_losses, best_kappa_preds, best_kappa_labels,  best_kappa_quad, best_kappa_lin
 
@@ -874,7 +876,7 @@ def main(data_dir, plot_dir, folds,df):
         'lr': [1e-3, 3e-4, 1e-4],
         'batch_size': [16, 32],
         'warmup_epochs': [3, 5, 8],
-        'patience': [5, 8, 10],
+        'patience': [8, 10, 15],
     }
 
     best_score = -float('inf')
@@ -905,8 +907,7 @@ def main(data_dir, plot_dir, folds,df):
                 lre=lr,
                 batch_size=bs,
                 warmup_epochs=warmup,
-                patience=patience,
-                cache_dataset=True  # so datasets are reused
+                patience=patience
             )
 
             if kappa_quad > best_score:
@@ -945,8 +946,7 @@ def main(data_dir, plot_dir, folds,df):
                 lre=best_params['lr'],
                 batch_size=best_params['batch_size'],
                 warmup_epochs=best_params['warmup_epochs'],
-                patience=best_params['patience'],
-                cache_dataset=True
+                patience=best_params['patience']
             )
 
             # Aggregate per fold
