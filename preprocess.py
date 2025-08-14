@@ -12,9 +12,7 @@ from scipy.ndimage import label, find_objects
 import glob
 from scipy.ndimage import zoom
 import pandas as pd
-
-from split_data import input_folder
-
+from radiomics import featureextractor
 
 class ROIPreprocessor:
     def __init__(self,
