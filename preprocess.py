@@ -1,7 +1,7 @@
 import os
 import numpy
 import sys
-from typing import Tuple, Optional
+from typing import Tuple
 import nibabel as nib
 import numpy as np
 
