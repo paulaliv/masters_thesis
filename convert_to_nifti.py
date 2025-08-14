@@ -3,6 +3,7 @@ import numpy as np
 import nibabel as nib
 import os
 import torch
+import SimpleITK as sitk
 
 
 
@@ -78,16 +79,27 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
         print(f"✔ Converted: {patient_id}")
 
 def convert_dicom():
-    import SimpleITK as sitk
-    import os
-
     input_root = "/home/bmep/plalfken/my-scratch/test_data/"
     output_root = "/home/bmep/plalfken/my-scratch/test_data_nifti/"
     os.makedirs(output_root, exist_ok=True)
+    for patient in os.listdir(input_root):
+        patient_path = os.path.join(input_root, patient)
+        if not os.path.isdir(patient_path):
+            continue
 
-    for folder_name in os.listdir(input_root):
-        dicom_folder = os.path.join(input_root, folder_name)
-        if not os.path.isdir(dicom_folder):
+        # get all subfolders (series) and sort to pick the first
+        series_folders = sorted([os.path.join(patient_path, f)
+                                 for f in os.listdir(patient_path)
+                                 if os.path.isdir(os.path.join(patient_path, f))])
+
+        if not series_folders:
+            print(f"No series found for {patient}, skipping.")
+            continue
+
+        first_series = series_folders[0]  # pick first series
+        dicom_folder = os.path.join(first_series, "DICOM")
+        if not os.path.exists(dicom_folder):
+            print(f"No DICOM folder in {first_series}, skipping.")
             continue
 
         reader = sitk.ImageSeriesReader()
@@ -95,12 +107,14 @@ def convert_dicom():
         if len(dicom_names) == 0:
             print(f"No DICOMs found in {dicom_folder}, skipping.")
             continue
+
         reader.SetFileNames(dicom_names)
         image = reader.Execute()
 
-        output_nii = os.path.join(output_root, f"{folder_name}.nii.gz")
+        output_nii = os.path.join(output_root, f"{patient}.nii.gz")
         sitk.WriteImage(image, output_nii)
         print(f"Converted {dicom_folder} -> {output_nii}")
+
 
 
 convert_dicom()
