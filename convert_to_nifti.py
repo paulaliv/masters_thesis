@@ -102,6 +102,11 @@ def convert_dicom():
             print(f"No DICOM folder in {first_series}, skipping.")
             continue
 
+        output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}.nii.gz")
+        if os.path.exists(output_nii):
+            print(f"Skipping {patient}")
+            continue
+
         reader = sitk.ImageSeriesReader()
         dicom_names = reader.GetGDCMSeriesFileNames(dicom_folder)
         if len(dicom_names) == 0:
@@ -111,10 +116,7 @@ def convert_dicom():
         reader.SetFileNames(dicom_names)
         image = reader.Execute()
 
-        output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}.nii.gz")
-        if os.path.exists(output_nii):
-            print(f"Skipping {patient}")
-            continue
+
         sitk.WriteImage(image, output_nii)
         print(f"Converted {dicom_folder} -> {output_nii}")
 
