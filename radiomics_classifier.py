@@ -181,7 +181,7 @@ feature_importance(X)
 #X_processed = preprocessing.fit_transform(X)
 
 models = get_models()
-k_values = [10, 25, 50, 100, 'all']
+k_values = [10, 25, 50, 100, 150, 200]
 best_scores = {}
 for name, model in models.items():
     best_score = 0
