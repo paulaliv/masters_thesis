@@ -54,6 +54,11 @@ def evaluate_model(name, model, X, y, label_names):
             X_train, X_test = X[train_idx], X[test_idx]
         else:
             X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+
+        if isinstance(y, pd.Series):
+            y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        else:
+            y_train, y_test = y[train_idx], y[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
 
         #Preprocessing per fold
