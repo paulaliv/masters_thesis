@@ -12,7 +12,9 @@ rad_df = pd.read_csv(radiomics_dir)
 
 
 # --- Step 1: Create a global 'empty_bool' and delete all '*empty_flag' columns ---
-unc_df['confidence_empty_flag'] = unc_df['empty_bool']  # if you want to rename or just copy
+
+unc_df.rename(columns={'confidence_empty_flag': 'empty_bool'}, inplace=True)
+
 # Drop all columns ending with 'empty_flag'
 empty_flag_cols = [col for col in unc_df.columns if col.endswith('empty_flag')]
 unc_df.drop(columns=empty_flag_cols, inplace=True)
