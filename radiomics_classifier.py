@@ -53,6 +53,24 @@ def feature_importance(X):
 
     mi_df['feature_clean'] = mi_df['feature'].apply(clean_feature_name_keep_prefix)
 
+    # Sort features by MI descending
+    sorted_features = mi_df.sort_values('mi_score', ascending=False)['feature'].values
+
+    selected_features = []
+    threshold_corr = 0.9  # max allowed correlation between selected features
+
+    for feat in sorted_features:
+        if len(selected_features) == 0:
+            selected_features.append(feat)
+            continue
+        # Compute correlation with already selected features
+        corr_with_selected = np.max([abs(X[feat].corr(X[s])) for s in selected_features])
+        if corr_with_selected < threshold_corr:
+            selected_features.append(feat)
+
+    print("Selected features after redundancy reduction:", selected_features)
+
+    mi_df = mi_df[mi_df['feature'].isin(selected_features)]
 
     mi_df['color'] = mi_df['feature'].apply(get_color)
 
@@ -224,24 +242,24 @@ param_grid = {
     }
 }
 
-
-models = get_models()
-k_values = [25, 50, 100, 150, 200, 250, 300]
-best_scores = {}
-for name, model in models.items():
-    best_score = 0
-    best_k = None
-    print(f"Model: {name}")
-    for k_value in k_values:
-        print(f"=== Testing with K={k_value} ===")
-        results = evaluate_model(name, model, X, y, label_names, k_value)
-        for key, value in results.items():
-            print(f"  {key}: {value:.4f}")
-            if key == 'f1_score':
-                if value > best_score:
-                    best_score = value
-                    best_k = k_value
-                    best_scores[name] = value
-        print("-" * 30)
-    print(f'Best Score for {name}: {best_score}')
-    print(f'Best K for {name}: {best_k}')
+#
+# models = get_models()
+# k_values = [25, 50, 100, 150, 200, 250, 300]
+# best_scores = {}
+# for name, model in models.items():
+#     best_score = 0
+#     best_k = None
+#     print(f"Model: {name}")
+#     for k_value in k_values:
+#         print(f"=== Testing with K={k_value} ===")
+#         results = evaluate_model(name, model, X, y, label_names, k_value)
+#         for key, value in results.items():
+#             print(f"  {key}: {value:.4f}")
+#             if key == 'f1_score':
+#                 if value > best_score:
+#                     best_score = value
+#                     best_k = k_value
+#                     best_scores[name] = value
+#         print("-" * 30)
+#     print(f'Best Score for {name}: {best_score}')
+#     print(f'Best K for {name}: {best_k}')
