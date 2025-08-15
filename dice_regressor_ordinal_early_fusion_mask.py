@@ -605,7 +605,7 @@ def pad_to_max_length(loss_lists):
     return np.array(padded)
 
 def main(data_dir, plot_dir, folds,df):
-    print('MODEL INPUT: UNCERTAINTY MAP + IMAGE')
+    print('MODEL INPUT: UNCERTAINTY MAP + MASK')
     print('FUSION: EARLY')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

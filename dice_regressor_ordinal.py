@@ -721,7 +721,7 @@ def pad_to_max_length(loss_lists):
 
 
 def main(data_dir, plot_dir, folds,df):
-    print('MODEL INPUT: UNCERTAINTY MAP AND MASK')
+    print('MODEL INPUT: UNCERTAINTY MAP AND IMAGE')
     print('FUSION: LATE')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
