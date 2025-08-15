@@ -174,7 +174,7 @@ feature_importance(X)
 models = get_models()
 k_values = [10, 25, 50, 100, 'all']
 for k_value in k_values:
-    print(f"=== Testing with K={k} ===")
+    print(f"=== Testing with K={k_value} ===")
     for name, model in models.items():
         results = evaluate_model(name,model, X, y, label_names, k_value)
         print(f"Model: {name}")
