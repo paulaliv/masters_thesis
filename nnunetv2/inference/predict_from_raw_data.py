@@ -1579,16 +1579,16 @@ def main(input_folder, output_folder, model_dir):
     
     
     # collect all files in the input folder
-    all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith('.nii.gz')]
+    #all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith('.nii.gz')]
 
 
     predictor.predict_from_files(
-        list_of_lists_or_source_folder=all_files,  # your folder with raw images
+        list_of_lists_or_source_folder=input_folder,  # your folder with raw images
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=False,
         overwrite=True,
-        num_processes_preprocessing=0,
-        num_processes_segmentation_export=
+        num_processes_preprocessing=1,
+        num_processes_segmentation_export=1
     )
 
 

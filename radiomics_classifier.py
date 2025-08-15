@@ -13,10 +13,31 @@ from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import cross_validate
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
+from sklearn.neural_network import MLPClassifier
+
 
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
+import matplotlib.pyplot as plt
 
+def feature_importance(X):
+    # Variance scores
+    variances = X.var()
+    variances.sort_values(ascending=False).head(20).plot(kind='bar', title="Top 20 Variance Features Tumor Classifier")
+
+    plt.savefig("/gpfs/home6/palfken/feature_variance.png")
+    plt.close()
+
+    # Mutual Information scores
+    mi_scores = mutual_info_classif(X, y, random_state=42)
+    mi_df = pd.DataFrame({"feature": X.columns, "mi_score": mi_scores})
+    mi_df.sort_values("mi_score", ascending=False).head(20).plot(x="feature", y="mi_score", kind="bar",
+                                                                 title="Top 20 MI Features")
+    plt.savefig("/gpfs/home6/palfken/feature_imp_rad.png")
+    plt.close()
 
 def get_models():
     models = {
@@ -27,8 +48,14 @@ def get_models():
             eval_metric="logloss",
             random_state=42
         ),
+        "RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
+        "LightGBM": LGBMClassifier(n_estimators=200, learning_rate=0.05, random_state=42),
+        "CatBoost": CatBoostClassifier(verbose=0, random_state=42),
         "SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
-        "LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42)
+        "LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42),
+        "MLP": MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+
+
     }
 
 
@@ -42,7 +69,7 @@ def get_models():
     }
     return models
 
-def evaluate_model(name, model, X, y, label_names):
+def evaluate_model(name, model, X, y, label_names, k_value):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
     accs, f1s, aucs = [], [], []
@@ -64,7 +91,7 @@ def evaluate_model(name, model, X, y, label_names):
         #Preprocessing per fold
         pipeline = Pipeline([
             ('var_thresh', VarianceThreshold(threshold=0.01)),
-            ('select_best', SelectKBest(mutual_info_classif, k=min(50, X.shape[1]))),
+            ('select_best', SelectKBest(mutual_info_classif, k=min(k_value, X.shape[1]))),
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
@@ -81,7 +108,8 @@ def evaluate_model(name, model, X, y, label_names):
         aucs.append(roc_auc_score(y_test, y_proba, multi_class='ovr'))
 
     # Print final averaged classification report
-    print(f"Model: {name}")
+    #print(f"Model: {name}")
+    print(f"Classification report for {name} (K={k}):")
     print(classification_report(all_y_true, all_y_pred, target_names=label_names))
     print("-" * 40)
 
@@ -103,10 +131,10 @@ csv_file.drop(columns='tumor_class_y', inplace=True)
 
 #csv_file.to_csv("/gpfs/home6/palfken/final_features.csv")
 
-X = csv_file.drop(columns=['case_id', 'tumor_class','confidence_diagnostics_Image-original_Dimensionality', 'entropy_diagnostics_Image-original_Dimensionality', 'mutual_info_diagnostics_Image-original_Dimensionality', 'epkl_diagnostics_Image-original_Dimensionality'
-                           ])
-
+X = csv_file.drop(columns=['case_id', 'tumor_class'])
 non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+print(X[non_numeric_cols].head(50))
+print(non_numeric_cols)
 
 # Print columns that will be dropped
 print("Dropping the following non-numeric columns from X:", non_numeric_cols)
@@ -114,9 +142,11 @@ print("Dropping the following non-numeric columns from X:", non_numeric_cols)
 # Drop them
 X = X.drop(columns=non_numeric_cols)
 print(len(X.columns))
+
 nan_cols = X.columns[X.isna().any()].tolist()
 print("Dropping columns with NaN values:", nan_cols)
-X = X.drop(columns=nan_cols)
+X = X.fillna(0)
+#X = X.drop(columns=nan_cols)
 
 
 
@@ -128,21 +158,26 @@ if y.dtype == 'object':
     label_names = le.classes_
 else:
     label_names = np.unique(y)
-y = np.array(y)  # <--
 
-preprocessing = Pipeline([
-    ('var_thresh', VarianceThreshold(threshold=0.01)),
-    ('scaler', StandardScaler())
-])
+feature_importance(X)
+
+#
+#
+# preprocessing = Pipeline([
+#     ('var_thresh', VarianceThreshold(threshold=0.01)),
+#     ('scaler', StandardScaler())
+# ])
 
 # Apply preprocessing
 #X_processed = preprocessing.fit_transform(X)
 
 models = get_models()
-
-for name, model in models.items():
-    results = evaluate_model(name,model, X, y, label_names)
-    print(f"Model: {name}")
-    for k, v in results.items():
-        print(f"  {k}: {v:.4f}")
-    print("-" * 30)
+k_values = [10, 25, 50, 100, 'all']
+for k_value in k_values:
+    print(f"=== Testing with K={k} ===")
+    for name, model in models.items():
+        results = evaluate_model(name,model, X, y, label_names, k_value)
+        print(f"Model: {name}")
+        for k, v in results.items():
+            print(f"  {k}: {v:.4f}")
+        print("-" * 30)
