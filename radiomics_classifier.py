@@ -16,7 +16,6 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
-from explore import tumor_class
 
 
 def get_models():
