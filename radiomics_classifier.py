@@ -37,11 +37,14 @@ def feature_importance(X):
     # Mutual Information scores
     mi_scores = mutual_info_classif(X, y, random_state=42)
     mi_df = pd.DataFrame({"feature": X.columns, "mi_score": mi_scores})
+    to_print = mi_df.sort_values("mi_score", ascending=False)[:20]
+    print(to_print["feature"].values)
+
     plt.figure(figsize=(12, 6))
 
     mi_df.sort_values("mi_score", ascending=False).head(20).plot(x="feature", y="mi_score", kind="bar",
                                                                   title="Top 20 MI Features")
-    plt.xticks(rotation=75, ha='right')
+    plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.savefig("/gpfs/home6/palfken/feature_imp_rad.png")
     plt.close()
@@ -181,23 +184,23 @@ feature_importance(X)
 # Apply preprocessing
 #X_processed = preprocessing.fit_transform(X)
 
-models = get_models()
-k_values = [25, 50, 100, 150, 200, 250, 300]
-best_scores = {}
-for name, model in models.items():
-    best_score = 0
-    best_k = None
-    print(f"Model: {name}")
-    for k_value in k_values:
-        print(f"=== Testing with K={k_value} ===")
-        results = evaluate_model(name, model, X, y, label_names, k_value)
-        for key, value in results.items():
-            print(f"  {key}: {value:.4f}")
-            if key == 'f1_score':
-                if value > best_score:
-                    best_score = value
-                    best_k = k_value
-                    best_scores[name] = value
-        print("-" * 30)
-    print(f'Best Score for {name}: {best_score}')
-    print(f'Best K for {name}: {best_k}')
+# models = get_models()
+# k_values = [25, 50, 100, 150, 200, 250, 300]
+# best_scores = {}
+# for name, model in models.items():
+#     best_score = 0
+#     best_k = None
+#     print(f"Model: {name}")
+#     for k_value in k_values:
+#         print(f"=== Testing with K={k_value} ===")
+#         results = evaluate_model(name, model, X, y, label_names, k_value)
+#         for key, value in results.items():
+#             print(f"  {key}: {value:.4f}")
+#             if key == 'f1_score':
+#                 if value > best_score:
+#                     best_score = value
+#                     best_k = k_value
+#                     best_scores[name] = value
+#         print("-" * 30)
+#     print(f'Best Score for {name}: {best_score}')
+#     print(f'Best K for {name}: {best_k}')
