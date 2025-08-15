@@ -9,6 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
+from torch.backends.mkl import verbose
 from xgboost import XGBClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import cross_validate
@@ -25,17 +26,23 @@ import matplotlib.pyplot as plt
 
 def feature_importance(X):
     # Variance scores
+    plt.figure(figsize=(12, 6))
     variances = X.var()
     variances.sort_values(ascending=False).head(20).plot(kind='bar', title="Top 20 Variance Features Tumor Classifier")
-
+    plt.xticks(rotation=75, ha='right')
+    plt.tight_layout()
     plt.savefig("/gpfs/home6/palfken/feature_variance.png")
     plt.close()
 
     # Mutual Information scores
     mi_scores = mutual_info_classif(X, y, random_state=42)
     mi_df = pd.DataFrame({"feature": X.columns, "mi_score": mi_scores})
+    plt.figure(figsize=(12, 6))
+
     mi_df.sort_values("mi_score", ascending=False).head(20).plot(x="feature", y="mi_score", kind="bar",
-                                                                 title="Top 20 MI Features")
+                                                                  title="Top 20 MI Features")
+    plt.xticks(rotation=75, ha='right')
+    plt.tight_layout()
     plt.savefig("/gpfs/home6/palfken/feature_imp_rad.png")
     plt.close()
 
@@ -49,7 +56,7 @@ def get_models():
             random_state=42
         ),
         "RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
-        "LightGBM": LGBMClassifier(n_estimators=200, learning_rate=0.05, random_state=42),
+        "LightGBM": LGBMClassifier(n_estimators=200, learning_rate=0.05, random_state=42,verbose=-1),
         "CatBoost": CatBoostClassifier(verbose=0, random_state=42),
         "SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
         "LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42),
@@ -95,6 +102,8 @@ def evaluate_model(name, model, X, y, label_names, k_value):
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
+        low_var_cols = X_train.var()[X_train.var() < 1e-8]
+        print(f"Low variance features: {len(low_var_cols)}")
 
         pipeline.fit(X_train, y_train)
         y_pred = pipeline.predict(X_test)
@@ -125,7 +134,7 @@ def evaluate_model(name, model, X, y, label_names, k_value):
 
 
 # Load your features and labels
-csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv")
+csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv", index_col=0)
 csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
 csv_file.drop(columns='tumor_class_y', inplace=True)
 
@@ -173,11 +182,21 @@ feature_importance(X)
 
 models = get_models()
 k_values = [10, 25, 50, 100, 'all']
-for k_value in k_values:
-    print(f"=== Testing with K={k_value} ===")
-    for name, model in models.items():
-        results = evaluate_model(name,model, X, y, label_names, k_value)
-        print(f"Model: {name}")
-        for k, v in results.items():
-            print(f"  {k}: {v:.4f}")
+best_scores = {}
+for name, model in models.items():
+    best_score = 0
+    best_k = None
+    print(f"Model: {name}")
+    for k_value in k_values:
+        print(f"=== Testing with K={k_value} ===")
+        results = evaluate_model(name, model, X, y, label_names, k_value)
+        for key, value in results.items():
+            print(f"  {key}: {value:.4f}")
+            if key == 'f1_score':
+                if value > best_score:
+                    best_score = value
+                    best_k = k_value
+                    best_scores[name] = value
         print("-" * 30)
+    print(f'Best Score for {name}: {best_score}')
+    print(f'Best K for {name}: {best_k}')
