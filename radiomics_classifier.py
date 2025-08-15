@@ -105,14 +105,15 @@ csv_file.drop(columns='tumor_class_y', inplace=True)
 
 X = csv_file.drop(columns=['case_id', 'tumor_class','confidence_diagnostics_Image-original_Dimensionality', 'entropy_diagnostics_Image-original_Dimensionality', 'mutual_info_diagnostics_Image-original_Dimensionality', 'epkl_diagnostics_Image-original_Dimensionality'
                            ])
-#
-# non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
-#
-# # Print columns that will be dropped
-# print("Dropping the following non-numeric columns from X:", non_numeric_cols)
-#
-# # Drop them
-# X = X.drop(columns=non_numeric_cols)
+
+non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+
+# Print columns that will be dropped
+print("Dropping the following non-numeric columns from X:", non_numeric_cols)
+
+# Drop them
+X = X.drop(columns=non_numeric_cols)
+print(len(X.columns))
 nan_cols = X.columns[X.isna().any()].tolist()
 print("Dropping columns with NaN values:", nan_cols)
 X = X.drop(columns=nan_cols)
