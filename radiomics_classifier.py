@@ -124,6 +124,7 @@ if y.dtype == 'object':
     label_names = le.classes_
 else:
     label_names = np.unique(y)
+y = np.array(y)  # <--
 
 preprocessing = Pipeline([
     ('var_thresh', VarianceThreshold(threshold=0.01)),
