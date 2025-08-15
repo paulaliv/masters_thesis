@@ -1563,20 +1563,6 @@ def main(input_folder, output_folder, model_dir):
     )
 
 
-    path = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_1/checkpoint_final.pth"
-
-    path2 = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_2/checkpoint_final.pth"
-    path3 = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_3/checkpoint_final.pth"
-    path4 = "/gpfs/home6/palfken/nnUNetFrame/nnunet_results/Dataset002_SoftTissue/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_4/checkpoint_final.pth"
-
-    ckpt = torch.load(path, map_location='cpu')
-    print("Checkpoint keys FOLD 1:", ckpt.keys())
-    ckpt = torch.load(path2, map_location='cpu')
-    print("Checkpoint keys FOLD 2:", ckpt.keys())
-    ckpt = torch.load(path3, map_location='cpu')
-    print("Checkpoint keys FOLD 3:", ckpt.keys())
-    ckpt = torch.load(path4, map_location='cpu')
-    print("Checkpoint keys FOLD 4:", ckpt.keys())
 
     # Initialize from your trained model folder
     print('Initializing trained model ...')
@@ -1590,14 +1576,19 @@ def main(input_folder, output_folder, model_dir):
 
     # This list will hold bottleneck features (one per image)
     #bottleneck_features = {}
+    
+    
+    # collect all files in the input folder
+    all_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) if f.endswith('.nii.gz')]
+
 
     predictor.predict_from_files(
-        list_of_lists_or_source_folder=input_folder,  # your folder with raw images
+        list_of_lists_or_source_folder=all_files,  # your folder with raw images
         output_folder_or_list_of_truncated_output_files=output_folder,  # where results get saved
         save_probabilities=False,
         overwrite=True,
-        num_processes_preprocessing=4,
-        num_processes_segmentation_export=4
+        num_processes_preprocessing=0,
+        num_processes_segmentation_export=
     )
 
 
@@ -1609,7 +1600,7 @@ if __name__ == '__main__':
     model_dir = sys.argv[3]
 
 
-    sys.path.insert(0, "/gpfs/home6/palfken/masters_thesis/dynamic-network-architectures/")
+    #sys.path.insert(0, "/gpfs/home6/palfken/masters_thesis/dynamic-network-architectures/")
 
     main(input_folder, output_folder, model_dir)
 
