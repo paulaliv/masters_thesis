@@ -2,8 +2,6 @@ import pandas as pd
 import openpyxl
 import os
 
-from dicer_regressor_mask_best import uncertainty
-
 radiomics_dir = "/gpfs/home6/palfken/radiomics_features.csv"
 
 uncertainty_dir = "/gpfs/home6/palfken/unc_map_features.csv"
