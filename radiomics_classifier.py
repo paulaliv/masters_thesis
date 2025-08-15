@@ -59,7 +59,7 @@ def evaluate_model(name, model, X, y, label_names):
             y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
         else:
             y_train, y_test = y[train_idx], y[test_idx]
-        y_train, y_test = y[train_idx], y[test_idx]
+        #y_train, y_test = y[train_idx], y[test_idx]
 
         #Preprocessing per fold
         pipeline = Pipeline([
@@ -99,7 +99,10 @@ def evaluate_model(name, model, X, y, label_names):
 # Load your features and labels
 csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv")
 csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
-csv_file.drop(columns='tumor_class_y')
+csv_file.drop(columns='tumor_class_y', inplace=True)
+
+#csv_file.to_csv("/gpfs/home6/palfken/final_features.csv")
+
 X = csv_file.drop(columns=['case_id', 'tumor_class','confidence_diagnostics_Image-original_Dimensionality', 'entropy_diagnostics_Image-original_Dimensionality', 'mutual_info_diagnostics_Image-original_Dimensionality', 'epkl_diagnostics_Image-original_Dimensionality'
                            ])
 #
