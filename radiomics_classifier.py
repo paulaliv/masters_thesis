@@ -102,10 +102,11 @@ def evaluate_model(name, model, X, y, label_names, k_value):
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
+
+        pipeline.fit(X_train, y_train)
         low_var_cols = X_train.var()[X_train.var() < 1e-8]
         print(f"Low variance features: {len(low_var_cols)}")
 
-        pipeline.fit(X_train, y_train)
         y_pred = pipeline.predict(X_test)
         y_proba = pipeline.predict_proba(X_test)
 
@@ -181,7 +182,7 @@ feature_importance(X)
 #X_processed = preprocessing.fit_transform(X)
 
 models = get_models()
-k_values = [10, 25, 50, 100, 150, 200]
+k_values = [25, 50, 100, 150, 200, 250, 300]
 best_scores = {}
 for name, model in models.items():
     best_score = 0
