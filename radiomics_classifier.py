@@ -24,13 +24,20 @@ from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
 import matplotlib.pyplot as plt
 
-# Assign colors by prefix
+# # Assign colors by prefix
+# prefix_colors = {
+#     'original': '#1f77b4',
+#     'confidence': '#ff7f0e',
+#     'entropy': '#2ca02c',
+#     'epkl': '#d62728',
+#     'mutual': '#9467bd'
+# }
 prefix_colors = {
-    'original': '#1f77b4',
-    'confidence': '#ff7f0e',
-    'entropy': '#2ca02c',
-    'epkl': '#d62728',
-    'mutual': '#9467bd'
+    'original': '#4E79A7',    # steel blue – calm and professional
+    'confidence': '#F28E2B',  # muted orange – stands out but not too bright
+    'entropy': '#59A14F',     # medium green – pleasant and readable
+    'epkl': '#E15759',        # soft red – draws attention
+    'mutual': '#B07AA1'       # muted purple – complements other colors
 }
 # Clean up feature names for plotting (keep prefixes)
 def clean_feature_name_keep_prefix(name):
