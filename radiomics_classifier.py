@@ -83,14 +83,13 @@ def feature_importance(X):
     bars = plt.barh(top_20['feature_clean'], top_20['mi_score'], color=top_20['color'])
     plt.gca().invert_yaxis()  # largest on top
 
-    plt.xlim(0, max_val * 1.1)  # extend by 10%
     plt.xlabel("Mutual Information Score")
     plt.title("Top 20 Features", fontsize=16)
 
-    # Add MI score labels
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(width + 0.01, bar.get_y() + bar.get_height() / 2, f'{width:.2f}', va='center')
+    # # Add MI score labels
+    # for bar in bars:
+    #     width = bar.get_width()
+    #     plt.text(width + 0.01, bar.get_y() + bar.get_height() / 2, f'{width:.2f}', va='center')
 
     plt.tight_layout()
     plt.savefig("/gpfs/home6/palfken/feature_imp_rad_professional.png", dpi=300)
