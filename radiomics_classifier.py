@@ -16,6 +16,9 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
+from explore import tumor_class
+
+
 def get_models():
     models = {
         "XGBoost": XGBClassifier(
@@ -91,7 +94,8 @@ def evaluate_model(name, model, X, y, label_names):
 
 # Load your features and labels
 csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv")
-X = csv_file.drop(columns=['case_id', 'tumor_class_x'])
+csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
+X = csv_file.drop(columns=['case_id', 'tumor_class'])
 
 y = csv_file['tumor_class']
 # Encode labels if they're not numeric
