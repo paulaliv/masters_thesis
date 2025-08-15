@@ -109,7 +109,7 @@ def evaluate_model(name, model, X, y, label_names, k_value):
 
     # Print final averaged classification report
     #print(f"Model: {name}")
-    print(f"Classification report for {name} (K={k}):")
+    print(f"Classification report for {name} (K={k_value}):")
     print(classification_report(all_y_true, all_y_pred, target_names=label_names))
     print("-" * 40)
 
