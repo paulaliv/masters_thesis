@@ -76,13 +76,16 @@ def feature_importance(X):
 
     # Top 20 features
     top_20 = mi_df.sort_values("mi_score", ascending=False).head(20)
+    max_val = top_20['mi_score'].max()
 
     # Plot horizontal bar chart
     plt.figure(figsize=(10, 8))
     bars = plt.barh(top_20['feature_clean'], top_20['mi_score'], color=top_20['color'])
     plt.gca().invert_yaxis()  # largest on top
+
+    plt.xlim(0, max_val * 1.1)  # extend by 10%
     plt.xlabel("Mutual Information Score")
-    plt.title("Top 20 Mutual Information Features", fontsize=16)
+    plt.title("Top 20 Features", fontsize=16)
 
     # Add MI score labels
     for bar in bars:
