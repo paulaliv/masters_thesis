@@ -95,8 +95,16 @@ def evaluate_model(name, model, X, y, label_names):
 csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv")
 csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
 csv_file.drop(columns='tumor_class_y')
-X = csv_file.drop(columns=['case_id', 'tumor_class'])
+X = csv_file.drop(columns=['case_id', 'tumor_class','confidence_diagnostics_Image-original_Dimensionality', 'entropy_diagnostics_Image-original_Dimensionality', 'mutual_info_diagnostics_Image-original_Dimensionality', 'epkl_diagnostics_Image-original_Dimensionality'
+                           ])
 
+non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+
+# Print columns that will be dropped
+print("Dropping the following non-numeric columns from X:", non_numeric_cols)
+
+# Drop them
+X = X.drop(columns=non_numeric_cols)
 y = csv_file['tumor_class']
 # Encode labels if they're not numeric
 if y.dtype == 'object':
