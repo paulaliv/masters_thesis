@@ -94,7 +94,7 @@ def evaluate_model(name, model, X, y, label_names):
 # Load your features and labels
 csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv")
 csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
-csv_file.drop(columns='tumor_clas_y')
+csv_file.drop(columns='tumor_class_y')
 X = csv_file.drop(columns=['case_id', 'tumor_class'])
 
 y = csv_file['tumor_class']
