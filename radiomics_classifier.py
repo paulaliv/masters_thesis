@@ -309,7 +309,7 @@ for name, model in models.items():
 
     # Setup GridSearchCV
     grid = GridSearchCV(
-        estimator=model,
+        estimator=pipe,
         param_grid=param_grid[name],
         scoring='f1_weighted',  # or 'accuracy', 'roc_auc_ovr', etc.
         cv=5,
