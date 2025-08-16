@@ -336,7 +336,7 @@ class ROIPreprocessor:
         plt.savefig(os.path.join(output_dir, f'dist_map_{self.case_id}.png'))
         plt.close()
 
-    def visualize_full_row(self, img, mask, pred, umap_dict, dice, output_dir, axis=0):
+    def visualize_full_row(self, img, pred, umap_dict, dice, output_dir, axis=0):
         """
         Visualize one row of 5 plots:
         - img with mask and pred overlayed
@@ -353,7 +353,7 @@ class ROIPreprocessor:
         """
 
         # Choose slice index based on mask presence
-        summed = np.sum(mask == 1, axis=tuple(i for i in range(mask.ndim) if i != axis))
+        summed = np.sum(pred == 1, axis=tuple(i for i in range(pred.ndim) if i != axis))
         idx = np.argmax(summed)
 
         # Get slices for img, mask, pred, umaps on chosen axis
@@ -368,11 +368,10 @@ class ROIPreprocessor:
                 raise ValueError("Axis must be 0, 1, or 2.")
 
         img_slice = get_slice(img)
-        mask_slice = get_slice(mask)
 
         # If pred empty, create empty pred overlay (zeros)
         if pred.sum() == 0:
-            pred_slice = np.zeros_like(mask_slice)
+            pred_slice = np.zeros_like(img_slice)
         else:
             pred_slice = get_slice(pred)
 
@@ -381,7 +380,7 @@ class ROIPreprocessor:
 
         # 1) Original image with mask and pred overlay
         axs[0].imshow(img_slice, cmap='gray')
-        axs[0].imshow(mask_slice, cmap='Greens', alpha=0.6, label='GT Mask')
+        #axs[0].imshow(mask_slice, cmap='Greens', alpha=0.6, label='GT Mask')
         if pred.sum() > 0:
             axs[0].imshow(pred_slice, cmap='Reds', alpha=0.4, label='Prediction')
         axs[0].set_title('Image + Mask + Pred')
@@ -403,7 +402,7 @@ class ROIPreprocessor:
         plt.savefig(save_path)
         plt.close()
 
-    def visualize_img_pred_mask(self,img, pred, mask,  dice, output_dir, axis=0):
+    def visualize_img_pred_mask(self,img, pred, mask, dice, output_dir, axis=0):
         """
         Visualize original image, prediction mask, and ground truth mask side by side.
 
@@ -741,7 +740,7 @@ class ROIPreprocessor:
         empty_flag = 0
         case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
-        orig_mask = sitk.ReadImage(gt_path)
+        #orig_mask = sitk.ReadImage(gt_path)
         pred = sitk.ReadImage(mask_path)
 
         original_spacing = orig_img.GetSpacing()
@@ -755,33 +754,29 @@ class ROIPreprocessor:
         pred.SetDirection(orig_img.GetDirection())
 
         img_sitk = self.resample_image(orig_img, is_label=False)
-        orig_mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
+        #orig_mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
         mask_sitk = self.resample_umap(pred, reference=img_sitk,is_label=True)
 
 
         resampled_img = sitk.GetArrayFromImage(img_sitk)  # [Z, Y, X]
-        resampled_mask = sitk.GetArrayFromImage(orig_mask_sitk)
+        #resampled_mask = sitk.GetArrayFromImage(orig_mask_sitk)
         resampled_pred = sitk.GetArrayFromImage(mask_sitk)
 
         orig_img_array = sitk.GetArrayFromImage(orig_img)
-        orig_mask_array = sitk.GetArrayFromImage(orig_mask)
+        #orig_mask_array = sitk.GetArrayFromImage(orig_mask)
         orig_pred_array = sitk.GetArrayFromImage(pred)
-        print(f'Original shape :{orig_mask_array.shape}')
+        #print(f'Original shape :{orig_mask_array.shape}')
         print(f'Pred shape :{orig_pred_array.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
 
         # Get bounding box in original mask
-        slices_orig = self.get_roi_bbox(orig_mask_array)  # same as your get_roi_bbox function
-        bbox_shape = (
-            slices_orig[0].stop - slices_orig[0].start,
-            slices_orig[1].stop - slices_orig[1].start,
-            slices_orig[2].stop - slices_orig[2].start
-        )
-        crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
+        #slices_orig = self.get_roi_bbox(orig_mask_array)  # same as your get_roi_bbox function
 
-        resampled_affine = self.compute_affine_with_origin_shift(
-            original_spacing, original_origin, original_direction, crop_start_index
-        )
+        #crop_start_index = np.array([slices_orig[2].start, slices_orig[1].start, slices_orig[0].start])
+        #
+        # resampled_affine = self.compute_affine_with_origin_shift(
+        #     original_spacing, original_origin, original_direction, crop_start_index
+        # )
 
         if resampled_pred.sum() > 0:
 
@@ -799,12 +794,12 @@ class ROIPreprocessor:
             #cropped_pred_sitk.SetSpacing(pred.GetSpacing())
 
 
-            cropped_mask = self.crop_to_roi(resampled_mask, slices)
+            #cropped_mask = self.crop_to_roi(resampled_mask, slices)
 
             img_pp = self.normalize(cropped_img)
             resized_img, resized_pred= self.adjust_to_shape(img_pp, cropped_pred, self.target_shape)
-            print('Adjusting GT Mask!!')
-            _,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
+            #print('Adjusting GT Mask!!')
+            #_,resized_mask = self.adjust_to_shape(img_pp, cropped_mask, self.target_shape)
 
 
         else:
@@ -824,7 +819,9 @@ class ROIPreprocessor:
 
             umap_array = npz_file[umap_type]
             umap_array = umap_array.astype(np.float32)  # or whichever key you want
+            print(f'UMAP shape : {umap_array.shape}')
             umap_array = np.squeeze(umap_array)
+            print(f'UAMP shape after squeeze: {umap_array.shape}')
 
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
 
@@ -839,7 +836,7 @@ class ROIPreprocessor:
 
             umap_sitk = self.resample_umap(orig_umap,reference=img_sitk, is_label=False)
 
-            assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
+            # assert img_sitk.GetSize() == orig_mask_sitk.GetSize() == umap_sitk.GetSize()
 
             umap_sitk.SetOrigin(img_sitk.GetOrigin())
             umap_sitk.SetSpacing(img_sitk.GetSpacing())
@@ -848,6 +845,7 @@ class ROIPreprocessor:
 
             if resampled_pred.sum() > 0:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
+                print(f'UMAP shape after crop: {cropped_umap.shape}')
                 cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
                 # new_origin = list(umap_sitk.TransformIndexToPhysicalPoint([slices[2].start,
                 #                                                            slices[1].start,
@@ -910,15 +908,15 @@ class ROIPreprocessor:
             if self.save_as_nifti:
                 reverted_adjusted_umap = self.resample_to_spacing(resized_umap, self.target_spacing, original_spacing,
                                                               is_mask=False)
-
-                self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
+                #
+                # self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
+                #                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
             else:
                 np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
 
         if resampled_pred.sum() > 0:
-            self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
-            self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
+            self.visualize_full_row(resampled_img,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
+            #self.visualize_img_pred_mask(resampled_img,resampled_pred,  dice_score, output_dir_visuals)
 
         if self.save_as_nifti:
 
@@ -927,14 +925,14 @@ class ROIPreprocessor:
             reverted_adjusted_mask = self.resample_to_spacing(resized_pred, self.target_spacing, original_spacing,
                                                               is_mask=True)
 
-            try:
-                self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
-                                os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
-                self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
-                                os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
-                print('Saved Image and mask')
-            except Exception as e:
-                print(f"Error saving image/mask for case {case_id}: {e}")
+            # try:
+            #     self.save_nifti(reverted_adjusted_img.astype(np.float32), resampled_affine,
+            #                     os.path.join(output_path, f"{case_id}_PADDED_img.nii.gz"))
+            #     self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
+            #                     os.path.join(output_path, f"{case_id}_PADDED_mask.nii.gz"))
+            #     print('Saved Image and mask')
+            # except Exception as e:
+            #     print(f"Error saving image/mask for case {case_id}: {e}")
         else:
             np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
             #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
