@@ -865,57 +865,57 @@ def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #metrics = ['confidence', 'entropy','mutual_info','epkl']
-    metrics = ['entropy', 'mutual_info', 'epkl']
+    metrics = ['mutual_info']
 
-    param_grid = {
-        'lr': [1e-3, 3e-4, 1e-4],
-        'batch_size': [16, 32],
-        'warmup_epochs': [3, 5, 8],
-        'patience': [8, 10, 15],
-    }
-
-
-    best_params_per_metric = {}
-
+    # param_grid = {
+    #     'lr': [1e-3, 3e-4, 1e-4],
+    #     'batch_size': [16, 32],
+    #     'warmup_epochs': [3, 5, 8],
+    #     'patience': [8, 10, 15],
+    # }
+    #
+    #
+    # best_params_per_metric = {}
+    #
     for metric in metrics:
         print(f"\n=== Tuning for metric: {metric} ===")
 
-        best_score = -float('inf')
-        best_params = None
-
-        # Step 1: Tune on just fold 0
-        for lr, bs, warmup, patience in product(
-                param_grid['lr'], param_grid['batch_size'],
-                param_grid['warmup_epochs'], param_grid['patience']
-        ):
-            print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}")
-
-            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
-                fold=0,  # tuning only on fold 0
-                data_dir=data_dir,
-                df=df,
-                splits=folds,
-                uncertainty_metric=metric,
-                plot_dir=plot_dir,
-                device=device,
-                epochs=30,
-                lre=lr,
-                batch_size=bs,
-                warmup_epochs=warmup,
-                patience=patience
-            )
-
-            if kappa_quad > best_score:
-                best_score = kappa_quad
-                best_params = {
-                    'lr': lr,
-                    'batch_size': bs,
-                    'warmup_epochs': warmup,
-                    'patience': patience
-                }
-
-        print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
-        best_params_per_metric[metric] = best_params
+    #     best_score = -float('inf')
+    #     best_params = None
+    #
+    #     # Step 1: Tune on just fold 0
+    #     for lr, bs, warmup, patience in product(
+    #             param_grid['lr'], param_grid['batch_size'],
+    #             param_grid['warmup_epochs'], param_grid['patience']
+    #     ):
+    #         print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}")
+    #
+    #         train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+    #             fold=0,  # tuning only on fold 0
+    #             data_dir=data_dir,
+    #             df=df,
+    #             splits=folds,
+    #             uncertainty_metric=metric,
+    #             plot_dir=plot_dir,
+    #             device=device,
+    #             epochs=30,
+    #             lre=lr,
+    #             batch_size=bs,
+    #             warmup_epochs=warmup,
+    #             patience=patience
+    #         )
+    #
+    #         if kappa_quad > best_score:
+    #             best_score = kappa_quad
+    #             best_params = {
+    #                 'lr': lr,
+    #                 'batch_size': bs,
+    #                 'warmup_epochs': warmup,
+    #                 'patience': patience
+    #             }
+    #
+    #     print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
+    #     best_params_per_metric[metric] = best_params
 
         # Step 2: Full 5-fold training with best params
         print(f"=== Running full CV for {metric} ===")
@@ -938,10 +938,10 @@ def main(data_dir, plot_dir, folds,df):
                 plot_dir=plot_dir,
                 device=device,
                 epochs=60,
-                lre=best_params['lr'],
-                batch_size=best_params['batch_size'],
-                warmup_epochs=best_params['warmup_epochs'],
-                patience=best_params['patience']
+                lre=1e-3,
+                batch_size=16,
+                warmup_epochs=3,
+                patience=15
             )
 
             # Aggregate per fold
@@ -1022,9 +1022,9 @@ def main(data_dir, plot_dir, folds,df):
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_MASK.png"))
         plt.close()
 
-    for metric in metrics:
-        print(f"Best params for {metric}: {best_params_per_metric[metric] }")
-
+    # for metric in metrics:
+    #     print(f"Best params for {metric}: {best_params_per_metric[metric] }")
+    #
 
 
 def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours, m, name, image_dir):
