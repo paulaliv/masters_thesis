@@ -901,13 +901,14 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(resampled_umap, resampled_pred, self.target_shape)
 
                 # Create a "full image" mask (all ones)
-                full_mask = np.ones_like(resampled_umap, dtype=np.uint8)
+                full_mask = np.ones(resampled_umap, dtype=np.uint8)
                 print(f'fake mask shape: {full_mask.shape}')
                 if full_mask.ndim == 4 and full_mask.shape[0] == 1:
                     full_mask = full_mask[0]  # squeeze singleton channel dimension
 
                 # Convert to SimpleITK
                 full_mask_sitk = sitk.GetImageFromArray(full_mask.astype(np.uint8))
+                full_mask_sitk = sitk.Cast(full_mask_sitk, sitk.sitkUInt8)
                 full_mask_sitk.CopyInformation(img_sitk)
                 print("Type of cropped_pred_sitk:", type(full_mask_sitk))
 
