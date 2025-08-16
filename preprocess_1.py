@@ -515,6 +515,11 @@ class ROIPreprocessor:
         if not np.any(cropped_mask):
             print(f"[SKIP] Tumor missing in cropped mask for {self.case_id}")
             return None
+        if resampled_mask.sum() < 5:
+            print(f"[SKIP] Tumor too sparse in cropped mask for {self.case_id}")
+            return None
+
+
 
         #self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id','empty', 'empty')
 
