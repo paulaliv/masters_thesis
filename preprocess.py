@@ -1051,9 +1051,9 @@ def main():
 
 
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
+    #preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
-    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
+    #preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 
     preprocessor1 = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
