@@ -650,6 +650,7 @@ class ROIPreprocessor:
             dice = 0
             self.subtype = tumor_class
             if os.path.exists(img_path):
+                print(f'Processing {self.case_id}')
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
                     subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=mask_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
