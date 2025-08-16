@@ -902,8 +902,8 @@ class ROIPreprocessor:
 
                 mask_np_before = sitk.GetArrayFromImage(cropped_pred_sitk)
                 print("Pre-checkMask mask shape:", mask_np_before.shape)
-                print("Bounding box:", bb)
-                print("Corrected mask array shape:", sitk.GetArrayFromImage(corrected).shape)
+
+
 
                 print("Type of cropped_umap_sitk:", type(cropped_umap_sitk))
                 print("Type of cropped_pred_sitk:", type(cropped_pred_sitk))
@@ -912,7 +912,8 @@ class ROIPreprocessor:
                     cropped_pred_sitk.CopyInformation(cropped_umap_sitk)
 
                 bb, corrected = imageoperations.checkMask(cropped_umap_sitk, cropped_pred_sitk)
-
+                print("Bounding box:", bb)
+                print("Corrected mask array shape:", sitk.GetArrayFromImage(corrected).shape)
                 features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
                 empty_flag = 0
 
