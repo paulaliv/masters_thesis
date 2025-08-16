@@ -704,9 +704,9 @@ def main(data_dir, plot_dir, folds,df):
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
         'batch_size': [16, 32],
-        'warmup_epochs': [3, 5, 8],
+        'warmup_epochs': [3, 5],
         'patience': [8, 10, 15],
-        'dropout': [0.0, 0.1, 0.2, 0.3],
+        'dropout': [0.1, 0.2, 0.3],
     }
 
     best_params_per_metric = {}
@@ -722,7 +722,7 @@ def main(data_dir, plot_dir, folds,df):
                 param_grid['lr'], param_grid['batch_size'],
                 param_grid['warmup_epochs'], param_grid['patience'], param_grid['dropout']
         ):
-            print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}")
+            print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}, Dropout={dropout}")
 
             train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
                 fold=0,  # tuning only on fold 0
