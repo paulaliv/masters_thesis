@@ -793,8 +793,7 @@ class ROIPreprocessor:
 
             print("Unique values in resampled_pred:", np.unique(resampled_pred))
             print("Unique values in cropped_pred:", np.unique(cropped_pred))
-            cropped_pred = (cropped_pred > 0).astype(np.uint8)
-
+            c
 
             cropped_pred_sitk = sitk.GetImageFromArray(cropped_pred)
             cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
@@ -866,8 +865,8 @@ class ROIPreprocessor:
                 # cropped_umap_sitk.SetSpacing(umap_sitk.GetSpacing())
                 #
                 # cropped_umap_sitk.SetDirection(umap_sitk.GetDirection())
-               # cropped_umap_sitk.CopyInformation(cropped_pred_sitk)
-                cropped_pred_sitk.CopyInformation(cropped_umap_sitk)
+                cropped_umap_sitk.CopyInformation(cropped_pred_sitk)
+                #cropped_pred_sitk.CopyInformation(cropped_umap_sitk)
 
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
