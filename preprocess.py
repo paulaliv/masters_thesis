@@ -907,6 +907,9 @@ class ROIPreprocessor:
                 print("Bounding box:", bb)
                 print("Corrected mask array shape:", sitk.GetArrayFromImage(corrected).shape)
 
+                print("Type of cropped_umap_sitk:", type(cropped_umap_sitk))
+                print("Type of cropped_pred_sitk:", type(cropped_pred_sitk))
+
                 features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
                 empty_flag = 0
 
