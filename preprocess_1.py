@@ -510,7 +510,11 @@ class ROIPreprocessor:
         slices = self.get_roi_bbox(resampled_mask)
 
         cropped_img= self.crop_to_roi(resampled_img,slices)
-        cropped_mask = self.crop_to_roi(resampled_img,  slices)
+        cropped_mask = self.crop_to_roi(resampled_mask,  slices)
+
+        if not np.any(cropped_mask):
+            print(f"[SKIP] Tumor missing in cropped mask for {self.case_id}")
+            return None
 
         #self.visualize_umap_and_mask(cropped_img, cropped_mask, orig_img_array, self.case_id','empty', 'empty')
 
@@ -669,12 +673,16 @@ class ROIPreprocessor:
 
                 else:
                    features = self.preprocess_case(img_path, mask_path, output_dir)
-                   filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
+                   if features is not None:
+                       filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
 
-                   new_row = {
-                       "case_id": case_id,
-                       "tumor_class": tumor_class,
-                       **filtered_features}
+                       new_row = {
+                           "case_id": case_id,
+                           "tumor_class": tumor_class,
+                           **filtered_features}
+                   else:
+                       print(f"[SKIP] Case {case_id} skipped due to preprocessing issues")
+                       continue
 
 
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
@@ -1045,9 +1053,9 @@ def main():
 
 
 
-    preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
+    #preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
-    preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
+    #preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 
     preprocessor1 = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
