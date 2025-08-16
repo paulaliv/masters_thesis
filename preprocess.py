@@ -1025,7 +1025,7 @@ def main():
     output_folder_visuals = '/home/bmep/plalfken/my-scratch/test_visuals'
 
     #os.makedirs(output_folder_data, exist_ok=True)
-    #os.makedirs(output_folder_visuals, exist_ok=True)
+    os.makedirs(output_folder_visuals, exist_ok=True)
     # # dice_scores = []
     input_folder_img = sys.argv[1]
     input_folder_gt = sys.argv[2]
