@@ -862,8 +862,8 @@ def main(data_dir, plot_dir, folds,df):
         plt.savefig(os.path.join(plot_dir, f"best_conf_matrix_all_folds_{metric}_LATE_ALL.png"))
         plt.close()
 
-    for metric in metrics:
-        print(f"Best params for {metric}: {best_params_per_metric[metric] }")
+    # for metric in metrics:
+    #     print(f"Best params for {metric}: {best_params_per_metric[metric] }")
 
 
 

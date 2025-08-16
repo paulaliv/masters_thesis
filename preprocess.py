@@ -565,10 +565,20 @@ class ROIPreprocessor:
         """
         Pad a 3D volume to match target_shape, centering the original content.
         """
-        pad_total = [t - v for v, t in zip(volume.shape, target_shape)]
-        pad_before = [p // 2 for p in pad_total]
-        pad_after = [p - b for p, b in zip(pad_total, pad_before)]
-        pad_width = list(zip(pad_before, pad_after))
+        pad_width = []
+        for vol_dim, target_dim in zip(volume.shape, target_shape):
+            total_pad = target_dim - vol_dim
+            if total_pad < 0:
+                # If volume is bigger than target, crop instead of pad
+                start = (vol_dim - target_dim) // 2
+                end = start + target_dim
+                # slice along this dimension
+                volume = volume[slice(start, end)] if vol_dim > target_dim else volume
+                pad_width.append((0, 0))
+            else:
+                pad_before = total_pad // 2
+                pad_after = total_pad - pad_before
+                pad_width.append((pad_before, pad_after))
         return np.pad(volume, pad_width, mode='constant')
 
     def bin_dice_score(self,dice):
@@ -643,13 +653,18 @@ class ROIPreprocessor:
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
                     subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=mask_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
-                    new_row = {
-                        "case_id": case_id,
-                        "tumor_class": tumor_class,
-                        'dist': dist,
-                        **subject_stats
-                    }
 
+                    if subject_stats is not None:  # Only proceed if preprocessing succeeded
+                        new_row = {
+                            "case_id": case_id,
+                            "tumor_class": tumor_class,
+                            "dist": dist,
+                            **subject_stats
+                        }
+                        # Append or save new_row as needed
+                    else:
+                        print(f"[SKIP] Case {case_id} skipped due to preprocessing issues")
+                        continue
 
                 else:
                    features = self.preprocess_case(img_path, mask_path, output_dir)
@@ -665,7 +680,7 @@ class ROIPreprocessor:
                 print(f'Added {case_id}: {dice}')
 
 
-
+                df = df.drop_duplicates(subset='case_id')
                 df.to_csv(save_path, index=False)
 
         print(f'Previous number of rows: {len(df)}')
@@ -774,6 +789,11 @@ class ROIPreprocessor:
         orig_img_array = sitk.GetArrayFromImage(orig_img)
         #orig_mask_array = sitk.GetArrayFromImage(orig_mask)
         orig_pred_array = sitk.GetArrayFromImage(pred)
+
+        if orig_img_array.shape != orig_pred_array.shape:
+            print(f"Shape mismatch: img {orig_img_array.shape}, mask {orig_pred_array.shape}, case {self.case_id}")
+            return None  #
+
         #print(f'Original shape :{orig_mask_array.shape}')
         print(f'Pred shape :{orig_pred_array.shape}')
         print(f'Image Shape after reshaping to target spacing: {resampled_img.shape}')
