@@ -625,11 +625,16 @@ class ROIPreprocessor:
             subtype_row = subtypes_df[subtypes_df['new_accnr'] == case_id]
             if not subtype_row.empty:
                 tumor_class = subtype_row.iloc[0]['tumor_class']
-                tumor_class = tumor_class.strip()
+                if isinstance(tumor_class, float) and np.isnan(tumor_class):
+                    tumor_class = 'Unknown'
+                    dist = 'Unknown'
+                else:
+                    tumor_class = str(tumor_class).strip()
 
-                dist = subtype_row.iloc[0]['dist']
+                    dist = subtype_row.iloc[0]['dist']
             else:
                 tumor_class = 'Unknown'
+                dist = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
 
             dice = 0
