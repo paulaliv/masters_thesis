@@ -997,7 +997,7 @@ def main():
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     #output_folder_data = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
-    output_folder_visuals = ' /home/bmep/plalfken/my-scratch/test_visuals '
+    output_folder_visuals = '/home/bmep/plalfken/my-scratch/test_visuals'
 
     #os.makedirs(output_folder_data, exist_ok=True)
     #os.makedirs(output_folder_visuals, exist_ok=True)
