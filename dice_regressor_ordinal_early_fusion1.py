@@ -610,14 +610,14 @@ def main(data_dir, plot_dir, folds,df):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    metrics = ['entropy', 'mutual_info', 'epkl']
-
+    #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    metrics = ['confidence']
 
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
         'batch_size': [16, 32],
-        'warmup_epochs': [3, 5,8],
+        'warmup_epochs': [3, 5],
         'patience': [8, 10, 15]
     }
 
@@ -625,44 +625,45 @@ def main(data_dir, plot_dir, folds,df):
 
     for metric in metrics:
         print(f"\n=== Tuning for metric: {metric} ===")
-
-        best_score = -float('inf')
-        best_params = None
-
-        # Step 1: Tune on just fold 0
-        for lr, bs, warmup, patience, dropout in product(
-                param_grid['lr'], param_grid['batch_size'],
-                param_grid['warmup_epochs'], param_grid['patience']
-        ):
-            print(f'Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}')
-
-            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
-                fold=0,  # tuning only on fold 0
-                data_dir=data_dir,
-                df=df,
-                splits=folds,
-                uncertainty_metric=metric,
-                plot_dir=plot_dir,
-                device=device,
-                epochs=30,
-                lre=lr,
-                batch_size=bs,
-                warmup_epochs=warmup,
-                patience=patience
-            )
-
-            if kappa_quad > best_score:
-                best_score = kappa_quad
-                best_params = {
-                    'lr': lr,
-                    'batch_size': bs,
-                    'warmup_epochs': warmup,
-                    'patience': patience
-                }
-
-        print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
-        best_params_per_metric[metric] = best_params
-
+        #
+        # best_score = -float('inf')
+        # best_params = None
+        #
+        # # Step 1: Tune on just fold 0
+        # for lr, bs, warmup, patience, dropout in product(
+        #         param_grid['lr'], param_grid['batch_size'],
+        #         param_grid['warmup_epochs'], param_grid['patience'], param_grid['dropout']
+        # ):
+        #     print(f"Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}, Dropout={dropout}")
+        #
+        #     train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+        #         fold=0,  # tuning only on fold 0
+        #         data_dir=data_dir,
+        #         df=df,
+        #         splits=folds,
+        #         uncertainty_metric=metric,
+        #         plot_dir=plot_dir,
+        #         device=device,
+        #         epochs=30,
+        #         lre=lr,
+        #         batch_size=bs,
+        #         warmup_epochs=warmup,
+        #         patience=patience,
+        #         dropout = dropout
+        #     )
+        #
+        #     if kappa_quad > best_score:
+        #         best_score = kappa_quad
+        #         best_params = {
+        #             'lr': lr,
+        #             'batch_size': bs,
+        #             'warmup_epochs': warmup,
+        #             'patience': patience
+        #         }
+        #
+        # print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
+        # best_params_per_metric[metric] = best_params
+        #
         # # Step 2: Full 5-fold training with best params
         print(f"=== Running full CV for {metric} ===")
 
@@ -684,10 +685,10 @@ def main(data_dir, plot_dir, folds,df):
                 plot_dir=plot_dir,
                 device=device,
                 epochs=60,
-                lre=best_params['lr'],
-                batch_size=best_params['batch_size'],
-                warmup_epochs=best_params['warmup_epochs'],
-                patience=best_params['patience']
+                lre=1e-4,
+                batch_size=16,
+                warmup_epochs=8,
+                patience=15
             )
             # Aggregate per fold
             all_val_preds.append(val_preds)
