@@ -542,10 +542,10 @@ class ROIPreprocessor:
             self.save_nifti(reverted_adjusted_mask.astype(np.uint8), resampled_affine,
                             os.path.join(output_dir, f"{self.case_id}_PADDED_mask.nii.gz"))
 
-
-        else:
-            np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-            np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+        #
+        # else:
+        #     np.save( os.path.join(output_dir, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+        #     np.save( os.path.join(output_dir, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
 
         print(f'Processed {self.case_id}')
         return features
@@ -577,7 +577,8 @@ class ROIPreprocessor:
 
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
-        subtypes_csv = "/gpfs/home6/palfken/WORC_train.csv"
+        #"/gpfs/home6/palfken/WORC_train.csv"
+        subtypes_csv = "/scratch/bmep/plalfken/test_table.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         #print(subtypes_df.columns)
         #
@@ -589,9 +590,13 @@ class ROIPreprocessor:
         image_paths = sorted(glob.glob(os.path.join(image_dir, '*_0000.nii.gz')))
         case_stats = []
 
-        #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
-        save_path = "/gpfs/home6/palfken/unc_map_features.csv"
-        #save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
+        if self.save_umaps:
+            #save_path = "/gpfs/home6/palfken/radiomics_features.csv"
+            save_path = "/scratch/bmep/plalfken/unc_map_features_test.csv"
+            #save_path = "/gpfs/home6/palfken/Dice_scores_BEST.csv"
+        else:
+            save_path = "/scratch/bmep/plalfken/radiomics_features_test.csv"
+
 
         if os.path.exists(save_path):
             from_scratch = False
@@ -605,46 +610,41 @@ class ROIPreprocessor:
             self.case_id = case_id
 
             mask_path = os.path.join(mask_dir, f"{case_id}.nii.gz")
-            gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
-
-            # # Find gt_path by searching in all gt_dirs (stop at first found)
-            # gt_path = None
-            # for gdir in gt_dirs:
-            #     candidate = os.path.join(gdir, f"{case_id}.nii.gz")
-            #     if os.path.exists(candidate):
-            #         gt_path = candidate
-            #         break
-            #
-            # if gt_path is None:
-            #     print(f"Warning: GT file for case {case_id} not found in any gt_dirs, skipping")
-            #     continue
-            pred = nib.load(mask_path)
-            gt = nib.load(gt_path)
-            dice = self.compute_dice(gt, pred)
-            print(f'Dice score: {dice}')
+            #gt_path = os.path.join(gt_dir,f'{case_id}.nii.gz')
 
 
-            subtype_row = subtypes_df[subtypes_df['nnunet_id'] == case_id]
+            #pred = nib.load(mask_path)
+            # gt = nib.load(gt_path)
+            # dice = self.compute_dice(gt, pred)
+            # print(f'Dice score: {dice}')
+
+
+            subtype_row = subtypes_df[subtypes_df['new_accnr'] == case_id]
             if not subtype_row.empty:
-                tumor_class = subtype_row.iloc[0]['Final_Classification']
+                tumor_class = subtype_row.iloc[0]['tumor_class']
                 tumor_class = tumor_class.strip()
+
+                dist = subtype_row.iloc[0]['dist']
             else:
                 tumor_class = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
+
+            dice = ''
             self.subtype = tumor_class
             if os.path.exists(img_path):
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
-                    subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=gt_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
+                    subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=mask_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
                     new_row = {
                         "case_id": case_id,
                         "tumor_class": tumor_class,
+                        'dist': dist,
                         **subject_stats
                     }
 
 
                 else:
-                   features = self.preprocess_case(img_path, gt_path, output_dir)
+                   features = self.preprocess_case(img_path, mask_path, output_dir)
                    filtered_features = {k: v for k, v in features.items() if "diagnostics" not in k}
 
                    new_row = {
@@ -660,7 +660,7 @@ class ROIPreprocessor:
 
                 df.to_csv(save_path, index=False)
 
-        print(f'PRevious number of rows: {len(df)}')
+        print(f'Previous number of rows: {len(df)}')
 
         # # Load existing results if available
         #
@@ -738,7 +738,7 @@ class ROIPreprocessor:
         #df.to_csv("/gpfs/home6/palfken/radiomics_features.csv", index=False)
 
     def preprocess_uncertainty_map(self, img_path, umap_path, gt_path, mask_path, dice_score, output_path, output_dir_visuals):
-
+        empty_flag = 0
         case_id = os.path.basename(mask_path).replace('.nii.gz', '')
         orig_img = sitk.ReadImage(img_path)
         orig_mask = sitk.ReadImage(gt_path)
@@ -901,7 +901,7 @@ class ROIPreprocessor:
                 stats_dict[f"{umap_type}_{k}"] = v
 
             # Add empty_flag
-            stats_dict[f"{umap_type}_empty_flag"] = empty_flag
+
             stats_dict[f"{umap_type}_pred_mean_unc"] = pred_mean_unc
             stats_dict[f"{umap_type}_pred_median_unc"] = pred_median_unc
             stats_dict[f"{umap_type}_pred_std_unc"] = pred_std_unc
@@ -913,12 +913,12 @@ class ROIPreprocessor:
 
                 self.save_nifti(reverted_adjusted_umap.astype(np.float32), resampled_affine,
                                 os.path.join(output_path, f"{self.case_id}_{umap_type}.nii.gz"))
-        #     else:
-        #         np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
-        # #
-        # if resampled_pred.sum() > 0:
-        #     self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
-        #     self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
+            else:
+                np.save(os.path.join(output_path, f"{self.case_id}_{umap_type}.npy"), resized_umap.astype(np.float32))
+
+        if resampled_pred.sum() > 0:
+            self.visualize_full_row(resampled_img,resampled_mask,resampled_pred,resampled_umaps, dice_score, output_dir_visuals)
+            self.visualize_img_pred_mask(resampled_img,resampled_pred, resampled_mask, dice_score, output_dir_visuals)
 
         if self.save_as_nifti:
 
@@ -935,12 +935,12 @@ class ROIPreprocessor:
                 print('Saved Image and mask')
             except Exception as e:
                 print(f"Error saving image/mask for case {case_id}: {e}")
-        # else:
-        #     np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
-        #     #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
-        #     np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
+        else:
+            np.save(os.path.join(output_path, f"{self.case_id}_img.npy"), resized_img.astype(np.float32))
+            #np.save(os.path.join(output_path, f"{self.case_id}_mask.npy"), resized_mask.astype(np.uint8))
+            np.save(os.path.join(output_path, f"{self.case_id}_pred.npy"), resized_pred.astype(np.uint8))
 
-
+        stats_dict["empty_bool"] = empty_flag
         print(f'Processed {self.case_id}')
         return stats_dict
 
@@ -960,7 +960,7 @@ def main():
     #mask_paths = sorted(glob.glob(os.path.join(input_folder_gt, '*.nii.gz')))
 
     #output_folder_data = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
-    output_folder_visuals = "/gpfs/home6/palfken/OOD_visuals/"
+    output_folder_visuals = ' /home/bmep/plalfken/my-scratch/test_visuals '
 
     #os.makedirs(output_folder_data, exist_ok=True)
     #os.makedirs(output_folder_visuals, exist_ok=True)
@@ -977,6 +977,11 @@ def main():
     preprocessor = ROIPreprocessor(safe_as_nifti=False, save_umaps=True)
 
     preprocessor.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
+
+
+    preprocessor1 = ROIPreprocessor(safe_as_nifti=False, save_umaps=False)
+
+    preprocessor1.preprocess_folder(input_folder_img, predicted_mask_folder,input_folder_gt, output_folder_data, output_folder_visuals)
 
 if __name__ == '__main__':
     main()
