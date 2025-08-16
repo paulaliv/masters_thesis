@@ -854,7 +854,7 @@ class ROIPreprocessor:
             umap_sitk.SetDirection(img_sitk.GetDirection())
             resampled_umap = sitk.GetArrayFromImage(umap_sitk)
 
-            if resampled_pred.sum() > 0:
+            if resampled_pred.sum() > 5:
                 cropped_umap = self.crop_to_roi(resampled_umap, slices)
                 print(f'UMAP shape after crop: {cropped_umap.shape}')
                 cropped_umap_sitk = sitk.GetImageFromArray(cropped_umap)
@@ -879,30 +879,11 @@ class ROIPreprocessor:
                 cropped_umap_sitk = sitk.Cast(cropped_umap_sitk, sitk.sitkFloat32)
                 cropped_pred_sitk = sitk.Cast(cropped_pred_sitk, sitk.sitkUInt8)
 
-                print("cropped_umap_sitk dim:", cropped_umap_sitk.GetDimension())
-                print("cropped_pred_sitk dim:", cropped_pred_sitk.GetDimension())
-
-
-                # Hard checks before calling PyRadiomics
-                print("IMG size:", cropped_umap_sitk.GetSize(), "spacing:", cropped_umap_sitk.GetSpacing())
-                print("MASK size:", cropped_pred_sitk.GetSize(), "spacing:", cropped_pred_sitk.GetSpacing())
-                print("IMG origin:", cropped_umap_sitk.GetOrigin(), "dir:", cropped_umap_sitk.GetDirection())
-                print("MASK origin:", cropped_pred_sitk.GetOrigin(), "dir:", cropped_pred_sitk.GetDirection())
 
                 assert cropped_umap_sitk.GetSize() == cropped_pred_sitk.GetSize()
                 assert cropped_umap_sitk.GetSpacing() == cropped_pred_sitk.GetSpacing()
                 assert cropped_umap_sitk.GetOrigin() == cropped_pred_sitk.GetOrigin()
                 assert cropped_umap_sitk.GetDirection() == cropped_pred_sitk.GetDirection()
-
-                arr_mask_for_check = sitk.GetArrayFromImage(cropped_pred_sitk)
-                print("Mask as array (pre-exec): shape", arr_mask_for_check.shape,
-                      "dtype", arr_mask_for_check.dtype, "unique", np.unique(arr_mask_for_check))
-
-                from radiomics import imageoperations
-
-                mask_np_before = sitk.GetArrayFromImage(cropped_pred_sitk)
-                print("Pre-checkMask mask shape:", mask_np_before.shape)
-
 
 
                 print("Type of cropped_umap_sitk:", type(cropped_umap_sitk))
@@ -911,9 +892,6 @@ class ROIPreprocessor:
                     cropped_pred_sitk = sitk.GetImageFromArray(cropped_pred_sitk)
                     cropped_pred_sitk.CopyInformation(cropped_umap_sitk)
 
-                bb, corrected = imageoperations.checkMask(cropped_umap_sitk, cropped_pred_sitk)
-                print("Bounding box:", bb)
-                print("Corrected mask array shape:", sitk.GetArrayFromImage(corrected).shape)
                 features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
                 empty_flag = 0
 
