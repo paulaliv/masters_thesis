@@ -859,6 +859,10 @@ class ROIPreprocessor:
             umap_array = np.squeeze(umap_array)
             print(f'UAMP shape after squeeze: {umap_array.shape}')
 
+            if umap_array.ndim == 2:
+                print(f"[SKIP] Case {case_id} has only a single slice, shape: {umap_array.shape}")
+                return None
+
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
 
            #self.visualize_umap_and_mask(umap_array, orig_mask_array, orig_img_array, f'{self.case_id}: {umap_type} map', umap_type, output_dir_visuals)
