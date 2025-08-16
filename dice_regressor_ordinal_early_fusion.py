@@ -630,8 +630,7 @@ def main(data_dir, plot_dir, folds,df):
         best_params = None
 
         # Step 1: Tune on just fold 0
-        for lr, bs, warmup, patience, dropout in product(
-                param_grid['lr'], param_grid['batch_size'],
+        for lr, bs, warmup, patience, dropout in product(param_grid['lr'], param_grid['batch_size'],
                 param_grid['warmup_epochs'], param_grid['patience']
         ):
             print(f'Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}')
