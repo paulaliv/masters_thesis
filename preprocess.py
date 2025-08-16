@@ -875,8 +875,13 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
                 print(f'Cropped pred shape: {cropped_pred.shape}')
 
+                # Force casting to Image
+                cropped_umap_sitk = sitk.Cast(cropped_umap_sitk, sitk.sitkFloat32)
+                cropped_pred_sitk = sitk.Cast(cropped_pred_sitk, sitk.sitkUInt8)
+
                 print("cropped_umap_sitk dim:", cropped_umap_sitk.GetDimension())
                 print("cropped_pred_sitk dim:", cropped_pred_sitk.GetDimension())
+
 
                 # Hard checks before calling PyRadiomics
                 print("IMG size:", cropped_umap_sitk.GetSize(), "spacing:", cropped_umap_sitk.GetSpacing())
