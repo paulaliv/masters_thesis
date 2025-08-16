@@ -394,7 +394,7 @@ class ROIPreprocessor:
             axs[i + 1].set_title(f'{umap_titles[i]} Map')
             axs[i + 1].axis('off')
 
-        plt.suptitle(f'Subtype: {self.subtype}, Dice: {dice:.3f}', fontsize=18)
+        plt.suptitle(f'Subtype: {self.subtype}', fontsize=18)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         # Save figure
@@ -453,7 +453,7 @@ class ROIPreprocessor:
         axs[2].set_title(f'Ground Truth Mask (slice {idx})')
         axs[2].axis('off')
 
-        plt.suptitle(f'Case: {self.case_id}, Dice: {dice:.3f}', fontsize=16)
+        plt.suptitle(f'Case: {self.case_id}', fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         save_path = os.path.join(output_dir, f"{self.case_id}_img_pred_mask_side_by_side.png")
@@ -632,7 +632,7 @@ class ROIPreprocessor:
                 tumor_class = 'Unknown'
                 print(f'Case id {case_id}: no subtype in csv file!')
 
-            dice = ''
+            dice = 0
             self.subtype = tumor_class
             if os.path.exists(img_path):
                 if self.save_umaps:
