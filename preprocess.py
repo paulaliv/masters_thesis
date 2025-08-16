@@ -866,6 +866,9 @@ class ROIPreprocessor:
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
                 print(f'Cropped pred shape: {cropped_pred.shape}')
 
+                print("cropped_umap_sitk dim:", cropped_umap_sitk.GetDimension())
+                print("cropped_pred_sitk dim:", cropped_pred_sitk.GetDimension())
+
                 features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
                 empty_flag = 0
 
