@@ -79,8 +79,8 @@ def convert_npz_to_nii(npz_folder, input_nifti_dir, out_folder, overwrite=False)
         print(f"✔ Converted: {patient_id}")
 
 def convert_dicom():
-    input_root = "/home/bmep/plalfken/my-scratch/test_data/"
-    output_root = "/home/bmep/plalfken/my-scratch/test_data_nifti/"
+    input_root = "/home/bmep/plalfken/my-scratch/test_data1/"
+    output_root = "/home/bmep/plalfken/my-scratch/test_data_nifti_1/"
     os.makedirs(output_root, exist_ok=True)
     for patient in os.listdir(input_root):
         patient_path = os.path.join(input_root, patient)
@@ -102,7 +102,7 @@ def convert_dicom():
             print(f"No DICOM folder in {first_series}, skipping.")
             continue
 
-        output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}.nii.gz")
+        output_nii = os.path.join(output_root, f"{patient.replace('-', '_')}_0000.nii.gz")
         if os.path.exists(output_nii):
             print(f"Skipping {patient}")
             continue
