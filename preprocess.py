@@ -478,6 +478,9 @@ class ROIPreprocessor:
         original_origin = orig_img.GetOrigin()  # tuple (x, y, z)
         original_direction = np.array(orig_img.GetDirection()).reshape(3, 3)  # ndarray shape (3,3)
 
+        orig_mask.SetOrigin(orig_img.GetOrigin())
+        orig_mask.SetSpacing(orig_img.GetSpacing())
+        orig_mask.SetDirection(orig_img.GetDirection())
 
         img_sitk = self.resample_image(orig_img, is_label=False)
         mask_sitk = self.resample_umap(orig_mask, reference=img_sitk,is_label=True)
@@ -514,7 +517,8 @@ class ROIPreprocessor:
         cropped_img_sitk = sitk.GetImageFromArray(cropped_img)
         cropped_img_sitk.SetSpacing(img_sitk.GetSpacing())  # very important!
         cropped_mask_sitk = sitk.GetImageFromArray(cropped_mask)
-        cropped_mask_sitk.SetSpacing(mask_sitk.GetSpacing())
+        #cropped_mask_sitk.SetSpacing(mask_sitk.GetSpacing())
+        cropped_mask_sitk.CopyInformation(cropped_img_sitk)
 
         features = self.extract_radiomics_features(cropped_img_sitk, cropped_mask_sitk)
 
@@ -860,6 +864,7 @@ class ROIPreprocessor:
 
 
                 resized_umap, _ = self.adjust_to_shape(cropped_umap, cropped_pred, self.target_shape)
+                print(f'Cropped pred shape: {cropped_pred.shape}')
 
                 features = self.extract_radiomics_features(cropped_umap_sitk, cropped_pred_sitk)
                 empty_flag = 0
