@@ -650,6 +650,7 @@ class ROIPreprocessor:
             dice = 0
             self.subtype = tumor_class
             if os.path.exists(img_path):
+                print(f'Processing {self.case_id}')
                 if self.save_umaps:
                     umap_path = os.path.join(mask_dir, f"{case_id}_uncertainty_maps.npz")
                     subject_stats = self.preprocess_uncertainty_map(img_path=img_path,umap_path=umap_path,gt_path=mask_path, mask_path=mask_path,dice_score = dice, output_path=output_dir, output_dir_visuals=output_dir_visuals)
@@ -790,6 +791,8 @@ class ROIPreprocessor:
         #orig_mask_array = sitk.GetArrayFromImage(orig_mask)
         orig_pred_array = sitk.GetArrayFromImage(pred)
 
+
+
         if orig_img_array.shape != orig_pred_array.shape:
             print(f"Shape mismatch: img {orig_img_array.shape}, mask {orig_pred_array.shape}, case {self.case_id}")
             return None  #
@@ -858,6 +861,12 @@ class ROIPreprocessor:
             print(f'UMAP shape : {umap_array.shape}')
             umap_array = np.squeeze(umap_array)
             print(f'UAMP shape after squeeze: {umap_array.shape}')
+
+            if umap_array.ndim == 2:
+                print(f"[SKIP] Case {case_id} has only a single slice, shape: {umap_array.shape}")
+                return None
+
+
 
             umap_array = self.center_pad_to_shape(umap_array, orig_img_array.shape)
 
