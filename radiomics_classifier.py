@@ -19,8 +19,9 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
+from sklearn.utils.class_weight import compute_sample_weight
 
-
+from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_selection import SelectKBest, mutual_info_classif,  f_classif
 
 import matplotlib.pyplot as plt
@@ -115,6 +116,9 @@ def feature_importance(X):
 
 
 def get_models():
+    classes = np.unique(y)
+    weights = compute_class_weight("balanced", classes=classes, y=y)
+
     models = {
         "XGBoost": XGBClassifier(
             n_estimators=100,
@@ -124,8 +128,8 @@ def get_models():
             random_state=42
         ),
         #"RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
-        "LightGBM": LGBMClassifier(n_estimators=200, learning_rate=0.05, random_state=42,verbose=-1),
-        "CatBoost": CatBoostClassifier(verbose=0, random_state=42),
+        "LightGBM": LGBMClassifier(n_estimators=200, class_weight="balanced", learning_rate=0.05, random_state=42,verbose=-1),
+        "CatBoost": CatBoostClassifier(verbose=0, random_state=42,  class_weights=weights),
         #"SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
         #"LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42),
         #"MLP": MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
@@ -170,8 +174,30 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         ])
 
         clf = pipeline.named_steps['clf']
-        if hasattr(clf, "fit") and "eval_set" in clf.fit.__code__.co_varnames:
-            clf.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=patience, verbose=False)
+        # XGBoost
+        if isinstance(clf, XGBClassifier):
+            sample_weights = compute_sample_weight("balanced", y_train)
+            clf.fit(X_train, y_train, sample_weight=sample_weights, eval_set=[(X_val, y_val)],
+                    early_stopping_rounds=patience)
+
+        # LightGBM
+        elif isinstance(clf, LGBMClassifier):
+            clf.fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
+                verbose=False
+            )
+
+        # CatBoost
+        elif isinstance(clf, CatBoostClassifier):
+            clf.fit(
+                X_train, y_train,
+                eval_set=(X_val, y_val),
+                early_stopping_rounds=patience,
+                verbose=False
+            )
+
         else:
             pipeline.fit(X_train, y_train)
 
@@ -419,7 +445,7 @@ else:
 #
 
 # Run manual tuning
-models = get_models()
+models = get_models(y)
 best_results = manual_tune_and_eval(models, X, y, label_names)
 
 for model_name, (best_model, metrics) in best_results.items():
