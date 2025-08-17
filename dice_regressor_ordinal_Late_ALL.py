@@ -724,7 +724,7 @@ def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
-    metrics = ['confidence']
+    metrics = ['mutual_info']
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
@@ -796,10 +796,10 @@ def main(data_dir, plot_dir, folds,df):
                 plot_dir=plot_dir,
                 device=device,
                 epochs=60,
-                lre=1e-4,
+                lre=3e-4,
                 batch_size=16,
                 warmup_epochs=3,
-                patience=15
+                patience=10
             )
 
             # Aggregate per fold

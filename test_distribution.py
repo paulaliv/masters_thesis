@@ -103,7 +103,7 @@ old_dir = "/scratch/bmep/plalfken/test_table.csv"
 old_df = pd.read_csv(old_dir)
 final_df = pd.concat([old_df, test_df_filtered],ignore_index=True)
 final_df.to_csv("/scratch/bmep/plalfken/test_table1.csv", index=False)
-check = "/scratch/bmep/plalfken/test_table.csv"
+check = "/scratch/bmep/plalfken/test_table1.csv"
 df = pd.read_csv(check)
 
 print(df.head(20))
