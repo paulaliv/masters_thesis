@@ -1252,13 +1252,13 @@ def inference(ood_dir, uncertainty_metric):
 
         with torch.no_grad():
 
-            for mask, uncertainty, subtype, case_id in ood_loader:
+            for mask, uncertainty, labels, subtype, case_id in ood_loader:
                 mask, uncertainty =  mask.to(device), uncertainty.to(device)
 
                 if fold_idx == 0:
                     all_subtypes.extend(subtype)
                     all_case_ids.extend(case_id)
-                    #all_labels.extend(labels.cpu().numpy())
+                    all_labels.extend(labels)
 
                 preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
@@ -1270,18 +1270,19 @@ def inference(ood_dir, uncertainty_metric):
 
     all_case_ids = np.array(all_case_ids)
     all_subtypes = np.array(all_subtypes)
-    #all_labels = np.array(all_labels)
+    all_labels = np.array(all_labels)
     all_preds = np.array(all_preds)
     from scipy.stats import mode
     final_preds, _ = mode(all_preds, axis=0)
     final_preds = final_preds.squeeze()
-    #avg_preds= np.mean(all_preds, axis=0)
+    avg_preds= np.mean(all_preds, axis=0)
 
     return  {
             "case_ids": all_case_ids,
             "labels": all_labels,
             "subtypes": all_subtypes,
-            "avg_preds": final_preds,
+            "maj_preds": final_preds,
+            "avg_preds": avg_preds,
             'all_preds': all_preds
 
     }
@@ -1334,7 +1335,9 @@ def visualize_features(ood_dir, plot_dir):
             "case_id": results["case_ids"],
             "gt": results["labels"],
             "subtype": results["subtypes"],
-            "pred": results["avg_preds"],
+            "maj_pred": results["maj_preds"],
+            "avg_pred": results["avg_preds"],
+
         })
 
         # expand per-fold predictions into extra columns
@@ -1351,9 +1354,9 @@ def visualize_features(ood_dir, plot_dir):
         # --- 2. Confusion matrix ---
         # Use val true labels and ood predicted labels (or vice versa depending on your setup)
         # Here I assume val labels vs ood labels as an example; adjust as needed
-        plot_confusion(results["labels"],results["avg_preds"],
-                   title=f"Confusion Matrix - {metric} : WORC OOD",
-                   save_path=os.path.join(plot_dir, f"confusion_ood_{metric}.png"))
+        # plot_confusion(results["labels"],results["avg_preds"],
+        #            title=f"Confusion Matrix - {metric} : WORC OOD",
+        #            save_path=os.path.join(plot_dir, f"confusion_ood_{metric}.png"))
 
 
 
