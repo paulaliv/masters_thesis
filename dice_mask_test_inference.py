@@ -1222,7 +1222,7 @@ def inference(ood_dir, uncertainty_metric):
     ood_dataset = QADataset(
         case_ids=lipoma_ids,
         data_dir=ood_dir,
-        df= subtypes_df,
+        df= df,
         uncertainty_metric=uncertainty_metric,
         transform=val_transforms,
         want_features=True,
