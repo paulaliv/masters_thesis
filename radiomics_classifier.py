@@ -20,7 +20,7 @@ from catboost import CatBoostClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.utils.class_weight import compute_sample_weight
-
+from xgboost.callback import EarlyStopping
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_selection import SelectKBest, mutual_info_classif,  f_classif
 
@@ -177,8 +177,13 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         # XGBoost
         if isinstance(clf, XGBClassifier):
             sample_weights = compute_sample_weight("balanced", y_train)
-            clf.fit(X_train, y_train, sample_weight=sample_weights, eval_set=[(X_val, y_val)],
-                    early_stopping_rounds=patience)
+            clf.fit(
+                X_train, y_train,
+                sample_weight=sample_weights,
+                eval_set=[(X_val, y_val)],
+                callbacks=[EarlyStopping(rounds=patience, save_best=True)],  # instead of early_stopping_rounds
+                verbose=False
+            )
 
         # LightGBM
         elif isinstance(clf, LGBMClassifier):
