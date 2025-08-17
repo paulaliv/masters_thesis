@@ -1211,7 +1211,7 @@ def inference(ood_dir, uncertainty_metric):
     missing_case = 'STT_0486'
 
     # Remove it from the DataFrame
-    df = df[df['case_id'] != missing_case]
+    df = df[df['new_accnr'] != missing_case]
     lipoma_ids = df["new_accnr"].values
 
 
