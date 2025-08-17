@@ -37,7 +37,7 @@ import os
 # print(merged_df.columns)
 subtypes_dir = "/scratch/bmep/plalfken/asqac-stbs JOB.xlsx"
 test_dir = "/scratch/bmep/plalfken/accession numbers.xlsx"
-test_data_dir = "/scratch/bmep/plalfken/test_data_nifti_1"
+test_data_dir = "/scratch/bmep/plalfken/test_data_nifti"
 
 
 # Read your files
@@ -94,16 +94,17 @@ id_tumors = [
 ]
 
 # Create a new column 'dist' to mark in-distribution (ID) vs out-of-distribution (OOD)
-test_df_filtered['dist'] = test_df_filtered['tumor_class'].apply(lambda x: 'ID' if x in id_tumors else 'OOD')
+test_df_filtered['dist'] = test_df_filtered['tumor_class'].strip().apply(lambda x: 'ID' if x in id_tumors else 'OOD')
 
 # Check
 print(test_df_filtered[['new_accnr', 'tumor_class', 'dist']].head(20))
 
-old_dir = "/scratch/bmep/plalfken/test_table.csv"
-old_df = pd.read_csv(old_dir)
-final_df = pd.concat([old_df, test_df_filtered],ignore_index=True)
-final_df.to_csv("/scratch/bmep/plalfken/test_table1.csv", index=False)
-check = "/scratch/bmep/plalfken/test_table1.csv"
+# old_dir = "/scratch/bmep/plalfken/test_table.csv"
+# old_df = pd.read_csv(old_dir)
+# final_df = pd.concat([old_df, test_df_filtered],ignore_index=True)
+# final_df.to_csv("/scratch/bmep/plalfken/test_table1.csv", index=False)
+test_df_filtered.to_csv("/scratch/bmep/plalfken/test_table.csv", index=False)
+check = "/scratch/bmep/plalfken/test_table.csv"
 df = pd.read_csv(check)
 
 print(df.head(20))
