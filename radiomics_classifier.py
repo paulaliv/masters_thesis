@@ -174,15 +174,21 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         ])
         # sample weights
         sample_weights = compute_sample_weight("balanced", y_train)
+        pipeline.fit(X_train, y_train)
 
         # fit the pipeline
         if isinstance(model, XGBClassifier):
-            pipeline.fit(
-                X_train, y_train,
-                clf__sample_weight=sample_weights,
-                clf__eval_set=[(X_val, y_val)],
-                clf__early_stopping_rounds=10
+            pipeline.named_steps['clf'].fit(
+                pipeline.transform(X_train),
+                y_train,
+                sample_weight=sample_weights,
+                eval_set=[(pipeline.transform(X_val), y_val)],
+                early_stopping_rounds=10,
+                verbose=False
             )
+
+
+
         if isinstance(model, LGBMClassifier):
             pipeline.fit(
                 X_train, y_train,
