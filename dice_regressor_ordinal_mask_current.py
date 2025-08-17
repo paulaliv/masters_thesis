@@ -433,7 +433,7 @@ class QADataset(Dataset):
 
 
         if self.want_features:
-            return mask, uncertainty,label_tensor, subtype, case_id
+            return mask, uncertainty, subtype, case_id
         else:
             return mask, uncertainty, label_tensor, subtype
 
