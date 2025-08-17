@@ -935,7 +935,7 @@ def main(data_dir, plot_dir, folds,df):
         all_kappas_quad = []
         all_kappas_lin = []
         start = time.time()
-        for fold in range(2):
+        for fold in range(5):
             train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
                 fold=fold,
                 data_dir=data_dir,
