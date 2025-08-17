@@ -181,10 +181,13 @@ def main():
 
     id_stats = preprocess_folder(data, splits)
 
+
     df = pd.DataFrame.from_dict(id_stats, orient='index')
     print(f'ID FOLDER: {len(df)}')
 
     df['dice_bin'] = bin_dice_score(df['dice'].values)
+    df.to_csv('/gpfs/home6/palfken/unc_features_id')
+
 
     ood_stats = preprocess_folder_1(data1)
 
@@ -193,6 +196,7 @@ def main():
     print(df_ood.head(10))
 
     df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
+    df_ood.to_csv('/gpfs/home6/palfken/unc_features_ood')
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
     # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
