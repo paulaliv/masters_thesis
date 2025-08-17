@@ -424,10 +424,15 @@ X = X.fillna(0)
 
 
 y = csv_file['tumor_class']
+# Merge WDLPS and MyxoidLiposarcoma
+y_merged = y.copy()
+y_merged = np.where((y_merged == 'WDLPS') | (y_merged == 'MyxoidlipoSarcoma'), 'Liposarcoma', y_merged)
+
+
 # Encode labels if they're not numeric
 if y.dtype == 'object':
     le = LabelEncoder()
-    y = le.fit_transform(y)
+    y = le.fit_transform(y_merged)
     label_names = le.classes_
 else:
     label_names = np.unique(y)
