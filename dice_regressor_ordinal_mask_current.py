@@ -1346,9 +1346,14 @@ def visualize_features(ood_dir, plot_dir):
             "gt": results["labels"],
             "subtype": results["subtypes"],
             "pred": results["avg_preds"],
-            "all_preds": results["all_preds"]
         })
 
+        # expand per-fold predictions into extra columns
+        all_preds = results["all_preds"]  # shape: (num_folds, num_cases)
+        num_folds = all_preds.shape[0]
+
+        for fold_idx in range(5):
+            df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
 
 
         df.to_csv(os.path.join(plot_dir,f'{metric}_ood_results.csv'), index=False)
