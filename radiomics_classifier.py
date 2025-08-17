@@ -115,7 +115,7 @@ def feature_importance(X):
 
 
 
-def get_models():
+def get_models(y):
     classes = np.unique(y)
     weights = compute_class_weight("balanced", classes=classes, y=y)
 
