@@ -181,22 +181,19 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
                 X_train, y_train,
                 clf__sample_weight=sample_weights,
                 clf__eval_set=[(X_val, y_val)],
-                clf__early_stopping_rounds=10,
-                verbose=False
+                clf__early_stopping_rounds=10
             )
         if isinstance(model, LGBMClassifier):
             pipeline.fit(
                 X_train, y_train,
                 clf__eval_set=[(X_val, y_val)],
-                clf__callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
-                verbose=False
+                clf__callbacks=[lightgbm.early_stopping(stopping_rounds=patience)]
             )
         if isinstance(model, CatBoostClassifier):
             pipeline.fit(
                 X_train, y_train,
                 clf__eval_set=(X_val, y_val),
-                clf__early_stopping_rounds=patience,
-                verbose=False
+                clf__early_stopping_rounds=patience
             )
 
 
