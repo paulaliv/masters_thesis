@@ -146,7 +146,7 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
 
     accs, f1s, aucs = [], [], []
     all_y_true, all_y_pred = [], []
-    X = remove_highly_correlated(X)
+    #X = remove_highly_correlated(X)
 
     for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
         # Split training and test fold
@@ -232,7 +232,7 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
     }
 
 
-def manual_tune_and_eval(models, X, y, label_names, k_value=250):
+def manual_tune_and_eval(models, X, y, label_names, k_value=300):
     """
     Manually tune only the most important params for tree-based models.
     Uses your evaluate_model function for fair comparison.
