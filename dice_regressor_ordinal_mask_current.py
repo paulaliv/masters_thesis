@@ -1340,7 +1340,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
     return {
         "case_id":all_case_ids_val,  # list of lists per fold
-        "subtypes": all_subtypes_val,  # list of lists per fold
+        "subtype": all_subtypes_val,  # list of lists per fold
         "preds": all_preds_val  # list of lists per fold
     }
 
