@@ -600,7 +600,7 @@ class ROIPreprocessor:
     def preprocess_folder(self, image_dir, mask_dir, gt_dir, output_dir, output_dir_visuals):
         #subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
         #"/gpfs/home6/palfken/WORC_train.csv"
-        subtypes_csv = "/scratch/bmep/plalfken/test_table.csv"
+        subtypes_csv = "/scratch/bmep/plalfken/test_table1.csv"
         subtypes_df = pd.read_csv(subtypes_csv)
         #print(subtypes_df.columns)
         #
