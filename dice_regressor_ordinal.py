@@ -725,7 +725,7 @@ def main(data_dir, plot_dir, folds,df):
     print('FUSION: LATE')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    metrics = ['entropy','mutual_info','epkl']
+    metrics = ['epkl']
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
