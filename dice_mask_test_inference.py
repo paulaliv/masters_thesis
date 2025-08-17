@@ -1363,9 +1363,9 @@ def visualize_features(ood_dir, plot_dir):
 if __name__ == '__main__':
 
 
-    ood_dir = sys.argv[1]
-    plot_dir = sys.argv[2]
-
+    ood_dir = "/home/bmep/plalfken/my-scratch/test_unc_maps_BAD/"
+    plot_dir = "/home/bmep/plalfken/my-scratch/results/"
+    os.makedirs(plot_dir, exist_ok=True)
     #main(preprocessed, plot_dir, splits, df)
     visualize_features( ood_dir, plot_dir)
 
