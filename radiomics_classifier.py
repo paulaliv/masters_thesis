@@ -182,15 +182,13 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         elif isinstance(model, LGBMClassifier):
             model.fit(
                 X_train_proc,
-                y_train,
-                verbose=False
+                y_train
             )
 
         elif isinstance(model, CatBoostClassifier):
             model.fit(
                 X_train_proc,
-                y_train,
-                verbose=False
+                y_train
             )
 
 
