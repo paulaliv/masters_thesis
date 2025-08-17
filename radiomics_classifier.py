@@ -172,36 +172,34 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
             ('scaler', StandardScaler()),
             ('clf', model)
         ])
+        # sample weights
+        sample_weights = compute_sample_weight("balanced", y_train)
 
-        clf = pipeline.named_steps['clf']
-        # XGBoost
-        if isinstance(clf, XGBClassifier):
-            sample_weights = compute_sample_weight("balanced", y_train)
-            clf.fit(
+        # fit the pipeline
+        if isinstance(model, XGBClassifier):
+            pipeline.fit(
                 X_train, y_train,
-                sample_weight=sample_weights,
-                eval_set=[(X_val, y_val)],
-                early_stopping_rounds = 10,  # instead of early_stopping_rounds
+                clf__sample_weight=sample_weights,
+                clf__eval_set=[(X_val, y_val)],
+                clf__early_stopping_rounds=10,
+                verbose=False
+            )
+        if isinstance(model, LGBMClassifier):
+            pipeline.fit(
+                X_train, y_train,
+                clf__eval_set=[(X_val, y_val)],
+                clf__callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
+                verbose=False
+            )
+        if isinstance(model, CatBoostClassifier):
+            pipeline.fit(
+                X_train, y_train,
+                clf__eval_set=(X_val, y_val),
+                clf__early_stopping_rounds=patience,
                 verbose=False
             )
 
-        # LightGBM
-        elif isinstance(clf, LGBMClassifier):
-            clf.fit(
-                X_train, y_train,
-                eval_set=[(X_val, y_val)],
-                callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
-                verbose=False
-            )
 
-        # CatBoost
-        elif isinstance(clf, CatBoostClassifier):
-            clf.fit(
-                X_train, y_train,
-                eval_set=(X_val, y_val),
-                early_stopping_rounds=patience,
-                verbose=False
-            )
 
         else:
             pipeline.fit(X_train, y_train)
