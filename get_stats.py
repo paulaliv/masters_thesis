@@ -52,6 +52,7 @@ def preprocess_folder(data, splits):
         # Load dice score from CSV if present, else NaN
         dice_score = dice_df.loc[case_id, 'dice_5'] if case_id in dice_df.index else np.nan
         stats_dict['dice'] = dice_score
+        stats_dict['case_id'] = case_id
 
         # Load predicted mask and ground truth mask
         pred_path = os.path.join(data, f"{case_id}_pred.npy")
@@ -123,6 +124,7 @@ def preprocess_folder_1(data):
         # Load dice score from CSV if present, else NaN
         dice_score = dice_scores[idx]
         print(f"{case_id}: {dice_score}")
+        stats_dict['case_id']= case_id
         stats_dict['dice'] = dice_score
 
         # Load predicted mask and ground truth mask
