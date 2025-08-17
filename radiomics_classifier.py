@@ -181,7 +181,7 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
                 X_train, y_train,
                 sample_weight=sample_weights,
                 eval_set=[(X_val, y_val)],
-                callbacks=[EarlyStopping(rounds=patience, save_best=True)],  # instead of early_stopping_rounds
+                early_stopping_rounds = 10,  # instead of early_stopping_rounds
                 verbose=False
             )
 
