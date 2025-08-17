@@ -147,55 +147,42 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
     accs, f1s, aucs = [], [], []
     all_y_true, all_y_pred = [], []
     X = remove_highly_correlated(X)
+
     for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
-        # Ensure X supports .iloc (convert back to DataFrame if needed)
+        # Split training and test fold
         if isinstance(X, np.ndarray):
-            X_train_full, X_test = X[train_idx], X[test_idx]
+            X_train, X_test = X[train_idx], X[test_idx]
         else:
-            X_train_full, X_test = X.iloc[train_idx], X.iloc[test_idx]
+            X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
 
         if isinstance(y, pd.Series):
-            y_train_full, y_test = y.iloc[train_idx], y.iloc[test_idx]
+            y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
         else:
-            y_train_full, y_test = y[train_idx], y[test_idx]
-        #y_train, y_test = y[train_idx], y[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
 
-        # Create a small validation split from training fold for early stopping
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train_full, y_train_full, test_size=val_size,
-            stratify=y_train_full, random_state=42
-        )
-        # Create preprocessing pipeline (without the classifier)
+        # Preprocessing pipeline
         preproc = Pipeline([
             ('var_thresh', VarianceThreshold(threshold=0.05)),
             ('select_best', SelectKBest(mutual_info_classif, k=min(k_value, X.shape[1]))),
             ('scaler', StandardScaler())
         ])
 
-        # Fit only preprocessing
-        preproc.fit(X_train, y_train)
 
-        # Transform data for classifier
-        X_train_proc = preproc.transform(X_train)
-        X_val_proc = preproc.transform(X_val)
+        # Fit and transform training data
+        X_train_proc = preproc.fit_transform(X_train, y_train)
+        X_test_proc = preproc.transform(X_test)
 
-        # Fit XGBoost directly on transformed data
+        # Handle sample weights for XGBoost
         if isinstance(model, XGBClassifier):
             sample_weights = compute_sample_weight("balanced", y_train)
-            model.fit(
-                X_train_proc,
-                y_train,
-                sample_weight=sample_weights,
-                eval_set=[(X_val_proc, y_val)],
-                verbose=False
-            )
+            model.fit(X_train_proc, y_train, sample_weight=sample_weights)
+
+
 
         elif isinstance(model, LGBMClassifier):
             model.fit(
                 X_train_proc,
                 y_train,
-                eval_set=[(X_val_proc, y_val)],
-                callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
                 verbose=False
             )
 
@@ -203,8 +190,6 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
             model.fit(
                 X_train_proc,
                 y_train,
-                eval_set=(X_val_proc, y_val),
-                early_stopping_rounds=patience,
                 verbose=False
             )
 
@@ -227,8 +212,8 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         # low_var_cols = X_train.var()[X_train.var() < 1e-8]
         # print(f"Low variance features: {len(low_var_cols)}")
 
-        y_pred = pipeline.predict(X_test)
-        y_proba = pipeline.predict_proba(X_test)
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)
 
         all_y_true.extend(y_test)
         all_y_pred.extend(y_pred)
