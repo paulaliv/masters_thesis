@@ -1204,10 +1204,15 @@ def inference(ood_dir, uncertainty_metric):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     subtypes_csv = "/home/bmep/plalfken/my-scratch/test_table1.csv"
-    subtypes_df = pd.read_csv(subtypes_csv)
+    df = pd.read_csv(subtypes_csv)
     # dice_dir ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
     # dice_df = pd.read_csv(dice_dir)
-    lipoma_ids = subtypes_df["new_accnr"].values
+    # Define the missing case_id
+    missing_case = 'STT_0486'
+
+    # Remove it from the DataFrame
+    df = df[df['case_id'] != missing_case]
+    lipoma_ids = df["new_accnr"].values
 
 
     # Filter dice_df to only Lipoma rows
