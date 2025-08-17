@@ -699,57 +699,58 @@ def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
-    metrics = ['confidence']
+    metrics = ['entropy','epkl']
 
-    #
-    # param_grid = {
-    #     'lr': [1e-3, 3e-4, 1e-4],
-    #     'batch_size': [16, 32],
-    #     'warmup_epochs': [3, 5],
-    #     'patience': [8, 10, 15]
-    # }
-    #
-    # best_params_per_metric = {}
-    #
+
+    param_grid = {
+        'lr': [1e-3, 3e-4, 1e-4],
+        'batch_size': [16, 32],
+        'warmup_epochs': [3, 5],
+        'patience': [10, 15]
+    }
+
+    best_params_per_metric = {}
+
     for metric in metrics:
         print(f"\n=== Tuning for metric: {metric} ===")
 
-    #     best_score = -float('inf')
-    #     best_params = None
-    #
-    #     # Step 1: Tune on just fold 0
-    #     for lr, bs, warmup, patience, dropout in product(
-    #             param_grid['lr'], param_grid['batch_size'],
-    #             param_grid['warmup_epochs'], param_grid['patience']
-    #     ):
-    #         print(f'Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}')
-    #
-    #         train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
-    #             fold=0,  # tuning only on fold 0
-    #             data_dir=data_dir,
-    #             df=df,
-    #             splits=folds,
-    #             uncertainty_metric=metric,
-    #             plot_dir=plot_dir,
-    #             device=device,
-    #             epochs=30,
-    #             lre=lr,
-    #             batch_size=bs,
-    #             warmup_epochs=warmup,
-    #             patience=patience
-    #         )
-    #
-    #         if kappa_quad > best_score:
-    #             best_score = kappa_quad
-    #             best_params = {
-    #                 'lr': lr,
-    #                 'batch_size': bs,
-    #                 'warmup_epochs': warmup,
-    #                 'patience': patience
-    #             }
-    #
-    #     print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
-    #     best_params_per_metric[metric] = best_params
+        best_score = -float('inf')
+        best_params = None
+
+        # Step 1: Tune on just fold 0
+        for lr, bs, warmup, patience, dropout in product(
+                param_grid['lr'], param_grid['batch_size'],
+                param_grid['warmup_epochs'], param_grid['patience']
+        ):
+            print(f'Testing params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}')
+
+            train_losses, val_losses, val_preds, val_labels, kappa_quad, kappa_lin = train_one_fold(
+                fold=0,  # tuning only on fold 0
+                data_dir=data_dir,
+                df=df,
+                splits=folds,
+                uncertainty_metric=metric,
+                plot_dir=plot_dir,
+                device=device,
+                epochs=30,
+                lre=lr,
+                batch_size=bs,
+                warmup_epochs=warmup,
+                patience=patience
+            )
+
+            if kappa_quad > best_score:
+                best_score = kappa_quad
+                best_params = {
+                    'lr': lr,
+                    'batch_size': bs,
+                    'warmup_epochs': warmup,
+                    'patience': patience
+                }
+            print(f'Tested params: LR={lr}, BS={bs}, Warmup={warmup}, Patience={patience}')
+
+        print(f"Best params for {metric}: {best_params} (kappa={best_score:.4f})")
+        best_params_per_metric[metric] = best_params
 
         # Step 2: Full 5-fold training with best params
         print(f"=== Running full CV for {metric} ===")
