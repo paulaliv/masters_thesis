@@ -415,8 +415,6 @@ class QADataset(Dataset):
         #uncertainty_tensor = uncertainty_tensor.unsqueeze(0)  # Add channel dim
 
 
-        label_tensor = torch.tensor(label).long()
-
         if self.transform:
             data = self.transform({
                 "mask": np.expand_dims(mask, 0),
@@ -427,9 +425,9 @@ class QADataset(Dataset):
 
 
         if self.want_features:
-            return mask, uncertainty,label_tensor, subtype, case_id
+            return mask, uncertainty,label, subtype, case_id
         else:
-            return mask, uncertainty, label_tensor, subtype
+            return mask, uncertainty, label, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
