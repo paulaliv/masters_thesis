@@ -390,7 +390,7 @@ class QADataset(Dataset):
     def __getitem__(self, idx):
         case_id = self.case_ids[idx]
         subtype = self.subtypes[idx]
-        subtype = subtype.strip()
+        #subtype = subtype.strip()
         label = self.df.loc[idx, 'dist']
 
 
