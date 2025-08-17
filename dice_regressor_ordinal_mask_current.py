@@ -1314,9 +1314,9 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         all_case_ids_val.append(fold_case_ids_val)
         all_subtypes_val.append(fold_subtypes_val)
 
-        all_case_ids_val = np.concatenate(all_case_ids_val)
-        all_subtypes_val = np.concatenate(all_subtypes_val)
-        all_preds_val = np.concatenate(all_preds_val)
+    all_case_ids_val = np.concatenate(all_case_ids_val)
+    all_subtypes_val = np.concatenate(all_subtypes_val)
+    all_preds_val = np.concatenate(all_preds_val)
 
 
 
