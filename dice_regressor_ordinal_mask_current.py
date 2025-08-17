@@ -1283,14 +1283,16 @@ def inference(ood_dir, uncertainty_metric):
     all_subtypes = np.array(all_subtypes)
     all_labels = np.array(all_labels)
     all_preds = np.array(all_preds)
-
-    avg_preds= np.mean(all_preds, axis=0)
+    from scipy.stats import mode
+    final_preds, _ = mode(all_preds, axis=0)
+    final_preds = final_preds.squeeze()
+    #avg_preds= np.mean(all_preds, axis=0)
 
     return  {
             "case_ids": all_case_ids,
             "labels": all_labels,
             "subtypes": all_subtypes,
-            "preds": avg_preds
+            "preds": final_preds
     }
 
 
