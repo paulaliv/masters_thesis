@@ -1207,7 +1207,7 @@ def plot_UMAP_1(X_val, y_val, neighbours, m, name, image_dir):
 
 
 
-def inference(ood_dir, uncertainty_metric):
+def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -1251,6 +1251,11 @@ def inference(ood_dir, uncertainty_metric):
     all_labels = []
     all_case_ids = []
 
+    all_subtypes_val = []
+    all_preds_val = []
+    #all_labels_val = []
+    all_case_ids_val = []
+
 
     for fold_idx, model_path in enumerate(fold_paths):
         with gzip.open(model_path, 'rb') as f:
@@ -1261,7 +1266,35 @@ def inference(ood_dir, uncertainty_metric):
         model.eval()
         fold_preds = []
 
+        # Validation loader for this fold
+        val_case_ids = splits[fold_idx]["val"]
+        val_dataset = QADataset(
+            case_ids=val_case_ids,
+            data_dir=data_dir,
+            df=df,
+            uncertainty_metric=uncertainty_metric,
+            transform=val_transforms,
+            want_features=True,
+        )
+        val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+
+
+        fold_preds_val = []
+        fold_case_ids_val = []
+        fold_subtypes_val= []
+
         with torch.no_grad():
+
+            for mask, uncertainty, subtype, case_id in val_loader:
+                mask, uncertainty = mask.to(device), uncertainty.to(device)
+                preds = model(mask, uncertainty).cpu()
+                decoded_preds = corn_predict(preds)
+
+                fold_preds_val.extend(decoded_preds)
+                fold_case_ids_val.extend(case_id)
+                fold_subtypes_val.extend(subtype)
+
+
 
             for mask, uncertainty, subtype, case_id in ood_loader:
                 mask, uncertainty =  mask.to(device), uncertainty.to(device)
@@ -1277,6 +1310,14 @@ def inference(ood_dir, uncertainty_metric):
 
         all_preds.append(fold_preds)
 
+        all_preds_val.append(fold_preds_val)
+        all_case_ids_val.append(fold_case_ids_val)
+        all_subtypes_val.append(fold_subtypes_val)
+
+        all_case_ids_val = np.concatenate(all_case_ids_val)
+        all_subtypes_val = np.concatenate(all_subtypes_val)
+        all_preds_val = np.concatenate(all_preds_val)
+
 
 
     all_case_ids = np.array(all_case_ids)
@@ -1288,13 +1329,19 @@ def inference(ood_dir, uncertainty_metric):
     final_preds = final_preds.squeeze()
     #avg_preds= np.mean(all_preds, axis=0)
 
-    return  {
-            "case_ids": all_case_ids,
-            "labels": all_labels,
-            "subtypes": all_subtypes,
-            "avg_preds": final_preds,
-            'all_preds': all_preds
+    # return  {
+    #         "case_ids": all_case_ids,
+    #         "labels": all_labels,
+    #         "subtypes": all_subtypes,
+    #         "avg_preds": final_preds,
+    #         'all_preds': all_preds
+    #
+    # }
 
+    return {
+        "case_ids":all_case_ids_val,  # list of lists per fold
+        "subtypes": all_subtypes_val,  # list of lists per fold
+        "preds": all_preds_val  # list of lists per fold
     }
 
 
@@ -1334,38 +1381,46 @@ def plot_bin_distribution(y_true, y_pred, title, save_path):
 
 
 
-def visualize_features(ood_dir, plot_dir):
+def visualize_features(data_dir,ood_dir, plot_dir,df,splits ):
 
 
     metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
     for metric in metrics:
-        results = inference(ood_dir=ood_dir,uncertainty_metric=metric)
+        results = inference(data_dir=data_dir,ood_dir=ood_dir,uncertainty_metric=metric, df=df,splits=splits)
 
-        df = pd.DataFrame({
-            "case_id": results["case_ids"],
-            "gt": results["labels"],
-            "subtype": results["subtypes"],
-            "pred": results["avg_preds"],
+        df_out = pd.DataFrame({
+            "case_id": results['case_id'],
+            "subtype": results['subtype'],
+            "preds": results['preds'],
         })
-
-        # expand per-fold predictions into extra columns
-        all_preds = results["all_preds"]  # shape: (num_folds, num_cases)
-        num_folds = all_preds.shape[0]
-
-        for fold_idx in range(5):
-            df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
+        df_out.to_csv(os.path.join(plot_dir,f'{metric}_id_results_mask.csv'), index=False)
 
 
-        df.to_csv(os.path.join(plot_dir,f'{metric}_ood_results.csv'), index=False)
-
+        # df = pd.DataFrame({
+        #     "case_id": results["case_ids"],
+        #     "gt": results["labels"],
+        #     "subtype": results["subtypes"],
+        #     "pred": results["avg_preds"],
+        # })
+        #
+        # # expand per-fold predictions into extra columns
+        # all_preds = results["all_preds"]  # shape: (num_folds, num_cases)
+        # num_folds = all_preds.shape[0]
+        #
+        # for fold_idx in range(5):
+        #     df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
+        #
+        #
+        # df.to_csv(os.path.join(plot_dir,f'{metric}_ood_results.csv'), index=False)
+        #
 
         # --- 2. Confusion matrix ---
         # Use val true labels and ood predicted labels (or vice versa depending on your setup)
         # Here I assume val labels vs ood labels as an example; adjust as needed
-        plot_confusion(results["labels"],results["avg_preds"],
-                   title=f"Confusion Matrix - {metric} : WORC OOD",
-                   save_path=os.path.join(plot_dir, f"confusion_ood_{metric}.png"))
-
+        # plot_confusion(results["labels"],results["avg_preds"],
+        #            title=f"Confusion Matrix - {metric} : WORC OOD",
+        #            save_path=os.path.join(plot_dir, f"confusion_ood_{metric}.png"))
+        #
 
 
 if __name__ == '__main__':
@@ -1375,10 +1430,10 @@ if __name__ == '__main__':
     clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df =  pd.read_csv(clinical_data)
 
-    #preprocessed= sys.argv[1]
-    ood_dir = sys.argv[1]
-    plot_dir = sys.argv[2]
+    preprocessed= sys.argv[1]
+    ood_dir = sys.argv[2]
+    plot_dir = sys.argv[3]
 
     #main(preprocessed, plot_dir, splits, df)
-    visualize_features( ood_dir, plot_dir)
+    visualize_features(preprocessed,ood_dir, plot_dir, df, splits)
 
