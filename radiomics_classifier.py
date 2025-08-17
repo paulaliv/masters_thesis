@@ -165,47 +165,52 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
             X_train_full, y_train_full, test_size=val_size,
             stratify=y_train_full, random_state=42
         )
-        #Preprocessing per fold
-        pipeline = Pipeline([
+        # Create preprocessing pipeline (without the classifier)
+        preproc = Pipeline([
             ('var_thresh', VarianceThreshold(threshold=0.05)),
             ('select_best', SelectKBest(mutual_info_classif, k=min(k_value, X.shape[1]))),
-            ('scaler', StandardScaler()),
-            ('clf', model)
+            ('scaler', StandardScaler())
         ])
-        # sample weights
-        sample_weights = compute_sample_weight("balanced", y_train)
-        pipeline.fit(X_train, y_train)
 
-        # fit the pipeline
+        # Fit only preprocessing
+        preproc.fit(X_train, y_train)
+
+        # Transform data for classifier
+        X_train_proc = preproc.transform(X_train)
+        X_val_proc = preproc.transform(X_val)
+
+        # Fit XGBoost directly on transformed data
         if isinstance(model, XGBClassifier):
-            pipeline.named_steps['clf'].fit(
-                pipeline.transform(X_train),
+            sample_weights = compute_sample_weight("balanced", y_train)
+            model.fit(
+                X_train_proc,
                 y_train,
                 sample_weight=sample_weights,
-                eval_set=[(pipeline.transform(X_val), y_val)],
+                eval_set=[(X_val_proc, y_val)],
                 early_stopping_rounds=10,
+                verbose=False
+            )
+
+        elif isinstance(model, LGBMClassifier):
+            model.fit(
+                X_train_proc,
+                y_train,
+                eval_set=[(X_val_proc, y_val)],
+                callbacks=[lightgbm.early_stopping(stopping_rounds=patience)],
+                verbose=False
+            )
+
+        elif isinstance(model, CatBoostClassifier):
+            model.fit(
+                X_train_proc,
+                y_train,
+                eval_set=(X_val_proc, y_val),
+                early_stopping_rounds=patience,
                 verbose=False
             )
 
 
 
-        if isinstance(model, LGBMClassifier):
-            pipeline.fit(
-                X_train, y_train,
-                clf__eval_set=[(X_val, y_val)],
-                clf__callbacks=[lightgbm.early_stopping(stopping_rounds=patience)]
-            )
-        if isinstance(model, CatBoostClassifier):
-            pipeline.fit(
-                X_train, y_train,
-                clf__eval_set=(X_val, y_val),
-                clf__early_stopping_rounds=patience
-            )
-
-
-
-        else:
-            pipeline.fit(X_train, y_train)
 
         # # Fit pipeline with early stopping if the model supports eval_set
         # if hasattr(model, "fit") and "eval_set" in model.fit.__code__.co_varnames:
