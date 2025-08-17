@@ -211,9 +211,8 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         #pipeline.fit(X_train, y_train)
         # low_var_cols = X_train.var()[X_train.var() < 1e-8]
         # print(f"Low variance features: {len(low_var_cols)}")
-
-        y_pred = model.predict(X_test)
-        y_proba = model.predict_proba(X_test)
+        y_pred = model.predict(X_test_proc)
+        y_proba = model.predict_proba(X_test_proc)
 
         all_y_true.extend(y_test)
         all_y_pred.extend(y_pred)
