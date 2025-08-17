@@ -1292,7 +1292,9 @@ def inference(ood_dir, uncertainty_metric):
             "case_ids": all_case_ids,
             "labels": all_labels,
             "subtypes": all_subtypes,
-            "preds": final_preds
+            "avg_preds": final_preds,
+            'all_preds': all_preds
+
     }
 
 
@@ -1343,7 +1345,8 @@ def visualize_features(ood_dir, plot_dir):
             "case_id": results["case_ids"],
             "gt": results["labels"],
             "subtype": results["subtypes"],
-            "pred": results["preds"],
+            "pred": results["avg_preds"],
+            "all_preds": results["all_preds"]
         })
 
 
@@ -1354,7 +1357,7 @@ def visualize_features(ood_dir, plot_dir):
         # --- 2. Confusion matrix ---
         # Use val true labels and ood predicted labels (or vice versa depending on your setup)
         # Here I assume val labels vs ood labels as an example; adjust as needed
-        plot_confusion(results["labels"],results["preds"],
+        plot_confusion(results["labels"],results["avg_preds"],
                    title=f"Confusion Matrix - {metric} : WORC OOD",
                    save_path=os.path.join(plot_dir, f"confusion_ood_{metric}.png"))
 
