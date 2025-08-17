@@ -167,7 +167,7 @@ class Light3DEncoder(nn.Module):
 
 
 class QAModel(nn.Module):
-    def __init__(self,num_thresholds, dropout_rate):
+    def __init__(self,num_thresholds):
         super().__init__()
         self.encoder = Light3DEncoder()
         #self.encoder_unc= Light3DEncoder()
@@ -176,7 +176,7 @@ class QAModel(nn.Module):
             nn.Flatten(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(dropout_rate),
+            nn.Dropout(0.3),
             nn.Linear(64, num_thresholds)  # Output = predicted Dice class
         )
 
@@ -344,7 +344,7 @@ def corn_predict(logits):
 #
 #     return (probs > 0.5).sum(dim=1)
 
-def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device,epochs,lre,batch_size,warmup_epochs, patience, dropout):
+def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, device,epochs,lre,batch_size,warmup_epochs, patience):
     print(f"Training fold {fold} ...")
 
     train_case_ids = splits[fold]["train"]
@@ -375,7 +375,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
     # Initialize your QA model and optimizer
     print('Initiating Model')
-    model = QAModel(num_thresholds=3, dropout_rate=dropout).to(device)
+    model = QAModel(num_thresholds=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lre)
 
     warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs)
@@ -630,7 +630,7 @@ def main(data_dir, plot_dir, folds,df):
         best_params = None
 
         # Step 1: Tune on just fold 0
-        for lr, bs, warmup, patience, dropout in product(
+        for lr, bs, warmup, patience  in product(
                 param_grid['lr'], param_grid['batch_size'],
                 param_grid['warmup_epochs'], param_grid['patience']
         ):
