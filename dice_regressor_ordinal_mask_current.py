@@ -1263,13 +1263,13 @@ def inference(ood_dir, uncertainty_metric):
 
         with torch.no_grad():
 
-            for mask, uncertainty, labels, subtype, case_id in ood_loader:
+            for mask, uncertainty, subtype, case_id in ood_loader:
                 mask, uncertainty =  mask.to(device), uncertainty.to(device)
 
                 if fold_idx == 0:
                     all_subtypes.extend(subtype)
                     all_case_ids.extend(case_id)
-                    all_labels.extend(labels.cpu().numpy())
+                    #all_labels.extend(labels.cpu().numpy())
 
                 preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
@@ -1281,7 +1281,7 @@ def inference(ood_dir, uncertainty_metric):
 
     all_case_ids = np.array(all_case_ids)
     all_subtypes = np.array(all_subtypes)
-    all_labels = np.array(all_labels)
+    #all_labels = np.array(all_labels)
     all_preds = np.array(all_preds)
     from scipy.stats import mode
     final_preds, _ = mode(all_preds, axis=0)
