@@ -187,7 +187,6 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
                 y_train,
                 sample_weight=sample_weights,
                 eval_set=[(X_val_proc, y_val)],
-                early_stopping_rounds=10,
                 verbose=False
             )
 
