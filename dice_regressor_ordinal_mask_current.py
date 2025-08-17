@@ -37,8 +37,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from dicer_regressor_mask_best import all_labels
-
 #metrics:  MAE, MSE, RMSE, Pearson Correlation, Spearman Correlation
 #Top-K Error: rank segmentation by quality (for human review)
 torch.manual_seed(42)
