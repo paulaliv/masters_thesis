@@ -123,12 +123,12 @@ def get_models():
             eval_metric="logloss",
             random_state=42
         ),
-        "RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
+        #"RandomForest": RandomForestClassifier(n_estimators=200, random_state=42),
         "LightGBM": LGBMClassifier(n_estimators=200, learning_rate=0.05, random_state=42,verbose=-1),
         "CatBoost": CatBoostClassifier(verbose=0, random_state=42),
-        "SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
-        "LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42),
-        "MLP": MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+        #"SVM": SVC(kernel="rbf", probability=True, C=1.0, gamma="scale", random_state=42),
+        #"LogisticRegression": LogisticRegression(penalty='l2', C=1.0, solver='lbfgs', max_iter=1000, random_state=42),
+        #"MLP": MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
 
 
     }
@@ -169,17 +169,22 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
             ('clf', model)
         ])
 
-
-        # Fit pipeline with early stopping if the model supports eval_set
-        if hasattr(model, "fit") and "eval_set" in model.fit.__code__.co_varnames:
-            pipeline.named_steps['clf'].fit(
-                X_train, y_train,
-                eval_set=[(X_val, y_val)],
-                early_stopping_rounds=patience,
-                verbose=False
-            )
+        clf = pipeline.named_steps['clf']
+        if hasattr(clf, "fit") and "eval_set" in clf.fit.__code__.co_varnames:
+            clf.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=patience, verbose=False)
         else:
             pipeline.fit(X_train, y_train)
+
+        # # Fit pipeline with early stopping if the model supports eval_set
+        # if hasattr(model, "fit") and "eval_set" in model.fit.__code__.co_varnames:
+        #     pipeline.named_steps['clf'].fit(
+        #         X_train, y_train,
+        #         eval_set=[(X_val, y_val)],
+        #         early_stopping_rounds=patience,
+        #         verbose=False
+        #     )
+        # else:
+        #     pipeline.fit(X_train, y_train)
 
 
         #pipeline.fit(X_train, y_train)
@@ -207,6 +212,167 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
         "f1_score": np.mean(f1s),
         "roc_auc_ovr": np.mean(aucs)
     }
+
+
+def manual_tune_and_eval(models, X, y, label_names, k_value=250):
+    """
+    Manually tune only the most important params for tree-based models.
+    Uses your evaluate_model function for fair comparison.
+    """
+    tuned_models = {}
+
+    # ----- XGBoost -----
+    tuned_models["XGBoost"] = [
+        # Config 1: near-default
+        XGBClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=6,
+            subsample=1.0,
+            colsample_bytree=1.0,
+            gamma=0,
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42
+        ),
+        # Config 2: slightly regularized
+        XGBClassifier(
+            n_estimators=200,
+            learning_rate=0.05,
+            max_depth=5,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            gamma=0.1,
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42
+        ),
+        # Config 3: more estimators, medium depth
+        XGBClassifier(
+            n_estimators=350,
+            learning_rate=0.07,
+            max_depth=6,
+            subsample=0.85,
+            colsample_bytree=0.8,
+            gamma=0.2,
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42
+        ),
+        # Config 4: aggressive (deeper, more trees)
+        XGBClassifier(
+            n_estimators=500,
+            learning_rate=0.1,
+            max_depth=8,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            gamma=0.3,
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42
+        )
+    ]
+
+    # ----- LightGBM -----
+    tuned_models["LightGBM"] = [
+        # Config 1: near-default
+        LGBMClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=-1,
+            num_leaves=31,
+            subsample=1.0,
+            colsample_bytree=1.0,
+            random_state=42,
+            verbose=-1
+        ),
+        # Config 2: slightly regularized
+        LGBMClassifier(
+            n_estimators=200,
+            learning_rate=0.05,
+            max_depth=6,
+            num_leaves=40,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            random_state=42,
+            verbose=-1
+        ),
+        # Config 3: medium complexity
+        LGBMClassifier(
+            n_estimators=350,
+            learning_rate=0.07,
+            max_depth=7,
+            num_leaves=60,
+            subsample=0.85,
+            colsample_bytree=0.85,
+            random_state=42,
+            verbose=-1
+        ),
+        # Config 4: aggressive
+        LGBMClassifier(
+            n_estimators=500,
+            learning_rate=0.1,
+            max_depth=8,
+            num_leaves=90,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            verbose=-1
+        )
+    ]
+
+    # ----- CatBoost -----
+    tuned_models["CatBoost"] = [
+        # Config 1: near-default
+        CatBoostClassifier(
+            iterations=500,
+            learning_rate=0.1,
+            depth=6,
+            l2_leaf_reg=3,
+            verbose=0,
+            random_state=42
+        ),
+        # Config 2: slower learning
+        CatBoostClassifier(
+            iterations=1000,
+            learning_rate=0.05,
+            depth=6,
+            l2_leaf_reg=3,
+            verbose=0,
+            random_state=42
+        ),
+        # Config 3: deeper, medium regularization
+        CatBoostClassifier(
+            iterations=800,
+            learning_rate=0.07,
+            depth=7,
+            l2_leaf_reg=4,
+            verbose=0,
+            random_state=42
+        ),
+        # Config 4: aggressive
+        CatBoostClassifier(
+            iterations=1200,
+            learning_rate=0.1,
+            depth=8,
+            l2_leaf_reg=5,
+            verbose=0,
+            random_state=42
+        )
+    ]
+
+    best_results = {}
+    for name, configs in tuned_models.items():
+        best_score, best_cfg = -1, None
+        for cfg in configs:
+            result = evaluate_model(name, cfg, X, y, label_names, k_value)
+            if result["f1_score"] > best_score:
+                best_score = result["f1_score"]
+                best_cfg = (cfg, result)
+        best_results[name] = best_cfg
+
+    return best_results
+
 
 
 
@@ -251,92 +417,97 @@ else:
 #feature_importance(X)
 
 #
-#
-# preprocessing = Pipeline([
-#     ('var_thresh', VarianceThreshold(threshold=0.01)),
-#     ('scaler', StandardScaler())
-# ])
 
-# Apply preprocessing
-#X_processed = preprocessing.fit_transform(X)
-
-
-param_grid = {
-    'XGBoost': {
-        'clf__n_estimators': [100, 200, 500],  # already in your code
-        'clf__learning_rate': [0.01, 0.05, 0.1],
-        'clf__max_depth': [3, 5, 7],
-        'clf__subsample': [0.7, 0.85, 1.0],
-        'clf__colsample_bytree': [0.7, 0.85, 1.0],
-        'clf__gamma': [0, 0.1, 0.3],
-        'select_best__k': [200, 250, 300]
-
-
-    },
-    'LightGBM': {
-    'clf__n_estimators': [100, 200, 500],
-    'clf__learning_rate': [0.01, 0.05, 0.1],
-    'clf__max_depth': [3, 5, 7, -1],   # -1 = no limit
-    'clf__num_leaves': [31, 50, 70],
-    'clf__subsample': [0.7, 0.85, 1.0],
-    'clf__colsample_bytree': [0.7, 0.85, 1.0],
-    'select_best__k': [200, 250, 300]
-    },
-    'CatBoost':{
-        'clf__iterations': [200, 500, 1000],
-        'clf__learning_rate': [0.01, 0.05, 0.1],
-        'clf__depth': [3, 5, 7],
-        'clf__l2_leaf_reg': [1, 3, 5, 7],
-        'select_best__k': [200, 250, 300]
-
-    }
-}
-
-
+# Run manual tuning
 models = get_models()
+best_results = manual_tune_and_eval(models, X, y, label_names)
 
-best_scores = {}
-for name, model in models.items():
-    if name not in param_grid:  # Skip models without param grids
-        continue
-    print(f"Running GridSearchCV for {name}...")
+for model_name, (best_model, metrics) in best_results.items():
+    print(f"\nBest {model_name} config:")
+    print(best_model.get_params())
+    print(f"Scores: {metrics}")
 
-    # Wrap classifier in a pipeline with SelectKBest
-    pipe = Pipeline([
-        ('select_best', SelectKBest(score_func=f_classif)),
-        ('clf', model)
-    ])
 
-    # Setup GridSearchCV
-    grid = GridSearchCV(
-        estimator=pipe,
-        param_grid=param_grid[name],
-        scoring='f1_weighted',  # or 'accuracy', 'roc_auc_ovr', etc.
-        cv=5,
-        n_jobs=-1,
-        verbose=2
-    )
+   #
+   #
+   # best_score = 0
+   #  best_k = None
+   #  print(f"Model: {name}")
+   #  for k_value in k_values:
+   #      print(f"=== Testing with K={k_value} ===")
+   #      results = evaluate_model(name, model, X, y, label_names, k_value)
+   #      for key, value in results.items():
+   #          print(f"  {key}: {value:.4f}")
+   #          if key == 'f1_score':
+   #              if value > best_score:
+   #                  best_score = value
+   #                  best_k = k_value
+   #                  best_scores[name] = value
+   #      print("-" * 30)
+   #  print(f'Best Score for {name}: {best_score}')
+   #  print(f'Best K for {name}: {best_k}')
 
-    # Fit the grid search
-    grid.fit(X, y)
+#
+# param_grid = {
+#     'XGBoost': {
+#         'clf__n_estimators': [100, 200, 500],  # already in your code
+#         'clf__learning_rate': [0.01, 0.05, 0.1],
+#         'clf__max_depth': [3, 5, 7],
+#         'clf__subsample': [0.7, 0.85, 1.0],
+#         'clf__colsample_bytree': [0.7, 0.85, 1.0],
+#         'clf__gamma': [0, 0.1, 0.3],
+#         'select_best__k': [200, 250, 300]
+#
+#
+#     },
+#     'LightGBM': {
+#     'clf__n_estimators': [100, 200, 500],
+#     'clf__learning_rate': [0.01, 0.05, 0.1],
+#     'clf__max_depth': [3, 5, 7, -1],   # -1 = no limit
+#     'clf__num_leaves': [31, 50, 70],
+#     'clf__subsample': [0.7, 0.85, 1.0],
+#     'clf__colsample_bytree': [0.7, 0.85, 1.0],
+#     'select_best__k': [200, 250, 300]
+#     },
+#     'CatBoost':{
+#         'clf__iterations': [200, 500, 1000],
+#         'clf__learning_rate': [0.01, 0.05, 0.1],
+#         'clf__depth': [3, 5, 7],
+#         'clf__l2_leaf_reg': [1, 3, 5, 7],
+#         'select_best__k': [200, 250, 300]
+#
+#     }
+# }
+#
+#
+# models = get_models()
+#
+# best_scores = {}
+# for name, model in models.items():
+#     if name not in param_grid:  # Skip models without param grids
+#         continue
+#     print(f"Running GridSearchCV for {name}...")
+#
+#     # Wrap classifier in a pipeline with SelectKBest
+#     pipe = Pipeline([
+#         ('select_best', SelectKBest(score_func=f_classif)),
+#         ('clf', model)
+#     ])
+#
+#     # Setup GridSearchCV
+#     grid = GridSearchCV(
+#         estimator=pipe,
+#         param_grid=param_grid[name],
+#         scoring='f1_weighted',  # or 'accuracy', 'roc_auc_ovr', etc.
+#         cv=5,
+#         n_jobs=-1,
+#         verbose=2
+#     )
+#
+#     # Fit the grid search
+#     grid.fit(X, y)
+#
+#     print(f"Best parameters for {name}: {grid.best_params_}")
+#     print(f"Best F1 score for {name}: {grid.best_score_:.4f}")
+#     best_scores[name] = grid.best_score_
 
-    print(f"Best parameters for {name}: {grid.best_params_}")
-    print(f"Best F1 score for {name}: {grid.best_score_:.4f}")
-    best_scores[name] = grid.best_score_
-
-    # best_score = 0
-    # best_k = None
-    # print(f"Model: {name}")
-    # for k_value in k_values:
-    #     print(f"=== Testing with K={k_value} ===")
-    #     results = evaluate_model(name, model, X, y, label_names, k_value)
-    #     for key, value in results.items():
-    #         print(f"  {key}: {value:.4f}")
-    #         if key == 'f1_score':
-    #             if value > best_score:
-    #                 best_score = value
-    #                 best_k = k_value
-    #                 best_scores[name] = value
-    #     print("-" * 30)
-    # print(f'Best Score for {name}: {best_score}')
-    # print(f'Best K for {name}: {best_k}')
