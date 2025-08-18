@@ -348,7 +348,7 @@ class QADataset(Dataset):
             uncertainty= data["uncertainty"]
 
         if self.want_features:
-            return image, mask, uncertainty, label_tensor, subtype
+            return image, mask, uncertainty, label_tensor, subtype, case_id
         else:
             return image, mask, uncertainty, label_tensor, subtype
 
@@ -987,6 +987,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     all_labels_val, all_labels_ood = [], []
     all_subtypes_val, all_subtypes_ood = [], []
     all_preds_val, all_preds_ood = [], []
+    all_case_ids_ood = []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -1016,11 +1017,11 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
 
     fold_paths = [
-        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}_crossentropy_ALL.pt.gz",
 
     ]
 
@@ -1032,80 +1033,53 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         model.load_state_dict(checkpoint)
         model.eval()
 
-        # Validation loader for this fold
-        val_case_ids = splits[fold_idx]["val"]
-        val_dataset = QADataset(
-            case_ids=val_case_ids,
-            data_dir=data_dir,
-            df=df,
-            uncertainty_metric=uncertainty_metric,
-            transform=val_transforms,
-            want_features=True,
-        )
-        val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
-
+        fold_preds_ood = []
         with torch.no_grad():
             # Validation set
-            for image, mask, uncertainty, label, subtype in val_loader:
-                image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
-
-                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
-                img_feat = model.extract_img_features(image).cpu().numpy()
-                mask_feat = model.extract_mask_features(mask).cpu().numpy()
-
-                all_unc_val.append(unc_feat)
-                all_img_val.append(img_feat)
-                all_mask_val.append(mask_feat)
-
-                all_labels_val.extend(label.cpu().numpy())
-                all_subtypes_val.extend(subtype)
-
-                preds = model(image, uncertainty)
-                pred_classes = preds.argmax(dim=1)
-
-                all_preds_val.extend(pred_classes)
 
             # OOD set
-            for image, mask, uncertainty, label, subtype in ood_loader:
+            for image, mask, uncertainty, label, subtype, case_id in ood_loader:
                 image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
 
-                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
-                img_feat = model.extract_img_features(image).cpu().numpy()
-                mask_feat = model.extract_mask_features(mask).cpu().numpy()
+                if fold_idx == 0:
+                    all_case_ids_ood.extend(case_id)
+                    all_labels_ood.extend(label.cpu().numpy())
+                    all_subtypes_ood.extend(subtype)
 
-                all_unc_ood.append(unc_feat)
-                all_img_ood.append(img_feat)
-                all_mask_ood.append(mask_feat)
+                preds = model(image, mask, uncertainty).cpu()
 
-                all_labels_ood.extend(label.cpu().numpy())
-                all_subtypes_ood.extend(subtype)
-
-                preds = model(image, uncertainty)
                 pred_classes = preds.argmax(dim=1)
+                fold_preds_ood.extend(pred_classes)
 
-                all_preds_ood.extend(pred_classes)
+                # all_preds_val.append(fold_preds_val)
+            all_preds_ood.append(fold_preds_ood)
 
-        # Concatenate features
-    all_unc_val = np.vstack(all_unc_val)
-    all_img_val = np.vstack(all_img_val)
-    all_mask_val = np.vstack(all_mask_val)
-
-    all_unc_ood = np.vstack(all_unc_ood)
-    all_img_ood = np.vstack(all_img_ood)
-    all_mask_ood = np.vstack(all_mask_ood)
+    from scipy.stats import mode
+    all_preds_ood = np.array(all_preds_ood)
+    final_preds, _ = mode(all_preds_ood, axis=0)
+    final_preds = final_preds.squeeze()
+    avg_preds = np.mean(all_preds_ood, axis=0)
 
     return {
-        "val": {
-            "unc": all_unc_val, "img": all_img_val, "mask": all_mask_val,
-            "labels": np.array(all_labels_val), "subtypes": np.array(all_subtypes_val),
-            "preds": np.array(all_preds_val)
-        },
+        # "val": {"case_ids": np.array(all_case_ids_val),
+        #     "labels": np.array(all_labels_val),
+        #     "subtypes": np.array(all_subtypes_val),
+        #     'preds': np.concatenate(all_preds_val)
+        #
+        # },
         "ood": {
-            "unc": all_unc_ood, "img": all_img_ood, "mask": all_mask_ood,
-            "labels": np.array(all_labels_ood), "subtypes": np.array(all_subtypes_ood),
-            "preds": np.array(all_preds_ood)
+            "case_ids": np.array(all_case_ids_ood),
+            "labels": np.array(all_labels_ood),
+            "subtypes": np.array(all_subtypes_ood),
+            "maj_preds": final_preds,
+            "avg_preds": avg_preds,
+            'all_preds': all_preds_ood
+
         }
     }
+
+
+
 
 def plot_confusion(y_true, y_pred, title, save_path):
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
@@ -1192,56 +1166,40 @@ def plot_distribution_kde(y_true, y_pred, title):
     plt.show()
 
 
-def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
-    results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=uncertainty_metric, df= df, splits=splits)
+def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
 
-    # Run inference to get feature dicts
-    results = inference(
-        data_dir=data_dir,
-        ood_dir=ood_dir,
-        uncertainty_metric=uncertainty_metric,
-        df=df,
-        splits=splits
-    )
+    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    for metric in metrics:
+        results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=metric, df= df, splits=splits)
 
-    # Alias for val and ood sets
-    val = results["val"]
-    ood = results["ood"]
 
-    # --- 1. UMAP plots for img, unc, mask ---
-    plot_UMAP(val["img"], val["labels"], val["subtypes"],
-              ood["img"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "img_umap.png"))
+        # Alias for val and ood sets
+        #val = results["val"]
+        ood = results["ood"]
 
-    plot_UMAP(val["unc"], val["labels"], val["subtypes"],
-              ood["unc"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "unc_umap.png"))
+        df = pd.DataFrame({
+            "case_id": ood["case_ids"],
+            "gt": ood["labels"],
+            "subtype": ood["subtypes"],
+            "maj_pred": ood["maj_preds"],
+            "avg_pred": ood["avg_preds"],
 
-    plot_UMAP(val["mask"], val["labels"], val["subtypes"],
-              ood["mask"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "mask_umap.png"))
+        })
 
-    # --- 2. Confusion matrix ---
-    # Use val true labels and ood predicted labels (or vice versa depending on your setup)
-    # Here I assume val labels vs ood labels as an example; adjust as needed
-    plot_confusion(ood["preds"], ood["labels"],
-                   title="Confusion Matrix - Val vs OOD",
-                   save_path=os.path.join(plot_dir, "confusion_val_vs_ood.png"))
+        # expand per-fold predictions into extra columns
+        all_preds = ood["all_preds"]  # shape: (num_folds, num_cases)
 
-    # --- 3. Bin distribution bar plot ---
-    # Combine all labels for bins
-    combined_labels = np.concatenate([val["labels"], ood["labels"]])
-    plot_bin_distribution(combined_labels,
-                  title="Subtype Distribution Val + OOD",
-                  save_path=os.path.join(plot_dir, "bin_dist_val_ood.png"))
 
-    # --- 4. Sankey plot ---
-    plot_sankey(val["labels"], ood["labels"],
-                title="Sankey Plot Val to OOD",
-                save_path=os.path.join(plot_dir, "sankey_val_to_ood.png"))
+        for fold_idx in range(5):
+            df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
+
+        print(f'SAVING RESULTS FOR metric {metric}: {plot_dir}')
+        df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_cross_ALL.csv'), index=False)
+
+
+        plot_confusion(ood["labels"],ood["maj_preds"],
+                       title="Confusion Matrix - OOD",
+                       save_path=os.path.join(plot_dir, "confusion_ood_cross_ALL.png"))
 
 
     #
@@ -1277,8 +1235,8 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    #ood_dir = sys.argv[2]
-    plot_dir = sys.argv[2]
+    ood_dir = sys.argv[2]
+    plot_dir = sys.argv[3]
 
-    main(preprocessed, plot_dir, splits, df)
-    #visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
+    /main(preprocessed, plot_dir, splits, df)
+    visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
