@@ -724,7 +724,7 @@ def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
-    metrics = ['mutual_info']
+    metrics = ['epkl']
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
@@ -795,10 +795,10 @@ def main(data_dir, plot_dir, folds,df):
                 uncertainty_metric=metric,
                 plot_dir=plot_dir,
                 device=device,
-                epochs=60,
-                lre=3e-4,
+                epochs=50,
+                lre=1e-3,
                 batch_size=16,
-                warmup_epochs=3,
+                warmup_epochs=5,
                 patience=10
             )
 
