@@ -686,8 +686,8 @@ def main(data_dir, plot_dir, folds,df):
     print('FUSION: LATE and EARLY for mask with image')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    #metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
-    metrics = ['epkl']
+    metrics = [ 'entropy', 'mutual_info']
+    #metrics = ['epkl']
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
