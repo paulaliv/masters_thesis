@@ -599,7 +599,7 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
                 val_total += label.size(0)
 
-                val_preds_list.extend(preds.cpu().numpy())
+                val_preds_list.extend(pred_classes.cpu().numpy())
                 val_labels_list.extend(label.cpu().numpy())
 
                 # Convert subtype to list

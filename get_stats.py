@@ -101,7 +101,10 @@ def preprocess_folder_1(data):
 
     #clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df = pd.read_csv(ood_dir)
+    case= 'STT_0486'
+
     df_unique = df.drop_duplicates(subset='new_accnr')
+    df_unique = df_unique[df_unique['new_accnr'] != case]
 
 
     #dice_df.set_index('case_id', inplace=True)  # for quick lookup
@@ -198,10 +201,14 @@ def main():
 
 
     df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
+    print(f'{len(df_ood)} Cases in df_ood')
+    print(f'df_ood columns: {df_ood.columns}')
 
     # --- Add WORC predictions ---
     for metric, path in worc_preds.items():
         pred_df = pd.read_csv(path)  # should contain columns ['case_id', 'preds']
+        print(f'pred_df columns: {pred_df.columns}')
+        pred_df = pred_df.drop_duplicates(subset=['case_id'])
 
         # Rename the prediction column to include the metric
         pred_df = pred_df.rename(columns={'preds': f'pred_{metric}'})
@@ -212,16 +219,14 @@ def main():
     # --- Add UMC predictions ---
     for metric, path in umc_preds.items():
         pred_df = pd.read_csv(path)  # should contain columns ['case_id', 'maj_preds']
+        pred_df = pred_df.drop_duplicates(subset=['case_id'])
 
         # Rename the prediction column to include the metric
         pred_df = pred_df.rename(columns={'maj_pred': f'pred_{metric}'})
 
         # Merge with OOD dataframe on new_accnr == case_id
-        df_ood = df_ood.merge(pred_df[['case_id', f'pred_{metric}']],
-                              left_on='new_accnr', right_on='case_id', how='left')
+        df_ood = df_ood.merge(pred_df[['case_id', f'pred_{metric}']],on='case_id', how='left')
 
-        # Drop redundant 'case_id' column after merge
-        df_ood = df_ood.drop(columns=['case_id'])
 
 
     print(f'OOD FOLDER: {len(df_ood)}')
@@ -239,13 +244,23 @@ def main():
     # Metrics & plotting
     metrics = ['mutual_info', 'epkl', 'entropy', 'confidence']
     dice_bins = sorted(worc_id_df['dice_bin'].unique())
-    colors = {'WORC': 'blue', 'UMC OOD': 'red', 'UMC ID': 'green'}
+    colors = {'WORC ID': 'blue', 'UMC OOD': 'red', 'UMC ID': 'green'}
 
     for metric in metrics:
         print(f"Processing metric: {metric}")
-        unc_worc = worc_id_df[f'pred_{metric}'].dropna().values
-        unc_id = umc_id[f'pred_{metric}'].dropna().values
-        unc_ood = umc_ood[f'pred_{metric}'].dropna().values
+        umc_id_clean = umc_id.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
+        unc_id = umc_id_clean[f'{metric}_pred_mean_unc'].values
+        pred_id = umc_id_clean[f'pred_{metric}'].values
+
+        # Similarly for WORC
+        worc_id_clean = worc_id_df.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
+        unc_worc = worc_id_clean[f'{metric}_pred_mean_unc'].values
+        pred_worc = worc_id_clean[f'pred_{metric}'].values
+
+        # And for UMC OOD
+        umc_ood_clean = umc_ood.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
+        unc_ood = umc_ood_clean[f'{metric}_pred_mean_unc'].values
+        pred_ood = umc_ood_clean[f'pred_{metric}'].values
 
         # KDE log-likelihood
         kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(unc_worc[:, None])
@@ -258,6 +273,7 @@ def main():
         plt.ylabel('Count')
         plt.legend()
         plt.savefig(f"/home/bmep/plalfken/my-scratch/log_prob_{metric}.png")
+        plt.show()
         plt.close()
 
         # AUROC / AUPR
@@ -270,10 +286,26 @@ def main():
 
         # Violin / KDE plots
         df_plot = pd.concat([
-            pd.DataFrame({'uncertainty': unc_worc, 'dist': 'WORC ID', 'dice_bin': worc_id_df[f'pred_{metric}']}),
-            pd.DataFrame({'uncertainty': unc_id, 'dist': 'UMC ID', 'dice_bin': umc_id[f'pred_{metric}']}),
-            pd.DataFrame({'uncertainty': unc_ood, 'dist': 'UMC OOD', 'dice_bin': umc_ood[f'pred_{metric}']})
+            pd.DataFrame({'uncertainty': unc_worc, 'dist': 'WORC ID', 'dice_bin': pred_worc}),
+            pd.DataFrame({'uncertainty': unc_id, 'dist': 'UMC ID', 'dice_bin': pred_id}),
+            pd.DataFrame({'uncertainty': unc_ood, 'dist': 'UMC OOD', 'dice_bin': pred_ood})
         ])
+
+        plt.figure(figsize=(12, 6))
+        sns.countplot(
+            data=df_plot,
+            x='dice_bin',  # your already-binned Dice predictions
+            hue='dist',  # the three datasets
+            palette=colors
+        )
+        plt.xlabel('Dice Bin Predictions')
+        plt.ylabel('Frequency')
+        plt.title(f'Frequency of Dice Bin Predictions per Dataset ({metric})')
+        plt.legend(title='Dataset')
+        plt.tight_layout()
+        plt.savefig(f"/home/bmep/plalfken/my-scratch/dicebin_frequency_{metric}.png")
+        plt.show()
+
 
         plt.figure(figsize=(10, 6))
         sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot,
@@ -281,6 +313,7 @@ def main():
         plt.title(f'Predicted Mean {metric} by Dice Bin')
         plt.tight_layout()
         plt.savefig(f"/home/bmep/plalfken/my-scratch/violin_{metric}_all_three.png")
+        plt.show()
         plt.close()
 
         plt.figure(figsize=(12, 6))
@@ -289,12 +322,13 @@ def main():
                         fill=True, alpha=0.4, color=color, label=dist_name)
             plt.axvline(df_plot[df_plot['dist'] == dist_name]['uncertainty'].mean(),
                         color=color, linestyle='--')
-        plt.title(f'Uncertainty Distribution: {metric}')
-        plt.xlabel('Predicted Mean Uncertainty')
+        plt.title(f' Global Uncertainty Distribution : {metric}')
+        plt.xlabel('Uncertainty')
         plt.ylabel('Density')
         plt.legend()
         plt.tight_layout()
         plt.savefig(f"/home/bmep/plalfken/my-scratch/kde_{metric}_all_three.png")
+        plt.show()
         plt.close()
     # print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
     #
