@@ -300,7 +300,9 @@ class QADataset(Dataset):
         # List of case_ids
         self.case_ids = case_ids
 
+
         self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
+
 
 
         # Now extract dice scores and subtypes aligned with self.case_ids
@@ -960,8 +962,8 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
 
 def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
-    all_unc_val, all_img_val, all_mask_val = [], [], []
-    all_unc_ood, all_img_ood, all_mask_ood = [], [], []
+
+    df['case_id'] = df['case_id'].str.strip()
 
     all_labels_val, all_labels_ood = [], []
     all_subtypes_val, all_subtypes_ood = [], []
@@ -993,7 +995,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         want_features=True,
         is_ood=True
     )
-    ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
+    ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=False, pin_memory=True)
 
     fold_paths = [
         f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}_ALL.pt.gz",
