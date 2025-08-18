@@ -335,13 +335,7 @@ class QADataset(Dataset):
 
         label_tensor = torch.tensor(label).long()
 
-        print("Case IDs type:", type(self.case_ids))
-        print("Number of case IDs:", len(self.case_ids))
-        print("Sample IDs:", self.case_ids[:5])
 
-        print("DataFrame index sample:", df['case_id'].head())
-        print("Intersection:", set(self.case_ids) & set(df['case_id']))
-        print("Difference:", set(self.case_ids) - set(df['case_id']))
 
         if self.transform:
             data = self.transform({
