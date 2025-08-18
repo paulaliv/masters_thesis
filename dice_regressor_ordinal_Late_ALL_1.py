@@ -1141,6 +1141,7 @@ def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
         for fold_idx in range(5):
             df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
 
+        print(f'SAVING RESULTS FOR metric {metric}: {plot_dir}')
         df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_ALL.csv'), index=False)
         #
         # df_id= pd.DataFrame({
