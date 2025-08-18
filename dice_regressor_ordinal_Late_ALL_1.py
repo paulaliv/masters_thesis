@@ -1031,10 +1031,10 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
             for image, mask, uncertainty, label, subtype, case_id in val_loader:
                 image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
 
-                if fold_idx == 0:
-                    all_labels_val.extend(label.cpu().numpy())
-                    all_subtypes_val.extend(subtype)
-                    all_case_ids_val.extend(case_id)
+
+                all_labels_val.extend(label.cpu().numpy())
+                all_subtypes_val.extend(subtype)
+                all_case_ids_val.extend(case_id)
 
 
 
