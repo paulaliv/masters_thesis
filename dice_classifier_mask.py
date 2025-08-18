@@ -1228,7 +1228,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
 
                 pred_classes = preds.argmax(dim=1)
-                fold_preds_ood.extend(preds_classes)
+                fold_preds_ood.extend(pred_classes)
 
             # all_preds_val.append(fold_preds_val)
             all_preds_ood.append(fold_preds_ood)
