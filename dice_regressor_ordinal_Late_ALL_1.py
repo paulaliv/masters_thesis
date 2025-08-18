@@ -1140,10 +1140,10 @@ def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
         df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_ALL.csv'), index=False)
 
         df_id= pd.DataFrame({
-            "case_id": ood["case_ids"],
-            "gt": ood["labels"],
-            "subtype": ood["subtypes"],
-            "preds": ood["preds"],
+            "case_id": val["case_ids"],
+            "gt": val["labels"],
+            "subtype": val["subtypes"],
+            "preds": val["preds"],
 
         })
         df_id.to_csv(os.path.join(plot_dir, f'{metric}_id_results_ALL.csv'), index=False)
