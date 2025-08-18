@@ -1098,9 +1098,8 @@ def plot_confusion(y_true, y_pred, title, save_path):
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Bin")
     plt.ylabel("Actual Bin")
-    plt.tight_layout()
     plt.title(title)
-
+    plt.tight_layout()
     plt.savefig(save_path, dpi=300)
 
 
