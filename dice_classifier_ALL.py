@@ -687,7 +687,7 @@ def main(data_dir, plot_dir, folds,df):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     metrics = [ 'entropy', 'mutual_info']
-    #metrics = ['epkl']
+
 
     param_grid = {
         'lr': [1e-3, 3e-4, 1e-4],
@@ -1235,8 +1235,8 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    ood_dir = sys.argv[2]
-    plot_dir = sys.argv[3]
+    #ood_dir = sys.argv[2]
+    plot_dir = sys.argv[2]
 
-    #main(preprocessed, plot_dir, splits, df)
-    visualize_features(preprocessed, ood_dir, splits, df,plot_dir)
+    main(preprocessed, plot_dir, splits, df)
+    #visualize_features(preprocessed, ood_dir, splits, df,plot_dir)
