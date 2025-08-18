@@ -1128,7 +1128,7 @@ def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
 
 
         # Alias for val and ood sets
-        val = results["val"]
+        #val = results["val"]
         ood = results["ood"]
 
         df = pd.DataFrame({
