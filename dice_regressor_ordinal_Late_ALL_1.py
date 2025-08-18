@@ -1052,7 +1052,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
                     all_labels_ood.extend(label.cpu().numpy())
                     all_subtypes_ood.extend(subtype)
 
-                preds = model(image, mask, uncertainty)
+                preds = model(image, mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
                 fold_preds_ood.extend(decoded_preds)
 
