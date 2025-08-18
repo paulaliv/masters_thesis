@@ -1294,7 +1294,7 @@ def plot_bin_distribution(y_true, y_pred, title, save_path):
 
 
 
-def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
+def visualize_features(data_dir,ood_dir,splits, df,  plot_dir):
 
 
     metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
@@ -1363,9 +1363,9 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    #ood_dir = sys.argv[2]
-    plot_dir = sys.argv[2]
+    ood_dir = sys.argv[2]
+    plot_dir = sys.argv[3]
 
-    main(preprocessed, plot_dir, splits, df)
-    #visualize_features(preprocessed, ood_dir, splits, df,"confidence", plot_dir)
+    #main(preprocessed, plot_dir, splits, df)
+    visualize_features(preprocessed, ood_dir, splits, df, plot_dir)
 
