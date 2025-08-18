@@ -1060,6 +1060,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         all_preds_ood.append(fold_preds_ood)
 
     from scipy.stats import mode
+    all_preds_ood = np.array(all_preds_ood)
     final_preds, _ = mode(all_preds_ood, axis=0)
     final_preds = final_preds.squeeze()
     avg_preds = np.mean(all_preds_ood, axis=0)
@@ -1079,7 +1080,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
             "subtypes": np.array(all_subtypes_ood),
             "maj_preds": final_preds,
             "avg_preds": avg_preds,
-            'all_preds': np.array(all_preds_ood)
+            'all_preds': all_preds_ood
 
         }
     }
