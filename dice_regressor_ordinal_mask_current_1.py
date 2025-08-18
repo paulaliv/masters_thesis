@@ -270,7 +270,7 @@ class Light3DEncoder(nn.Module):
         #
         #     nn.Conv3d(16, 32, kernel_size=3, padding=1),
         #     nn.BatchNorm3d(32),
-        #     nn.ReLU(),
+        #     nn.ReLFU(),
         #     nn.MaxPool3d(2),
         #
         #     nn.Conv3d(32, 64, kernel_size=3, padding=1),

@@ -344,7 +344,7 @@ class QADataset(Dataset):
             uncertainty= data["uncertainty"]
 
         if self.want_features:
-            return image, mask, uncertainty, label_tensor, subtype
+            return image, mask, uncertainty, label_tensor, subtype, case_id
         else:
             return image, mask, uncertainty, label_tensor, subtype
 
@@ -966,6 +966,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     all_labels_val, all_labels_ood = [], []
     all_subtypes_val, all_subtypes_ood = [], []
     all_preds_val, all_preds_ood = [], []
+    all_case_ids_ood, all_case_ids_val = [], []
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -995,11 +996,11 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
 
     fold_paths = [
-        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}.pt.gz",
-        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}.pt.gz",
+        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}_ALL.pt.gz",
+        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}_ALL.pt.gz",
 
     ]
 
@@ -1022,73 +1023,72 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
             want_features=True,
         )
         val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+        fold_preds_val = []
+        fold_preds_ood = []
 
         with torch.no_grad():
             # Validation set
-            for image, mask, uncertainty, label, subtype in val_loader:
+            for image, mask, uncertainty, label, subtype, case_id in val_loader:
                 image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
 
-                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
-                img_feat = model.extract_img_features(image).cpu().numpy()
-                mask_feat = model.extract_mask_features(mask).cpu().numpy()
+                if fold_idx == 0:
+                    all_labels_val.extend(label.cpu().numpy())
+                    all_subtypes_val.extend(subtype)
+                    all_case_ids_val.extend(case_id)
 
-                all_unc_val.append(unc_feat)
-                all_img_val.append(img_feat)
-                all_mask_val.append(mask_feat)
 
-                all_labels_val.extend(label.cpu().numpy())
-                all_subtypes_val.extend(subtype)
 
                 preds = model(image, uncertainty)
                 decoded_preds = corn_predict(preds)
-                all_preds_val.extend(decoded_preds)
+                fold_preds_val.extend(decoded_preds)
 
             # OOD set
-            for image, mask, uncertainty, label, subtype in ood_loader:
+            for image, mask, uncertainty, label, subtype, case_id in ood_loader:
                 image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
 
-                unc_feat = model.extract_unc_features(uncertainty).cpu().numpy()
-                img_feat = model.extract_img_features(image).cpu().numpy()
-                mask_feat = model.extract_mask_features(mask).cpu().numpy()
+                if fold_idx == 0:
 
-                all_unc_ood.append(unc_feat)
-                all_img_ood.append(img_feat)
-                all_mask_ood.append(mask_feat)
-
-                all_labels_ood.extend(label.cpu().numpy())
-                all_subtypes_ood.extend(subtype)
+                    all_case_ids_ood.extend(case_id)
+                    all_labels_ood.extend(label.cpu().numpy())
+                    all_subtypes_ood.extend(subtype)
 
                 preds = model(image, uncertainty)
                 decoded_preds = corn_predict(preds)
-                all_preds_ood.extend(decoded_preds)
+                fold_preds_ood.extend(decoded_preds)
 
-        # Concatenate features
-    all_unc_val = np.vstack(all_unc_val)
-    all_img_val = np.vstack(all_img_val)
-    all_mask_val = np.vstack(all_mask_val)
+        all_preds_val.append(fold_preds_val)
+        all_preds_ood.append(fold_preds_ood)
 
-    all_unc_ood = np.vstack(all_unc_ood)
-    all_img_ood = np.vstack(all_img_ood)
-    all_mask_ood = np.vstack(all_mask_ood)
+    from scipy.stats import mode
+    final_preds, _ = mode(all_preds_ood, axis=0)
+    final_preds = final_preds.squeeze()
+    avg_preds = np.mean(all_preds_ood, axis=0)
+
+
 
     return {
-        "val": {
-            "unc": all_unc_val, "img": all_img_val, "mask": all_mask_val,
-            "labels": np.array(all_labels_val), "subtypes": np.array(all_subtypes_val),
-            "preds": np.array(all_preds_val)
+        "val": {"case_ids": np.array(all_case_ids_val),
+            "labels": np.array(all_labels_val),
+            "subtypes": np.array(all_subtypes_val),
+            'preds': np.array(all_preds_val)
+
         },
         "ood": {
-            "unc": all_unc_ood, "img": all_img_ood, "mask": all_mask_ood,
-            "labels": np.array(all_labels_ood), "subtypes": np.array(all_subtypes_ood),
-            "preds": np.array(all_preds_ood)
+            "case_ids":  np.array(all_case_ids_ood),
+            "labels": np.array(all_labels_ood),
+            "subtypes": np.array(all_subtypes_ood),
+            "maj_preds": final_preds,
+            "avg_preds": avg_preds,
+            'all_preds': np.array(all_preds_ood)
+
         }
     }
 
 def plot_confusion(y_true, y_pred, title, save_path):
     class_names = ["Fail (0-0.1)", "Poor (0.1-0.5)", "Moderate(0.5-0.7)", " Good (>0.7)"]
     present_labels = np.unique(y_pred)
-    labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
-    cm = confusion_matrix(y_true, y_pred, labels=labels_idx)
+    #labels_idx = sorted([label for label in [0, 1, 2, 3] if label in present_labels])
+    cm = confusion_matrix(y_true, y_pred, labels=[0,1,2,3])
     plt.figure(figsize=(6,5))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted Bin")
@@ -1098,67 +1098,6 @@ def plot_confusion(y_true, y_pred, title, save_path):
     plt.savefig(save_path, dpi=300)
 
 
-def plot_bin_distribution(y_true, y_pred, title):
-    bins = sorted(set(y_true) | set(y_pred))
-    df = pd.DataFrame({
-        "Actual": pd.Series(y_true).value_counts(normalize=True),
-        "Predicted": pd.Series(y_pred).value_counts(normalize=True)
-    }).fillna(0).reindex(bins)
-
-    width = 0.35
-    x = np.arange(len(bins))
-
-    plt.bar(x - width/2, df["Actual"], width, label="Actual")
-    plt.bar(x + width/2, df["Predicted"], width, label="Predicted")
-    plt.xticks(x, bins)
-    plt.ylabel("Proportion")
-    plt.title(title)
-    plt.legend()
-    plt.show()
-
-
-
-def plot_sankey(y_true, y_pred, title):
-    # Ensure numpy arrays
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-
-    bins = sorted(set(y_true) | set(y_pred))
-
-    # Create label list: actual bins first, then predicted bins
-    labels = [f"Actual {b}" for b in bins] + [f"Pred {b}" for b in bins]
-
-    # Build source-target-flow lists
-    source = []
-    target = []
-    value = []
-
-    for i, b_true in enumerate(bins):
-        for j, b_pred in enumerate(bins):
-            count = np.sum((y_true == b_true) & (y_pred == b_pred))
-            if count > 0:
-                source.append(i)               # actual bin index
-                target.append(len(bins) + j)   # predicted bin index (shifted)
-                value.append(count)
-
-    # Create Sankey diagram
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=20,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=labels,
-            color=["#636EFA"]*len(bins) + ["#EF553B"]*len(bins)  # blue for actual, red for pred
-        ),
-        link=dict(
-            source=source,
-            target=target,
-            value=value
-        )
-    )])
-
-    fig.update_layout(title_text=title, font_size=12)
-    fig.show()
 
 
 def plot_distribution_kde(y_true, y_pred, title):
@@ -1169,56 +1108,52 @@ def plot_distribution_kde(y_true, y_pred, title):
     plt.show()
 
 
-def visualize_features(data_dir,ood_dir,splits, df, uncertainty_metric, plot_dir):
-    results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=uncertainty_metric, df= df, splits=splits)
+def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
 
-    # Run inference to get feature dicts
-    results = inference(
-        data_dir=data_dir,
-        ood_dir=ood_dir,
-        uncertainty_metric=uncertainty_metric,
-        df=df,
-        splits=splits
-    )
 
-    # Alias for val and ood sets
-    val = results["val"]
-    ood = results["ood"]
+    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    for metric in metrics:
+        results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=metric, df= df, splits=splits)
 
-    # --- 1. UMAP plots for img, unc, mask ---
-    plot_UMAP(val["img"], val["labels"], val["subtypes"],
-              ood["img"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "img_umap.png"))
 
-    plot_UMAP(val["unc"], val["labels"], val["subtypes"],
-              ood["unc"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "unc_umap.png"))
+        # Alias for val and ood sets
+        val = results["val"]
+        ood = results["ood"]
 
-    plot_UMAP(val["mask"], val["labels"], val["subtypes"],
-              ood["mask"], ood["labels"], ood["subtypes"],
-              neighbours=15, m="euclidean",
-              name=os.path.join(plot_dir, "mask_umap.png"))
+        df = pd.DataFrame({
+            "case_id": ood["case_ids"],
+            "gt": ood["labels"],
+            "subtype": ood["subtypes"],
+            "maj_pred": ood["maj_preds"],
+            "avg_pred": ood["avg_preds"],
 
-    # --- 2. Confusion matrix ---
-    # Use val true labels and ood predicted labels (or vice versa depending on your setup)
-    # Here I assume val labels vs ood labels as an example; adjust as needed
-    plot_confusion(ood["preds"], ood["labels"],
-                   title="Confusion Matrix - Val vs OOD",
-                   save_path=os.path.join(plot_dir, "confusion_val_vs_ood.png"))
+        })
 
-    # --- 3. Bin distribution bar plot ---
-    # Combine all labels for bins
-    combined_labels = np.concatenate([val["labels"], ood["labels"]])
-    plot_bin_distribution(combined_labels,
-                  title="Subtype Distribution Val + OOD",
-                  save_path=os.path.join(plot_dir, "bin_dist_val_ood.png"))
+        # expand per-fold predictions into extra columns
+        all_preds = ood["all_preds"]  # shape: (num_folds, num_cases)
+        num_folds = all_preds.shape[0]
 
-    # --- 4. Sankey plot ---
-    plot_sankey(val["labels"], ood["labels"],
-                title="Sankey Plot Val to OOD",
-                save_path=os.path.join(plot_dir, "sankey_val_to_ood.png"))
+        for fold_idx in range(5):
+            df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
+
+        df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_ALL.csv'), index=False)
+
+        df_id= pd.DataFrame({
+            "case_id": ood["case_ids"],
+            "gt": ood["labels"],
+            "subtype": ood["subtypes"],
+            "preds": ood["preds"],
+
+        })
+        df_id.to_csv(os.path.join(plot_dir, f'{metric}_id_results_ALL.csv'), index=False)
+        # --- 2. Confusion matrix ---
+        # Use val true labels and ood predicted labels (or vice versa depending on your setup)
+        # Here I assume val labels vs ood labels as an example; adjust as needed
+        plot_confusion(ood["maj_preds"], ood["labels"],
+                       title="Confusion Matrix - Val vs OOD",
+                       save_path=os.path.join(plot_dir, f"confusion_ood_ALL_{metric}.png"))
+
+
 
 
     #
@@ -1254,8 +1189,8 @@ if __name__ == '__main__':
     df =  pd.read_csv(clinical_data)
 
     preprocessed= sys.argv[1]
-    #ood_dir = sys.argv[2]
+    ood_dir = sys.argv[2]
     plot_dir = sys.argv[2]
 
-    main(preprocessed, plot_dir, splits, df)
-    #visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
+    #main(preprocessed, plot_dir, splits, df)
+    visualize_features(preprocessed, ood_dir, splits, df,plot_dir)
