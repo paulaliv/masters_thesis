@@ -727,7 +727,7 @@ def main(data_dir, plot_dir, folds,df):
         plt.title(f'Training and Validation Loss Curves - {metric}')
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_EARLY_img.png'))
+        plt.savefig(os.path.join(plot_dir, f'loss_curves_all_folds_{metric}_EARLY_mask.png'))
         plt.close()
 
         # confusion matrix

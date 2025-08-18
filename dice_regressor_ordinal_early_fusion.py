@@ -610,7 +610,7 @@ def main(data_dir, plot_dir, folds,df):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    metrics = ['entropy', 'mutual_info', 'epkl']
+    metrics = ['entropy','epkl']
 
 
 
