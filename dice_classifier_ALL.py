@@ -1239,4 +1239,4 @@ if __name__ == '__main__':
     plot_dir = sys.argv[3]
 
     #main(preprocessed, plot_dir, splits, df)
-    visualize_features(preprocessed, ood_dir, splits, df,"mutual_info", plot_dir)
+    visualize_features(preprocessed, ood_dir, splits, df,plot_dir)
