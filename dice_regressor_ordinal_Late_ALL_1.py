@@ -1022,35 +1022,35 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         model.load_state_dict(checkpoint)
         model.eval()
 
-        # Validation loader for this fold
-        val_case_ids = splits[fold_idx]["val"]
-        val_dataset = QADataset(
-            case_ids=val_case_ids,
-            data_dir=data_dir,
-            df=df,
-            uncertainty_metric=uncertainty_metric,
-            transform=val_transforms,
-            want_features=True,
-        )
-        val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+        # # Validation loader for this fold
+        # val_case_ids = splits[fold_idx]["val"]
+        # val_dataset = QADataset(
+        #     case_ids=val_case_ids,
+        #     data_dir=data_dir,
+        #     df=df,
+        #     uncertainty_metric=uncertainty_metric,
+        #     transform=val_transforms,
+        #     want_features=True,
+        # )
+        # val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
         fold_preds_val = []
         fold_preds_ood = []
 
         with torch.no_grad():
             # Validation set
-            for image, mask, uncertainty, label, subtype, case_id in val_loader:
-                image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
-
-
-                all_labels_val.extend(label.cpu().numpy())
-                all_subtypes_val.extend(subtype)
-                all_case_ids_val.extend(case_id)
-
-
-
-                preds = model(image, mask,uncertainty).cpu()
-                decoded_preds = corn_predict(preds)
-                fold_preds_val.extend(decoded_preds)
+            # for image, mask, uncertainty, label, subtype, case_id in val_loader:
+            #     image, mask, uncertainty = image.to(device), mask.to(device), uncertainty.to(device)
+            #
+            #
+            #     all_labels_val.extend(label.cpu().numpy())
+            #     all_subtypes_val.extend(subtype)
+            #     all_case_ids_val.extend(case_id)
+            #
+            #
+            #
+            #     preds = model(image, mask,uncertainty).cpu()
+            #     decoded_preds = corn_predict(preds)
+            #     fold_preds_val.extend(decoded_preds)
 
             # OOD set
             for image, mask, uncertainty, label, subtype, case_id in ood_loader:
@@ -1066,7 +1066,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
                 decoded_preds = corn_predict(preds)
                 fold_preds_ood.extend(decoded_preds)
 
-        all_preds_val.append(fold_preds_val)
+        #all_preds_val.append(fold_preds_val)
         all_preds_ood.append(fold_preds_ood)
 
     from scipy.stats import mode
@@ -1078,12 +1078,12 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
 
     return {
-        "val": {"case_ids": np.array(all_case_ids_val),
-            "labels": np.array(all_labels_val),
-            "subtypes": np.array(all_subtypes_val),
-            'preds': np.concatenate(all_preds_val)
-
-        },
+        # "val": {"case_ids": np.array(all_case_ids_val),
+        #     "labels": np.array(all_labels_val),
+        #     "subtypes": np.array(all_subtypes_val),
+        #     'preds': np.concatenate(all_preds_val)
+        #
+        # },
         "ood": {
             "case_ids":  np.array(all_case_ids_ood),
             "labels": np.array(all_labels_ood),
@@ -1148,15 +1148,15 @@ def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
             df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
 
         df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_ALL.csv'), index=False)
-
-        df_id= pd.DataFrame({
-            "case_id": val["case_ids"],
-            "gt": val["labels"],
-            "subtype": val["subtypes"],
-            "preds": val["preds"],
-
-        })
-        df_id.to_csv(os.path.join(plot_dir, f'{metric}_id_results_ALL.csv'), index=False)
+        #
+        # df_id= pd.DataFrame({
+        #     "case_id": val["case_ids"],
+        #     "gt": val["labels"],
+        #     "subtype": val["subtypes"],
+        #     "preds": val["preds"],
+        #
+        # })
+        # df_id.to_csv(os.path.join(plot_dir, f'{metric}_id_results_ALL.csv'), index=False)
         # --- 2. Confusion matrix ---
         # Use val true labels and ood predicted labels (or vice versa depending on your setup)
         # Here I assume val labels vs ood labels as an example; adjust as needed
