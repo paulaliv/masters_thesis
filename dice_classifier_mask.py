@@ -550,8 +550,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
             with torch.no_grad():
                 #decoded_preds = decode_predictions(preds)
                 # decoded_preds = corn_predict(preds)
-
-                correct += (preds == label).sum().item()
+                pred_classes = preds.argmax(dim=1)
+                correct += (pred_classes == label).sum().item()
 
 
         epoch_train_loss = running_loss / total
@@ -593,8 +593,8 @@ def train_one_fold(fold,data_dir, df, splits, uncertainty_metric,plot_dir, devic
 
 
                 with torch.no_grad():
-
-                    val_correct += (preds == label).sum().item()
+                    pred_classes = preds.argmax(dim=1)
+                    val_correct += (pred_classes == label).sum().item()
 
 
                 val_total += label.size(0)
