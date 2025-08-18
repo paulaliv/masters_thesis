@@ -1071,7 +1071,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         "val": {"case_ids": np.array(all_case_ids_val),
             "labels": np.array(all_labels_val),
             "subtypes": np.array(all_subtypes_val),
-            'preds': np.array(all_preds_val)
+            'preds': np.concatenate(all_preds_val)
 
         },
         "ood": {
