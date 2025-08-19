@@ -1232,7 +1232,7 @@ def inference(ood_dir, uncertainty_metric):
 
                 if fold_idx == 0:
                     all_case_ids_ood.extend(case_id)
-                    all_labels_ood.extend(label.cpu().numpy())
+                    all_labels_ood.extend(label)
                     all_subtypes_ood.extend(subtype)
 
                 preds = model(mask, uncertainty).cpu()
