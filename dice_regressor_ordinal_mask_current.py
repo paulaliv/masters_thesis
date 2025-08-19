@@ -433,7 +433,7 @@ class QADataset(Dataset):
 
 
         if self.want_features:
-            return mask, uncertainty, subtype, case_id
+            return mask, uncertainty, label, subtype, case_id
         else:
             return mask, uncertainty, label_tensor, subtype
 
@@ -1246,17 +1246,10 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     ]
 
 
-    all_subtypes = []
-    all_preds = []
-    all_labels = []
-    all_case_ids = []
-
-    all_subtypes_val = []
-    all_preds_val = []
-    #all_labels_val = []
-    all_case_ids_val = []
-
-
+    all_labels_val, all_labels_ood = [], []
+    all_subtypes_val, all_subtypes_ood = [], []
+    all_preds_val, all_preds_ood = [], []
+    all_case_ids_ood, all_case_ids_val = [], []
     for fold_idx, model_path in enumerate(fold_paths):
         with gzip.open(model_path, 'rb') as f:
             checkpoint = torch.load(f, map_location=device, weights_only=False)
@@ -1266,68 +1259,66 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
         model.eval()
         fold_preds = []
 
-        # Validation loader for this fold
-        val_case_ids = splits[fold_idx]["val"]
-        val_dataset = QADataset(
-            case_ids=val_case_ids,
-            data_dir=data_dir,
-            df=df,
-            uncertainty_metric=uncertainty_metric,
-            transform=val_transforms,
-            want_features=True,
-        )
-        val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
-
-
-        fold_preds_val = []
-        fold_case_ids_val = []
-        fold_subtypes_val= []
-
+        # # Validation loader for this fold
+        # val_case_ids = splits[fold_idx]["val"]
+        # val_dataset = QADataset(
+        #     case_ids=val_case_ids,
+        #     data_dir=data_dir,
+        #     df=df,
+        #     uncertainty_metric=uncertainty_metric,
+        #     transform=val_transforms,
+        #     want_features=True,
+        # )
+        # val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, pin_memory=True)
+        #
+        #
+        # fold_preds_val = []
+        # fold_case_ids_val = []
+        # fold_subtypes_val= []
+        fold_preds_ood = []
         with torch.no_grad():
 
-            for mask, uncertainty, subtype, case_id in val_loader:
-                mask, uncertainty = mask.to(device), uncertainty.to(device)
-                preds = model(mask, uncertainty).cpu()
-                decoded_preds = corn_predict(preds)
+            # for mask, uncertainty, subtype, case_id in val_loader:
+            #     mask, uncertainty = mask.to(device), uncertainty.to(device)
+            #     preds = model(mask, uncertainty).cpu()
+            #     decoded_preds = corn_predict(preds)
+            #
+            #     fold_preds_val.extend(decoded_preds)
+            #     fold_case_ids_val.extend(case_id)
+            #     fold_subtypes_val.extend(subtype)
 
-                fold_preds_val.extend(decoded_preds)
-                fold_case_ids_val.extend(case_id)
-                fold_subtypes_val.extend(subtype)
 
 
-
-            for mask, uncertainty, subtype, case_id in ood_loader:
+            for mask, uncertainty, label, subtype, case_id in ood_loader:
                 mask, uncertainty =  mask.to(device), uncertainty.to(device)
 
                 if fold_idx == 0:
-                    all_subtypes.extend(subtype)
-                    all_case_ids.extend(case_id)
-                    #all_labels.extend(labels.cpu().numpy())
+                    all_case_ids_ood.extend(case_id)
+                    all_labels_ood.extend(label.cpu().numpy())
+                    all_subtypes_ood.extend(subtype)
+
 
                 preds = model(mask, uncertainty).cpu()
                 decoded_preds = corn_predict(preds)
-                fold_preds.extend(decoded_preds)
+                fold_preds_ood.extend(decoded_preds)
 
-        all_preds.append(fold_preds)
+        all_preds_ood.append(fold_preds_ood)
+        #
+        # all_preds_val.append(fold_preds_val)
+        # all_case_ids_val.append(fold_case_ids_val)
+        # all_subtypes_val.append(fold_subtypes_val)
+    #
+    # all_case_ids_val = np.concatenate(all_case_ids_val)
+    # all_subtypes_val = np.concatenate(all_subtypes_val)
+    # all_preds_val = np.concatenate(all_preds_val)
 
-        all_preds_val.append(fold_preds_val)
-        all_case_ids_val.append(fold_case_ids_val)
-        all_subtypes_val.append(fold_subtypes_val)
 
-    all_case_ids_val = np.concatenate(all_case_ids_val)
-    all_subtypes_val = np.concatenate(all_subtypes_val)
-    all_preds_val = np.concatenate(all_preds_val)
-
-
-
-    all_case_ids = np.array(all_case_ids)
-    all_subtypes = np.array(all_subtypes)
-    #all_labels = np.array(all_labels)
-    all_preds = np.array(all_preds)
     from scipy.stats import mode
-    final_preds, _ = mode(all_preds, axis=0)
+    all_preds_ood = np.array(all_preds_ood)
+    final_preds, _ = mode(all_preds_ood, axis=0)
     final_preds = final_preds.squeeze()
-    #avg_preds= np.mean(all_preds, axis=0)
+    avg_preds = np.mean(all_preds_ood, axis=0)
+
 
     # return  {
     #         "case_ids": all_case_ids,
@@ -1337,11 +1328,22 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     #         'all_preds': all_preds
     #
     # }
-
     return {
-        "case_id":all_case_ids_val,  # list of lists per fold
-        "subtype": all_subtypes_val,  # list of lists per fold
-        "preds": all_preds_val  # list of lists per fold
+        # "val": {"case_ids": np.array(all_case_ids_val),
+        #     "labels": np.array(all_labels_val),
+        #     "subtypes": np.array(all_subtypes_val),
+        #     'preds': np.concatenate(all_preds_val)
+        #
+        # },
+        "ood": {
+            "case_ids": np.array(all_case_ids_ood),
+            "labels": np.array(all_labels_ood),
+            "subtypes": np.array(all_subtypes_ood),
+            "maj_preds": final_preds,
+            "avg_preds": avg_preds,
+            'all_preds': all_preds_ood
+
+        }
     }
 
 
@@ -1388,12 +1390,27 @@ def visualize_features(data_dir,ood_dir, plot_dir,df,splits ):
     for metric in metrics:
         results = inference(data_dir=data_dir,ood_dir=ood_dir,uncertainty_metric=metric, df=df,splits=splits)
 
-        df_out = pd.DataFrame({
-            "case_id": results['case_id'],
-            "subtype": results['subtype'],
-            "preds": results['preds'],
+        ood = results["ood"]
+
+        df = pd.DataFrame({
+            "case_id": ood["case_ids"],
+            "gt": ood["labels"],
+            "subtype": ood["subtypes"],
+            "maj_pred": ood["maj_preds"],
+            "avg_pred": ood["avg_preds"],
+
         })
-        df_out.to_csv(os.path.join(plot_dir,f'{metric}_id_results_mask.csv'), index=False)
+
+        # expand per-fold predictions into extra columns
+        all_preds = ood["all_preds"]  # shape: (num_folds, num_cases)
+
+        for fold_idx in range(5):
+            df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
+
+        print(f'SAVING RESULTS FOR metric {metric}: {plot_dir}')
+        df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_mask.csv'), index=False)
+
+
 
 
         # df = pd.DataFrame({
