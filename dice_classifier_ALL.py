@@ -304,15 +304,17 @@ class QADataset(Dataset):
         # List of case_ids
         self.case_ids = case_ids
 
-        self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
+        #self.df = df.set_index('case_id').loc[self.case_ids].reset_index()
+        self.df = df.set_index('new_accnr').loc[self.case_ids].reset_index()
 
-
-        # Now extract dice scores and subtypes aligned with self.case_ids
-        if is_ood:
-            self.dice_scores = self.df['dice'].tolist()
-        else:
-            self.dice_scores = self.df['dice_5'].tolist()
         self.subtypes = self.df['tumor_class'].tolist()
+
+        # # Now extract dice scores and subtypes aligned with self.case_ids
+        # if is_ood:
+        #     self.dice_scores = self.df['dice'].tolist()
+        # else:
+        #     self.dice_scores = self.df['dice_5'].tolist()
+        # self.subtypes = self.df['tumor_class'].tolist()
 
         self.transform = transform
 
@@ -321,10 +323,10 @@ class QADataset(Dataset):
 
     def __getitem__(self, idx):
         case_id = self.case_ids[idx]
-        dice_score = self.dice_scores[idx]
+        #dice_score = self.dice_scores[idx]
         subtype = self.subtypes[idx]
-        subtype = subtype.strip()
-
+        #subtype = subtype.strip()
+        label = self.df.loc[idx, 'dist']
 
         image = np.load(os.path.join(self.data_dir, f'{case_id}_img.npy'))
         mask = np.load(os.path.join(self.data_dir, f'{case_id}_pred.npy'))
@@ -333,9 +335,9 @@ class QADataset(Dataset):
 
         # Map dice score to category
 
-        label = bin_dice_score(dice_score)
-
-        label_tensor = torch.tensor(label).long()
+        # label = bin_dice_score(dice_score)
+        #
+        # label_tensor = torch.tensor(label).long()
 
         if self.transform:
             data = self.transform({
@@ -348,9 +350,9 @@ class QADataset(Dataset):
             uncertainty= data["uncertainty"]
 
         if self.want_features:
-            return image, mask, uncertainty, label_tensor, subtype, case_id
+            return image, mask, uncertainty, label, subtype, case_id
         else:
-            return image, mask, uncertainty, label_tensor, subtype
+            return image, mask, uncertainty, label, subtype
 
 def get_padded_shape(shape, multiple=16):
     return tuple(((s + multiple - 1) // multiple) * multiple for s in shape)
@@ -979,10 +981,7 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
     plt.savefig(image_loc, dpi=300)
     plt.show()
 
-def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
-
-    all_unc_val, all_img_val, all_mask_val = [], [], []
-    all_unc_ood, all_img_ood, all_mask_ood = [], [], []
+def inference(ood_dir, uncertainty_metric):
 
     all_labels_val, all_labels_ood = [], []
     all_subtypes_val, all_subtypes_ood = [], []
@@ -991,39 +990,57 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
-    subtypes_df = pd.read_csv(subtypes_csv)
-    dice_dir ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
-    dice_df = pd.read_csv(dice_dir)
+    # subtypes_csv = "/gpfs/home6/palfken/WORC_test.csv"
+    subtypes_csv = "/home/bmep/plalfken/my-scratch/test_table1.csv"
+    df = pd.read_csv(subtypes_csv)
+    # dice_dir ="/gpfs/home6/palfken/Dice_scores_OOD.csv"
+    # dice_df = pd.read_csv(dice_dir)
 
-    lipoma_ids = subtypes_df.loc[
-        subtypes_df["Final_Classification"] == "Lipoma",
-        "nnunet_id"
-    ].values
+    missing_case = 'STT_0486'
 
-    # Filter dice_df to only Lipoma rows
-    dice_df_lipoma = dice_df[dice_df["tumor_class"] == "Lipoma"]
-    print(f"{len(lipoma_ids),len(dice_df_lipoma)} OOD cases found")
+    # Remove it from the DataFrame
+    df = df[df['new_accnr'] != missing_case]
+    lipoma_ids = df["new_accnr"].values
+
+
+    # lipoma_ids = subtypes_df.loc[
+    #     subtypes_df["Final_Classification"] == "Lipoma",
+    #     "nnunet_id"
+    # ].values
+
+    # # Filter dice_df to only Lipoma rows
+    # dice_df_lipoma = dice_df[dice_df["tumor_class"] == "Lipoma"]
+    # print(f"{len(lipoma_ids),len(dice_df_lipoma)} OOD cases found")
+    print(f"{len(lipoma_ids)} OOD cases found")
 
     ood_dataset = QADataset(
         case_ids=lipoma_ids,
         data_dir=ood_dir,
-        df=dice_df_lipoma,
+        df=df,
         uncertainty_metric=uncertainty_metric,
         transform=val_transforms,
         want_features=True,
         is_ood=True
     )
-    ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=True, pin_memory=True)
+    ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=False, pin_memory=True)
 
     fold_paths = [
-        f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}_crossentropy_ALL.pt.gz",
-        f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}_crossentropy_ALL.pt.gz",
-        f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}_crossentropy_ALL.pt.gz",
-        f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}_crossentropy_ALL.pt.gz",
-        f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold0_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold1_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold2_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold3_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold4_{uncertainty_metric}_crossentropy_ALL.pt.gz",
 
     ]
+    #
+    # fold_paths = [
+    #     f"/gpfs/home6/palfken/model_fold0_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+    #     f"/gpfs/home6/palfken/model_fold1_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+    #     f"/gpfs/home6/palfken/model_fold2_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+    #     f"/gpfs/home6/palfken/model_fold3_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+    #     f"/gpfs/home6/palfken/model_fold4_{uncertainty_metric}_crossentropy_ALL.pt.gz",
+    #
+    # ]
 
     for fold_idx, model_path in enumerate(fold_paths):
         with gzip.open(model_path, 'rb') as f:
@@ -1061,13 +1078,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
     avg_preds = np.mean(all_preds_ood, axis=0)
 
     return {
-        # "val": {"case_ids": np.array(all_case_ids_val),
-        #     "labels": np.array(all_labels_val),
-        #     "subtypes": np.array(all_subtypes_val),
-        #     'preds': np.concatenate(all_preds_val)
-        #
-        # },
-        "ood": {
+
             "case_ids": np.array(all_case_ids_ood),
             "labels": np.array(all_labels_ood),
             "subtypes": np.array(all_subtypes_ood),
@@ -1075,7 +1086,7 @@ def inference(data_dir, ood_dir, uncertainty_metric, df, splits):
             "avg_preds": avg_preds,
             'all_preds': all_preds_ood
 
-        }
+
     }
 
 
@@ -1166,41 +1177,36 @@ def plot_distribution_kde(y_true, y_pred, title):
     plt.show()
 
 
-def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
+def visualize_features(ood_dir,plot_dir):
 
 
     metrics = ['entropy', 'mutual_info', 'epkl']
     for metric in metrics:
-        results = inference(data_dir=data_dir, ood_dir=ood_dir,uncertainty_metric=metric, df= df, splits=splits)
+        results = inference( ood_dir=ood_dir,uncertainty_metric=metric)
 
 
         # Alias for val and ood sets
         #val = results["val"]
-        ood = results["ood"]
 
         df = pd.DataFrame({
-            "case_id": ood["case_ids"],
-            "gt": ood["labels"],
-            "subtype": ood["subtypes"],
-            "maj_pred": ood["maj_preds"],
-            "avg_pred": ood["avg_preds"],
+            "case_id": results["case_ids"],
+            "dist": results["labels"],
+            "subtype": results["subtypes"],
+            "maj_pred": results["maj_preds"],
+            "avg_pred": results["avg_preds"],
 
         })
 
+
         # expand per-fold predictions into extra columns
-        all_preds = ood["all_preds"]  # shape: (num_folds, num_cases)
+        all_preds = results["all_preds"]  # shape: (num_folds, num_cases)
 
 
         for fold_idx in range(5):
             df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
 
         print(f'SAVING RESULTS FOR metric {metric}: {plot_dir}')
-        df.to_csv(os.path.join(plot_dir, f'{metric}_ood_results_cross_ALL.csv'), index=False)
-
-
-        plot_confusion(ood["labels"],ood["maj_preds"],
-                       title="Confusion Matrix - OOD",
-                       save_path=os.path.join(plot_dir, f"confusion_ood_cross_{metric}_ALL.png"))
+        df.to_csv(os.path.join(plot_dir, f'{metric}_UMC_results_cross_ALL.csv'), index=False)
 
 
     #
@@ -1230,14 +1236,19 @@ def visualize_features(data_dir,ood_dir,splits, df, plot_dir):
     #         f"Pair: {train_case_ids[i1]} - {train_case_ids[i2]},  Distance: {dist:.4f}")
 if __name__ == '__main__':
 
-    with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
-        splits = json.load(f)
-    clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
-    df =  pd.read_csv(clinical_data)
+    # with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
+    #     splits = json.load(f)
+    # clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
+    # df =  pd.read_csv(clinical_data)
+    #
+    # preprocessed= sys.argv[1]
+    # ood_dir = sys.argv[2]
+    # plot_dir = sys.argv[3]
+    #
 
-    preprocessed= sys.argv[1]
-    ood_dir = sys.argv[2]
-    plot_dir = sys.argv[3]
+
+    ood_dir = "/home/bmep/plalfken/my-scratch/test_unc_maps_BAD/"
+    plot_dir = "/home/bmep/plalfken/my-scratch/results/"
 
     #main(preprocessed, plot_dir, splits, df)
-    visualize_features(preprocessed, ood_dir, splits, df,plot_dir)
+    visualize_features(ood_dir,plot_dir)

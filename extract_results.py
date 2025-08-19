@@ -24,7 +24,7 @@ def plot_confusion(y_true, y_pred, title, save_path=None):
         plt.savefig(save_path, dpi=300)
     plt.show()
 
-csv_files = glob.glob("/home/bmep/plalfken/my-scratch/results/*ood_results_cross_mask.csv")
+csv_files = glob.glob("/home/bmep/plalfken/my-scratch/results/*_UMC_results_mask_ordinal.csv")
 
 results = []
 metrics = ['confidence', 'entropy','mutual_info','epkl']
@@ -58,20 +58,20 @@ for f in csv_files:
 
     results.append({
         "file": f.replace("/home/bmep/plalfken/my-scratch/results","" ),
-        "loss": "Crossentropy",
+        "loss": "Ordinal",
         "modality": "Mask",
         "map": metric_found,
-        "set": "Lipoma",
+        "set": "UMC",
         "kappa": kappa,
         "quadratic_kappa": quad_kappa
     })
     save_path = os.path.join(
-        "/home/bmep/plalfken/my-scratch/results",f"heatmap_mask_{metric_found}_cross_lipoma.png"
+        "/home/bmep/plalfken/my-scratch/results",f"heatmap_mask_{metric_found}_ordinal_UMC.png"
 
     )
 
     plot_confusion(y_true, y_pred,
-                   title=f"Model with {metric_found} and Mask (Crossentropy Loss) \n on OOD Lipoma Set (K$^2$ = {quad_kappa:.3f})",
+                   title=f"Model with {metric_found} and Mask \n on UMC Set (K$^2$ = {quad_kappa:.3f})",
                    save_path=save_path)
 
 results_df = pd.DataFrame(results)
