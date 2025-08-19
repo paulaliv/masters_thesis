@@ -950,7 +950,7 @@ def plot_UMAP(X_val, y_val, subtypes_val, X_ood, y_ood, subtypes_ood, neighbours
     plt.savefig(image_loc, dpi=300)
     plt.show()
 
-def inference(dood_dir, uncertainty_metric):
+def inference(ood_dir, uncertainty_metric):
     all_labels_val, all_labels_ood = [], []
     all_subtypes_val, all_subtypes_ood = [], []
     all_preds_val, all_preds_ood = [], []
@@ -1098,10 +1098,9 @@ def plot_distribution_kde(y_true, y_pred, title):
 
 def visualize_features(ood_dir,plot_dir):
 
-
-    metrics = ['confidence', 'entropy', 'mutual_info', 'epkl']
+    metrics = ['entropy', 'mutual_info', 'epkl']
     for metric in metrics:
-        results = inference( ood_dir=ood_dir,uncertainty_metric=metric)
+        results = inference(ood_dir=ood_dir,uncertainty_metric=metric)
 
 
         df = pd.DataFrame({
