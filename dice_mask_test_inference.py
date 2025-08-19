@@ -1338,7 +1338,7 @@ def visualize_features(ood_dir, plot_dir):
 
         df = pd.DataFrame({
             "case_id": results["case_ids"],
-            "gt": results["labels"],
+            "dist": results["labels"],
             "subtype": results["subtypes"],
             "maj_pred": results["maj_preds"],
             "avg_pred": results["avg_preds"],
@@ -1353,7 +1353,7 @@ def visualize_features(ood_dir, plot_dir):
             df[f"pred_fold{fold_idx}"] = all_preds[fold_idx]
 
 
-        df.to_csv(os.path.join(plot_dir,f'{metric}_ood_results.csv'), index=False)
+        df.to_csv(os.path.join(plot_dir,f'{metric}_UMC_results_mask_ordinal.csv'), index=False)
 
 
         # --- 2. Confusion matrix ---
