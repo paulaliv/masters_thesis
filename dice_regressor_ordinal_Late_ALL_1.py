@@ -992,11 +992,11 @@ def inference(ood_dir, uncertainty_metric):
     ood_loader = DataLoader(ood_dataset, batch_size=4, shuffle=False, pin_memory=True)
 
     fold_paths = [
-        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold0_{uncertainty_metric}_ALL.pt.gz",
-        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold1_{uncertainty_metric}_ALL.pt.gz",
-        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold2_{uncertainty_metric}_ALL.pt.gz",
-        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold3_{uncertainty_metric}_ALL.pt.gz",
-        f"/home/bmep/plalfken/my-scratch/trained_models/model_fold4_{uncertainty_metric}_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/results/model_fold0_{uncertainty_metric}_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/results/model_fold1_{uncertainty_metric}_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/results/model_fold2_{uncertainty_metric}_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/results/model_fold3_{uncertainty_metric}_ALL.pt.gz",
+        f"/home/bmep/plalfken/my-scratch/results/model_fold4_{uncertainty_metric}_ALL.pt.gz",
 
     ]
 
