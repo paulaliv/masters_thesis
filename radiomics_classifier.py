@@ -398,13 +398,15 @@ def manual_tune_and_eval(models, X, y, label_names, k_value=200):
 
 
 # Load your features and labels
-csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv", index_col=0)
+csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv", index_col=0)
 csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
 csv_file.drop(columns='tumor_class_y', inplace=True)
 
 #csv_file.to_csv("/gpfs/home6/palfken/final_features.csv")
 
 X = csv_file.drop(columns=['case_id', 'tumor_class'])
+X = X[~X['tumor_class'].isin(['MyxofibroSarcomas', 'MyxoidlipoSarcoma'])].reset_index(
+    drop=True)
 non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
 print(X[non_numeric_cols].head(50))
 print(non_numeric_cols)
@@ -425,14 +427,12 @@ X = X.fillna(0)
 
 y = csv_file['tumor_class']
 # Merge WDLPS and MyxoidLiposarcoma
-y_merged = y.copy()
-y_merged = np.where((y_merged == 'WDLPS') | (y_merged == 'MyxoidlipoSarcoma'), 'Liposarcoma', y_merged)
 
 
 # Encode labels if they're not numeric
 if y.dtype == 'object':
     le = LabelEncoder()
-    y = le.fit_transform(y_merged)
+    y = le.fit_transform(y)
     label_names = le.classes_
 else:
     label_names = np.unique(y)

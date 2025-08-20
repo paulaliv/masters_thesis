@@ -1098,7 +1098,7 @@ def plot_distribution_kde(y_true, y_pred, title):
 
 def visualize_features(ood_dir,plot_dir):
 
-    metrics = ['entropy', 'mutual_info', 'epkl']
+    metrics = ['epkl']
     for metric in metrics:
         results = inference(ood_dir=ood_dir,uncertainty_metric=metric)
 
