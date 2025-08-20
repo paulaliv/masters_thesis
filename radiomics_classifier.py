@@ -232,7 +232,7 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
     }
 
 
-def manual_tune_and_eval(models, X, y, label_names, k_value=250):
+def manual_tune_and_eval(models, X, y, label_names, k_value=150):
     """
     Manually tune only the most important params for tree-based models.
     Uses your evaluate_model function for fair comparison.
@@ -398,13 +398,13 @@ def manual_tune_and_eval(models, X, y, label_names, k_value=250):
 
 
 # Load your features and labels
-csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv", index_col=0)
-#csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv")
+#csv_file = pd.read_csv("/gpfs/home6/palfken/final_features.csv", index_col=0)
+csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv")
 
-csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
+#csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
 csv_file = csv_file[~csv_file['tumor_class'].isin(['MyxofibroSarcomas'])].reset_index(
     drop=True)
-csv_file.drop(columns='tumor_class_y', inplace=True)
+#csv_file.drop(columns='tumor_class_y', inplace=True)
 print(csv_file.columns)
 
 #csv_file.to_csv("/gpfs/home6/palfken/final_features.csv")
