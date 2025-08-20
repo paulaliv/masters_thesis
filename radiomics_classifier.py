@@ -232,7 +232,7 @@ def evaluate_model(name, model, X, y, label_names, k_value, patience = 10, val_s
     }
 
 
-def manual_tune_and_eval(models, X, y, label_names, k_value=200):
+def manual_tune_and_eval(models, X, y, label_names, k_value=250):
     """
     Manually tune only the most important params for tree-based models.
     Uses your evaluate_model function for fair comparison.
