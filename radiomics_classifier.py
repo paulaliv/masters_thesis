@@ -400,7 +400,7 @@ def manual_tune_and_eval(models, X, y, label_names, k_value=200):
 # Load your features and labels
 #csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv", index_col=0)
 csv_file = pd.read_csv("/gpfs/home6/palfken/radiomics_features.csv")
-csv_file = csv_file[~csv_file['tumor_class'].isin(['MyxofibroSarcomas', 'MyxoidlipoSarcoma'])].reset_index(
+csv_file = csv_file[~csv_file['tumor_class'].isin(['MyxoidlipoSarcoma'])].reset_index(
     drop=True)
 #csv_file.rename(columns={'tumor_class_x':'tumor_class'}, inplace=True)
 #csv_file.drop(columns='tumor_class_y', inplace=True)
