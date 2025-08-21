@@ -283,10 +283,10 @@ def main():
 
         # Map dice bins to their ranges for captions
         dice_bin_caption = {
-            0: "0.0–0.25",
-            1: "0.25–0.5",
-            2: "0.5–0.75",
-            3: "0.75–1.0"
+            0: "0.0–0.1",
+            1: "0.1–0.5",
+            2: "0.5–0.7",
+            3: ">0.7"
         }
 
         # Apply the mapping
