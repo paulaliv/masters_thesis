@@ -179,22 +179,25 @@ def main():
 
 
 
-    id_stats = preprocess_folder(data, splits)
-
-    df = pd.DataFrame.from_dict(id_stats, orient='index')
-    df.to_csv("/gpfs/home6/palfken/ood_features/id_stats.csv")
+    # id_stats = preprocess_folder(data, splits)
+    #
+    # df = pd.DataFrame.from_dict(id_stats, orient='index')
+    # df.to_csv("/gpfs/home6/palfken/ood_features/id_stats.csv")
+    df = pd.read_csv("/gpfs/home6/palfken/ood_features/id_stats.csv")
     print(f'ID FOLDER: {len(df)}')
 
     df['dice_bin'] = bin_dice_score(df['dice'].values)
 
-    ood_stats = preprocess_folder_1(data1)
+    # ood_stats = preprocess_folder_1(data1)
+    #
+    # df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
+    # print(f'OOD FOLDER: {len(df_ood)}')
+    # print(df_ood.head(10))
+    #
+    # df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
+    # df_ood.to_csv("/gpfs/home6/palfken/ood_features/ood_stats.csv")
 
-    df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
-    print(f'OOD FOLDER: {len(df_ood)}')
-    print(df_ood.head(10))
-
-    df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
-    df_ood.to_csv("/gpfs/home6/palfken/ood_features/ood_stats.csv")
+    df_ood = pd.read_csv("/gpfs/home6/palfken/ood_features/ood_stats.csv")
     print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
     # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
@@ -205,86 +208,140 @@ def main():
     colors = {'In-Distribution': 'blue', 'OOD': 'red'}
     # For simplicity, if multiple pred_mean_unc columns exist, take the first
     metrics = ['EPKL','Confidence','Entropy','Mutual-Info']
+
+    dice_bins = sorted(df['dice_bin'].unique())
+    results = []
+
     for idx, metric in enumerate(unc_cols_pred):
-        print(f'METRICS FOR {metric}')
         unc_col = unc_cols_pred[idx]
         unc_col_ood = unc_cols_pred_ood[idx]
+        print(f"\n=== METRIC: {metric} ===")
 
-        # Extract and clean ID values
-        id_unc = df[unc_col].values
-        print("NaNs in ID:", np.isnan(id_unc).sum())
-        id_unc_clean = id_unc[~np.isnan(id_unc)]
+        for bin_id in dice_bins:
+            print(f"--- Dice bin {bin_id} ---")
 
-        # Extract and clean OOD values
-        ood_unc = df_ood[unc_col_ood].values
-        print("NaNs in OOD before cleaning:", np.isnan(ood_unc).sum())
-        ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
-        print("NaNs in OOD after cleaning:", np.isnan(ood_unc_clean).sum())
+            # Select bin-specific ID and OOD
+            id_subset = df[df['dice_bin'] == bin_id]
+            ood_subset = df_ood[df_ood['dice_bin'] == bin_id]
 
-        # Define quantile thresholds from ID
-        q95 = np.quantile(id_unc_clean, 0.95)
-        q98 = np.quantile(id_unc_clean, 0.98)
-        print(f"95th percentile (ID): {q95:.4f}")
-        print(f"98th percentile (ID): {q98:.4f}")
+            if len(id_subset) == 0 or len(ood_subset) == 0:
+                print(f"Skipping bin {bin_id}, not enough data.")
+                continue
 
-        # Check how many OOD points fall above thresholds
-        frac_ood_above95 = np.mean(ood_unc_clean > q95)
-        frac_ood_above98 = np.mean(ood_unc_clean > q98)
-        frac_id_above95 = np.mean(id_unc_clean > q95)  # should be ~5%
-        frac_id_above98 = np.mean(id_unc_clean > q98)  # should be ~2%
+            id_unc = id_subset[unc_col].values
+            ood_unc = ood_subset[unc_col_ood].values
 
-        print(f"OOD above 95th: {frac_ood_above95:.2%}, ID above 95th: {frac_id_above95:.2%}")
-        print(f"OOD above 98th: {frac_ood_above98:.2%}, ID above 98th: {frac_id_above98:.2%}")
+            # Clean NaNs
+            id_unc = id_unc[~np.isnan(id_unc)]
+            ood_unc = ood_unc[~np.isnan(ood_unc)]
 
-        # Plot distributions
-        plt.hist(id_unc_clean, bins=30, alpha=0.6, label='ID')
-        plt.hist(ood_unc_clean, bins=30, alpha=0.6, label='OOD')
-        plt.axvline(q95, color='red', linestyle='--', label='95th ID')
-        plt.axvline(q98, color='black', linestyle='--', label='98th ID')
-        plt.xlabel('Uncertainty')
-        plt.ylabel('Count')
-        plt.title(f'{metric} Uncertainty distribution of ID Validation vs OOD Lipoma Set with 95/98% cutoff')
-        plt.legend()
-        plt.show()
-        plt.savefig(f"/gpfs/home6/palfken/ood_features/unc_thresholds_{metric}.png")
-        plt.close()
+            if len(id_unc) == 0 or len(ood_unc) == 0:
+                print(f"Skipping bin {bin_id}, all NaNs.")
+                continue
 
-        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc_clean[:, None])
-        log_prob = kde.score_samples(ood_unc_clean[:, None])
-        log_prob_id = kde.score_samples(id_unc[:, None])
+            # KDE fit on ID
+            kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc[:, None])
+            log_prob_id = kde.score_samples(id_unc[:, None])
+            log_prob_ood = kde.score_samples(ood_unc[:, None])
 
-        threshold = np.percentile(log_prob_id, 5)  # bottom 5% likelihood of ID
-        id_pred = log_prob_id > threshold
-        ood_pred = log_prob > threshold
+            # Threshold for accuracy calculation
+            threshold = np.percentile(log_prob_id, 5)
+            id_pred = log_prob_id > threshold
+            ood_pred = log_prob_ood > threshold
 
-        # Build ground truth + preds
-        y_true = np.concatenate([np.ones(len(log_prob_id)), np.zeros(len(log_prob))])
-        y_pred = np.concatenate([id_pred, ood_pred])
+            y_true = np.concatenate([np.ones(len(log_prob_id)), np.zeros(len(log_prob_ood))])
+            y_pred = np.concatenate([id_pred, ood_pred])
+            scores = np.concatenate([log_prob_id, log_prob_ood])
+            from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+            # Metrics
+            acc = accuracy_score(y_true, y_pred)
+            auroc = roc_auc_score(y_true, scores)
+            aupr = average_precision_score(y_true, scores)
 
-        from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
-        # Accuracy
-        acc = accuracy_score(y_true, y_pred)
-        print(f"Accuracy (5% cutoff): {acc:.3f}")
-
-        # AUROC (better measure, uses raw log probs)
-        scores = np.concatenate([log_prob_id, log_prob])
-        auroc = roc_auc_score(y_true, scores)
-        print(f"AUROC: {auroc:.3f}")
-
-        # ---- Visualization ----
-        plt.figure(figsize=(8, 5))
-        plt.scatter(range(len(log_prob_id)), log_prob_id, label="ID", alpha=0.6)
-        plt.scatter(range(len(log_prob_id), len(log_prob_id) + len(log_prob)), log_prob, label="OOD", alpha=0.6,
-                    color="orange")
-        plt.axhline(threshold, color="red", linestyle="--", label="5% threshold (ID)")
-        plt.xlabel("Sample index")
-        plt.ylabel("Log-likelihood under ID KDE")
-        plt.legend()
-        plt.tight_layout()
-        plt.title(f"Log-likelihood under ID KDE with {metric}")
-        plt.show()
-        plt.savefig(f"/gpfs/home6/palfken/ood_features/log_likelihood_{metric}.png")
-        plt.close()
+            print(f"Bin {bin_id}: ACC={acc:.3f}, AUROC={auroc:.3f}, AUPR={aupr:.3f}")
+    #
+    # for idx, metric in enumerate(unc_cols_pred):
+    #     print(f'METRICS FOR {metric}')
+    #     for bin in range(4):
+    #         print(f'{bin}: {metric}')
+    #         unc_col = unc_cols_pred[idx]
+    #         unc_col_ood = unc_cols_pred_ood[idx]
+    #
+    #         # Extract and clean ID values
+    #         id_unc = df[unc_col].values
+    #         print("NaNs in ID:", np.isnan(id_unc).sum())
+    #         id_unc_clean = id_unc[~np.isnan(id_unc)]
+    #
+    #         # Extract and clean OOD values
+    #         ood_unc = df_ood[unc_col_ood].values
+    #         print("NaNs in OOD before cleaning:", np.isnan(ood_unc).sum())
+    #         ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
+    #         print("NaNs in OOD after cleaning:", np.isnan(ood_unc_clean).sum())
+    #
+    #         # Define quantile thresholds from ID
+    #         q95 = np.quantile(id_unc_clean, 0.95)
+    #         q98 = np.quantile(id_unc_clean, 0.98)
+    #         print(f"95th percentile (ID): {q95:.4f}")
+    #         print(f"98th percentile (ID): {q98:.4f}")
+    #
+    #         # Check how many OOD points fall above thresholds
+    #         frac_ood_above95 = np.mean(ood_unc_clean > q95)
+    #         frac_ood_above98 = np.mean(ood_unc_clean > q98)
+    #         frac_id_above95 = np.mean(id_unc_clean > q95)  # should be ~5%
+    #         frac_id_above98 = np.mean(id_unc_clean > q98)  # should be ~2%
+    #
+    #         print(f"OOD above 95th: {frac_ood_above95:.2%}, ID above 95th: {frac_id_above95:.2%}")
+    #         print(f"OOD above 98th: {frac_ood_above98:.2%}, ID above 98th: {frac_id_above98:.2%}")
+    #
+    #         # Plot distributions
+    #         plt.hist(id_unc_clean, bins=30, alpha=0.6, label='ID')
+    #         plt.hist(ood_unc_clean, bins=30, alpha=0.6, label='OOD')
+    #         plt.axvline(q95, color='red', linestyle='--', label='95th ID')
+    #         plt.axvline(q98, color='black', linestyle='--', label='98th ID')
+    #         plt.xlabel('Uncertainty')
+    #         plt.ylabel('Count')
+    #         plt.title(f'{metric} Uncertainty distribution of ID Validation vs OOD Lipoma Set with 95/98% cutoff')
+    #         plt.legend()
+    #         plt.show()
+    #         plt.savefig(f"/gpfs/home6/palfken/ood_features/unc_thresholds_{metric}.png")
+    #         plt.close()
+    #
+    #         kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc_clean[:, None])
+    #         log_prob = kde.score_samples(ood_unc_clean[:, None])
+    #         log_prob_id = kde.score_samples(id_unc[:, None])
+    #
+    #         threshold = np.percentile(log_prob_id, 5)  # bottom 5% likelihood of ID
+    #         id_pred = log_prob_id > threshold
+    #         ood_pred = log_prob > threshold
+    #
+    #         # Build ground truth + preds
+    #         y_true = np.concatenate([np.ones(len(log_prob_id)), np.zeros(len(log_prob))])
+    #         y_pred = np.concatenate([id_pred, ood_pred])
+    #
+    #         from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+    #         # Accuracy
+    #         acc = accuracy_score(y_true, y_pred)
+    #         print(f"Accuracy (5% cutoff): {acc:.3f}")
+    #
+    #         # AUROC (better measure, uses raw log probs)
+    #         scores = np.concatenate([log_prob_id, log_prob])
+    #         auroc = roc_auc_score(y_true, scores)
+    #         print(f"AUROC: {auroc:.3f}")
+    #
+    #         # ---- Visualization ----
+    #         plt.figure(figsize=(8, 5))
+    #         plt.scatter(range(len(log_prob_id)), log_prob_id, label="ID", alpha=0.6)
+    #         plt.scatter(range(len(log_prob_id), len(log_prob_id) + len(log_prob)), log_prob, label="OOD", alpha=0.6,
+    #                 color="orange")
+    #         plt.axhline(threshold, color="red", linestyle="--", label="5% threshold (ID)")
+    #         plt.xlabel("Sample index")
+    #         plt.ylabel("Log-likelihood under ID KDE")
+    #         plt.legend()
+    #         plt.tight_layout()
+    #         plt.title(f"Log-likelihood under ID KDE with {metric}")
+    #         plt.show()
+    #         plt.savefig(f"/gpfs/home6/palfken/ood_features/log_likelihood_{metric}.png")
+    #         plt.close()
 
         # plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
         # plt.hist(log_prob, bins=30, alpha=0.6, label='OOD')
