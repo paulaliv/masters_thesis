@@ -278,7 +278,7 @@ def main():
             "epkl_pred_mean_unc": "EPKL",
             "confidence_pred_mean_unc": "Confidence",
             "entropy_pred_mean_unc": "Entropy",
-            "mutual-info_pred_mean_unc": "Mutual Info"
+            "mutual_info_pred_mean_unc": "Mutual Info"
         }
 
         # Map dice bins to their ranges for captions
