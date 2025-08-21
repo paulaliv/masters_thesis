@@ -258,7 +258,38 @@ def main():
             auroc = roc_auc_score(y_true, scores)
             aupr = average_precision_score(y_true, scores)
 
+            results.append({
+                "metric": metric,
+                "dice_bin": bin_id,
+                "acc": acc,
+                "auroc": auroc,
+                "aupr": aupr,
+                "n_id": len(id_unc),
+                "n_ood": len(ood_unc),
+            })
+
             print(f"Bin {bin_id}: ACC={acc:.3f}, AUROC={auroc:.3f}, AUPR={aupr:.3f}")
+
+        # Convert to DataFrame for easy analysis
+        results_df = pd.DataFrame(results)
+
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        # Assuming you have results_df from before
+        plt.figure(figsize=(8, 6))
+        sns.lineplot(data=results_df, x="dice_bin", y="auroc", hue="metric", marker="o")
+        plt.title("AUROC per Dice Bin per Metric")
+        plt.xlabel("Dice Bin")
+        plt.ylabel("AUROC")
+        plt.legend(title="Metric")
+        plt.ylim(0.0, 1.05)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("/gpfs/home6/palfken/ood_features/auroc_per_bin.png")
+        plt.show()
+
     #
     # for idx, metric in enumerate(unc_cols_pred):
     #     print(f'METRICS FOR {metric}')
