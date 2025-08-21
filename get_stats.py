@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr, spearmanr
 from sklearn.neighbors import KernelDensity
-from sklearn.metrics import roc_auc_score, average_precision_score
 
 def bin_dice_score( dice):
     epsilon = 1e-8
@@ -53,7 +52,6 @@ def preprocess_folder(data, splits):
         # Load dice score from CSV if present, else NaN
         dice_score = dice_df.loc[case_id, 'dice_5'] if case_id in dice_df.index else np.nan
         stats_dict['dice'] = dice_score
-        stats_dict['case_id'] = case_id
 
         # Load predicted mask and ground truth mask
         pred_path = os.path.join(data, f"{case_id}_pred.npy")
@@ -61,7 +59,7 @@ def preprocess_folder(data, splits):
 
         if not (os.path.exists(pred_path)):
             print(f"Missing mask or pred for case {case_id}, skipping.")
-            return None
+            continue
 
         resampled_pred = np.load(pred_path)
 
@@ -97,21 +95,19 @@ def preprocess_folder(data, splits):
 
 def preprocess_folder_1(data):
     # subtypes_csv = "/gpfs/home6/palfken/masters_thesis/all_folds"
-    ood_dir = "/home/bmep/plalfken/my-scratch/test_table1.csv"
+    ood_dir = "/gpfs/home6/palfken/Dice_scores_OOD_30.csv"
 
     #clinical_data = "/gpfs/home6/palfken/masters_thesis/Final_dice_dist1.csv"
     df = pd.read_csv(ood_dir)
-    case= 'STT_0486'
+    df_unique = df.drop_duplicates(subset='case_id')
 
-    df_unique = df.drop_duplicates(subset='new_accnr')
-    df_unique = df_unique[df_unique['new_accnr'] != case]
+    df_unique.to_csv(ood_dir, index=False)
 
-
+    dice_df = df_unique[df_unique['tumor_class'] == 'Lipoma']
     #dice_df.set_index('case_id', inplace=True)  # for quick lookup
 
-    case_ids = df_unique["new_accnr"].values
-    subtype = df_unique["tumor_class"].values
-    dist = df_unique["dist"].values
+    case_ids = dice_df["case_id"].values
+    dice_scores = dice_df["dice"].values
     # image_paths = []
     # for idir in image_dirs:
     #     image_paths.extend(glob.glob(os.path.join(idir, '*_0000.nii.gz')))
@@ -124,11 +120,12 @@ def preprocess_folder_1(data):
     for idx,case_id in enumerate(case_ids):
         stats_dict = {}
 
-        stats_dict['case_id']= case_id
-        #
-        stats_dict['subtype'] = subtype[idx]  # add tumor subtype
-        stats_dict['dist'] = dist[idx]
+        # Load dice score from CSV if present, else NaN
+        dice_score = dice_scores[idx]
+        print(f"{case_id}: {dice_score}")
+        stats_dict['dice'] = dice_score
 
+        # Load predicted mask and ground truth mask
         pred_path = os.path.join(data, f"{case_id}_pred.npy")
 
 
@@ -169,307 +166,200 @@ def preprocess_folder_1(data):
 
 
         all_stats[case_id] = stats_dict
-
     return all_stats
 
 
 
 def main():
 
-    data = "/home/bmep/plalfken/my-scratch/test_unc_maps_BAD/"
-    umc_id_dir = "/home/bmep/plalfken/my-scratch/unc_features_id.csv"
-    #umc_ood_dir = "/home/bmep/plalfken/my-scratch/unc_features_id.csv"
-    worc_id_df = pd.read_csv(umc_id_dir)
-    umc_preds = {
-        'mutual_info': "/home/bmep/plalfken/my-scratch/results/mutual_info_ood_results.csv",
-        'epkl': "/home/bmep/plalfken/my-scratch/results/mutual_info_ood_results.csv",
-        'entropy': "/home/bmep/plalfken/my-scratch/results/mutual_info_ood_results.csv",
-        'confidence': "/home/bmep/plalfken/my-scratch/results/mutual_info_ood_results.csv"
-    }
-    worc_preds = {
-        'mutual_info': "/home/bmep/plalfken/my-scratch/results/mutual_info_id_results_mask.csv",
-        'epkl': "/home/bmep/plalfken/my-scratch/results/mutual_info_id_results_mask.csv",
-        'entropy': "/home/bmep/plalfken/my-scratch/results/mutual_info_id_results_mask.csv",
-        'confidence': "/home/bmep/plalfken/my-scratch/results/mutual_info_id_results_mask.csv"
-    }
-
-    # data1 = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
-    # with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
-    #     splits = json.load(f)
-    ood_stats = preprocess_folder_1(data)
+    data = "/gpfs/home6/palfken/QA_dataTr_final/"
+    data1 = "/gpfs/home6/palfken/ood_features/ood_umaps_cropped_30/"
+    with open('/gpfs/home6/palfken/masters_thesis/Final_splits30.json', 'r') as f:
+        splits = json.load(f)
 
 
+
+    id_stats = preprocess_folder(data, splits)
+
+    df = pd.DataFrame.from_dict(id_stats, orient='index')
+    df.to_csv("/gpfs/home6/palfken/ood_features/id_stats.csv")
+    print(f'ID FOLDER: {len(df)}')
+
+    df['dice_bin'] = bin_dice_score(df['dice'].values)
+
+    ood_stats = preprocess_folder_1(data1)
 
     df_ood = pd.DataFrame.from_dict(ood_stats, orient='index')
-    print(f'{len(df_ood)} Cases in df_ood')
-    print(f'df_ood columns: {df_ood.columns}')
-
-    # --- Add WORC predictions ---
-    for metric, path in worc_preds.items():
-        pred_df = pd.read_csv(path)  # should contain columns ['case_id', 'preds']
-        print(f'pred_df columns: {pred_df.columns}')
-        pred_df = pred_df.drop_duplicates(subset=['case_id'])
-
-        # Rename the prediction column to include the metric
-        pred_df = pred_df.rename(columns={'preds': f'pred_{metric}'})
-
-        # Merge with WORC ID dataframe on case_id
-        worc_id_df = worc_id_df.merge(pred_df[['case_id', f'pred_{metric}']], on='case_id', how='left')
-
-    # --- Add UMC predictions ---
-    for metric, path in umc_preds.items():
-        pred_df = pd.read_csv(path)  # should contain columns ['case_id', 'maj_preds']
-        pred_df = pred_df.drop_duplicates(subset=['case_id'])
-
-        # Rename the prediction column to include the metric
-        pred_df = pred_df.rename(columns={'maj_pred': f'pred_{metric}'})
-
-        # Merge with OOD dataframe on new_accnr == case_id
-        df_ood = df_ood.merge(pred_df[['case_id', f'pred_{metric}']],on='case_id', how='left')
-
-
-
     print(f'OOD FOLDER: {len(df_ood)}')
     print(df_ood.head(10))
 
+    df_ood['dice_bin'] = bin_dice_score(df_ood['dice'].values)
+    df_ood.to_csv("/gpfs/home6/palfken/ood_features/ood_stats.csv")
+    print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
 
-    df_ood.to_csv('/home/bmep/plalfken/my-scratch/unc_features_test.csv', index=False)
+    # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
+    unc_cols_pred = [c for c in df.columns if c.endswith('pred_mean_unc')]
+    unc_cols_pred_ood = [c for c in df_ood.columns if c.endswith('pred_mean_unc')]
 
-    umc_id = df_ood[df_ood['dist'] == 'ID']
-    print(f'Number of WORD ID Samples: {len(umc_id)}')
-    umc_ood = df_ood[df_ood['dist'] == 'OOD']
-    print(f'Number of WORD OOD Samples: {len(umc_ood)}')
+    dice_bins = sorted(df['dice_bin'].unique())
+    colors = {'In-Distribution': 'blue', 'OOD': 'red'}
+    # For simplicity, if multiple pred_mean_unc columns exist, take the first
+    metrics = ['EPKL','Confidence','Entropy','Mutual-Info']
+    for idx, metric in enumerate(unc_cols_pred):
+        print(f'METRICS FOR {metric}')
+        unc_col = unc_cols_pred[idx]
+        unc_col_ood = unc_cols_pred_ood[idx]
 
+        # Extract and clean ID values
+        id_unc = df[unc_col].values
+        print("NaNs in ID:", np.isnan(id_unc).sum())
+        id_unc_clean = id_unc[~np.isnan(id_unc)]
 
-    # Metrics & plotting
-    metrics = ['mutual_info', 'epkl', 'entropy', 'confidence']
-    dice_bins = sorted(worc_id_df['dice_bin'].unique())
-    colors = {'WORC ID': 'blue', 'UMC OOD': 'red', 'UMC ID': 'green'}
+        # Extract and clean OOD values
+        ood_unc = df_ood[unc_col_ood].values
+        print("NaNs in OOD before cleaning:", np.isnan(ood_unc).sum())
+        ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
+        print("NaNs in OOD after cleaning:", np.isnan(ood_unc_clean).sum())
 
-    for metric in metrics:
-        print(f"Processing metric: {metric}")
-        umc_id_clean = umc_id.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
-        unc_id = umc_id_clean[f'{metric}_pred_mean_unc'].values
-        pred_id = umc_id_clean[f'pred_{metric}'].values
+        # Define quantile thresholds from ID
+        q95 = np.quantile(id_unc_clean, 0.95)
+        q98 = np.quantile(id_unc_clean, 0.98)
+        print(f"95th percentile (ID): {q95:.4f}")
+        print(f"98th percentile (ID): {q98:.4f}")
 
-        # Similarly for WORC
-        worc_id_clean = worc_id_df.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
-        unc_worc = worc_id_clean[f'{metric}_pred_mean_unc'].values
-        pred_worc = worc_id_clean[f'pred_{metric}'].values
+        # Check how many OOD points fall above thresholds
+        frac_ood_above95 = np.mean(ood_unc_clean > q95)
+        frac_ood_above98 = np.mean(ood_unc_clean > q98)
+        frac_id_above95 = np.mean(id_unc_clean > q95)  # should be ~5%
+        frac_id_above98 = np.mean(id_unc_clean > q98)  # should be ~2%
 
-        # And for UMC OOD
-        umc_ood_clean = umc_ood.dropna(subset=[f'{metric}_pred_mean_unc', f'pred_{metric}'])
-        unc_ood = umc_ood_clean[f'{metric}_pred_mean_unc'].values
-        pred_ood = umc_ood_clean[f'pred_{metric}'].values
+        print(f"OOD above 95th: {frac_ood_above95:.2%}, ID above 95th: {frac_id_above95:.2%}")
+        print(f"OOD above 98th: {frac_ood_above98:.2%}, ID above 98th: {frac_id_above98:.2%}")
 
-        # KDE log-likelihood
-        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(unc_worc[:, None])
-        log_prob_id = kde.score_samples(unc_id[:, None])
-        log_prob_ood = kde.score_samples(unc_ood[:, None])
-
-        plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
-        plt.hist(log_prob_ood, bins=30, alpha=0.6, label='OOD')
-        plt.xlabel('Log-Likelihood under ID KDE')
-        plt.ylabel('Count')
-        plt.legend()
-        plt.savefig(f"/home/bmep/plalfken/my-scratch/log_prob_{metric}.png")
-        plt.show()
-        plt.close()
-
-        # AUROC / AUPR
-        for label, scores in zip(['ID', 'OOD'], [unc_id, unc_ood]):
-            y_true = np.concatenate([np.zeros(len(unc_worc)), np.ones(len(scores))])
-            y_scores = np.concatenate([unc_worc, scores])
-            roc = roc_auc_score(y_true, y_scores)
-            pr = average_precision_score(y_true, y_scores)
-            print(f"AUROC for WORC vs {label} ({metric}): {roc:.3f}, AUPR: {pr:.3f}")
-
-        # Violin / KDE plots
-        df_plot = pd.concat([
-            pd.DataFrame({'uncertainty': unc_worc, 'dist': 'WORC ID', 'dice_bin': pred_worc}),
-            pd.DataFrame({'uncertainty': unc_id, 'dist': 'UMC ID', 'dice_bin': pred_id}),
-            pd.DataFrame({'uncertainty': unc_ood, 'dist': 'UMC OOD', 'dice_bin': pred_ood})
-        ])
-
-        plt.figure(figsize=(12, 6))
-        sns.countplot(
-            data=df_plot,
-            x='dice_bin',  # your already-binned Dice predictions
-            hue='dist',  # the three datasets
-            palette=colors
-        )
-        plt.xlabel('Dice Bin Predictions')
-        plt.ylabel('Frequency')
-        plt.title(f'Frequency of Dice Bin Predictions per Dataset ({metric})')
-        plt.legend(title='Dataset')
-        plt.tight_layout()
-        plt.savefig(f"/home/bmep/plalfken/my-scratch/dicebin_frequency_{metric}.png")
-        plt.show()
-
-
-        plt.figure(figsize=(10, 6))
-        sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot,
-                       inner='quartile', palette=colors)
-        plt.title(f'Predicted Mean {metric} by Dice Bin')
-        plt.tight_layout()
-        plt.savefig(f"/home/bmep/plalfken/my-scratch/violin_{metric}_all_three.png")
-        plt.show()
-        plt.close()
-
-        plt.figure(figsize=(12, 6))
-        for dist_name, color in colors.items():
-            sns.kdeplot(df_plot[df_plot['dist'] == dist_name]['uncertainty'],
-                        fill=True, alpha=0.4, color=color, label=dist_name)
-            plt.axvline(df_plot[df_plot['dist'] == dist_name]['uncertainty'].mean(),
-                        color=color, linestyle='--')
-        plt.title(f' Global Uncertainty Distribution : {metric}')
+        # Plot distributions
+        plt.hist(id_unc_clean, bins=30, alpha=0.6, label='ID')
+        plt.hist(ood_unc_clean, bins=30, alpha=0.6, label='OOD')
+        plt.axvline(q95, color='red', linestyle='--', label='95th ID')
+        plt.axvline(q98, color='black', linestyle='--', label='98th ID')
         plt.xlabel('Uncertainty')
-        plt.ylabel('Density')
+        plt.ylabel('Count')
+        plt.title(f'{metric} Uncertainty distribution of ID Validation vs OOD Lipoma Set with 95/98% cutoff')
+        plt.legend()
+        plt.show()
+        plt.savefig(f"/gpfs/home6/palfken/ood_features/unc_thresholds_{metric}.png")
+        plt.close()
+
+        kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(id_unc_clean[:, None])
+        log_prob = kde.score_samples(ood_unc_clean[:, None])
+        log_prob_id = kde.score_samples(id_unc[:, None])
+
+        threshold = np.percentile(log_prob_id, 5)  # bottom 5% likelihood of ID
+        id_pred = log_prob_id > threshold
+        ood_pred = log_prob > threshold
+
+        # Build ground truth + preds
+        y_true = np.concatenate([np.ones(len(log_prob_id)), np.zeros(len(log_prob))])
+        y_pred = np.concatenate([id_pred, ood_pred])
+
+        from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+        # Accuracy
+        acc = accuracy_score(y_true, y_pred)
+        print(f"Accuracy (5% cutoff): {acc:.3f}")
+
+        # AUROC (better measure, uses raw log probs)
+        scores = np.concatenate([log_prob_id, log_prob])
+        auroc = roc_auc_score(y_true, scores)
+        print(f"AUROC: {auroc:.3f}")
+
+        # ---- Visualization ----
+        plt.figure(figsize=(8, 5))
+        plt.scatter(range(len(log_prob_id)), log_prob_id, label="ID", alpha=0.6)
+        plt.scatter(range(len(log_prob_id), len(log_prob_id) + len(log_prob)), log_prob, label="OOD", alpha=0.6,
+                    color="orange")
+        plt.axhline(threshold, color="red", linestyle="--", label="5% threshold (ID)")
+        plt.xlabel("Sample index")
+        plt.ylabel("Log-likelihood under ID KDE")
         plt.legend()
         plt.tight_layout()
-        plt.savefig(f"/home/bmep/plalfken/my-scratch/kde_{metric}_all_three.png")
+        plt.title(f"Log-likelihood under ID KDE with {metric}")
         plt.show()
+        plt.savefig(f"/gpfs/home6/palfken/ood_features/log_likelihood_{metric}.png")
         plt.close()
-    # print("\nDice Score Distribution and Uncertainty Stats by Tumor Class:")
+
+        # plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
+        # plt.hist(log_prob, bins=30, alpha=0.6, label='OOD')
+        # plt.xlabel('Log-Likelihood under ID KDE')
+        # plt.ylabel('Count')
+        # plt.legend()
+        # plt.savefig(f"/gpfs/home6/palfken/log_prob_{metric}.png")
+        # plt.close()
+        #
+        # from sklearn.metrics import roc_auc_score, average_precision_score
+        # y_true = np.concatenate([np.zeros(len(id_unc)), np.ones(len(ood_unc_clean))])
+        # scores = np.concatenate([id_unc, ood_unc_clean])
+        #
+        # roc = roc_auc_score(y_true, scores)
+        # pr = average_precision_score(y_true, scores)
+        #
+        # print(f"AUROC: {roc:.3f}, AUPR: {pr:.3f}")
+        #
+        # # --- Combine for plotting ---
+        # df_plot = pd.concat([
+        #     pd.DataFrame({'uncertainty': df[unc_col], 'dice_bin': df['dice_bin'], 'dist': 'In-Distribution'}),
+        #     pd.DataFrame(
+        #         {'uncertainty': df_ood[unc_col_ood], 'dice_bin': df_ood['dice_bin'], 'dist': 'OOD'})
+        # ])
+        #
+        # # --- Plot ---
+        # plt.figure(figsize=(10, 6))
+        # sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot, split=True, inner='quartile',
+        #                palette='Set2')
+        # plt.title(f'Predicted Mean {metrics[idx]} by Dice Bin')
+        # plt.xlabel('Dice Bin')
+        # plt.ylabel('Predicted Mean Uncertainty')
+        # plt.legend(title='Distribution')
+        # plt.tight_layout()
+        # plt.savefig(f"/gpfs/home6/palfken/violin_{metric}.png")
+        # plt.close()
+        #
+        # plt.figure(figsize=(12, 6))
+        #
+        # for i, bin_label in enumerate(dice_bins):
+        #     plt.subplot(1, len(dice_bins), i + 1)
+        #
+        #     id_unc = df.loc[df['dice_bin'] == bin_label, unc_col]
+        #     ood_unc = df_ood.loc[df_ood['dice_bin'] == bin_label, unc_col_ood]
+        #
+        #     # Smooth KDE plots
+        #     sns.kdeplot(id_unc, fill=True, alpha=0.4, color=colors['In-Distribution'], label='ID')
+        #     sns.kdeplot(ood_unc, fill=True, alpha=0.4, color=colors['OOD'], label='OOD')
+        #
+        #     # Mean lines
+        #     plt.axvline(id_unc.mean(), color=colors['In-Distribution'], linestyle='--')
+        #     plt.axvline(ood_unc.mean(), color=colors['OOD'], linestyle='--')
+        #
+        #     plt.title(f'Dice Bin: {bin_label}')
+        #     plt.xlabel(f'Predicted Mean {metrics[idx]}')
+        #     plt.ylabel('Density')
+        #     if i == 0:
+        #         plt.legend()
+        #
+        # plt.tight_layout()
+        # plt.savefig(f"/gpfs/home6/palfken/hist_kde_{metric}.png")
+        # plt.close()
+
+    # for col in unc_cols_pred:
+    #     means = df.groupby('dice_bin')[col].mean()
+    #     stds = df.groupby('dice_bin')[col].std()
     #
-    # # Select columns for predicted region mean uncertainty only (can adjust if you want gt or full)
-    # unc_cols_pred_worc = [c for c in worc_id_df.columns if c.endswith('pred_mean_unc')]
-    # unc_cols_pred_id = [c for c in umc_id.columns if c.endswith('pred_mean_unc')]
-    # unc_cols_pred_ood = [c for c in umc_ood.columns if c.endswith('pred_mean_unc')]
+    #     plt.errorbar(means.index, means.values, yerr=stds.values, label=col, capsize=5, marker='o')
     #
-    # dice_bins = sorted(worc_id_df['dice_bin'].unique())
-    # colors = {'WORC': 'blue', 'UMC OOD': 'red', 'UMC ID': 'green'}
-    # # For simplicity, if multiple pred_mean_unc columns exist, take the first
-    # metrics = ['EPKL','Confidence','Entropy','Mutual-Info']
-    # for idx, metric in enumerate(unc_cols_pred_worc):
-    #     print(f'METRICS FOR {metric}')
-    #     unc_col = unc_cols_pred_worc[idx]
-    #     unc_col_id = unc_cols_pred_id[idx]
-    #     unc_col_ood = unc_cols_pred_ood[idx]
-    #
-    #
-    #     # Extract and clean ID values
-    #     worc_unc = worc_id_df[unc_col].values
-    #     print("NaNs in ID:", np.isnan(worc_unc).sum())
-    #     worc_unc_clean = worc_unc[~np.isnan(worc_unc)]
-    #
-    #     # Extract and clean OOD values
-    #     id_unc = umc_id[unc_col_id].values
-    #     print("NaNs in OOD before cleaning:", np.isnan(id_unc).sum())
-    #     id_unc_clean = id_unc[~np.isnan(id_unc)]
-    #     print("NaNs in OOD after cleaning:", np.isnan(id_unc_clean).sum())
-    #
-    #     # Extract and clean OOD values
-    #     ood_unc = umc_ood[unc_col_ood].values
-    #     print("NaNs in OOD before cleaning:", np.isnan(ood_unc).sum())
-    #     ood_unc_clean = ood_unc[~np.isnan(ood_unc)]
-    #     print("NaNs in OOD after cleaning:", np.isnan(ood_unc_clean).sum())
-    #
-    #     kde = KernelDensity(kernel='gaussian', bandwidth=0.05).fit(worc_unc_clean[:, None])
-    #     log_prob = kde.score_samples(ood_unc_clean[:, None])
-    #     log_prob_id = kde.score_samples(id_unc_clean[:, None])
-    #
-    #     plt.hist(log_prob_id, bins=30, alpha=0.6, label='ID')
-    #     plt.hist(log_prob, bins=30, alpha=0.6, label='OOD')
-    #     plt.xlabel('Log-Likelihood under ID KDE')
-    #     plt.ylabel('Count')
-    #     plt.legend()
-    #     plt.savefig(f"/home/bmep/plalfken/my-scratch/log_prob_{metric}.png")
-    #     plt.close()
-    #
-    #     from sklearn.metrics import roc_auc_score, average_precision_score
-    #     y_true = np.concatenate([np.zeros(len(worc_unc_clean)), np.ones(len(id_unc_clean))])
-    #     scores = np.concatenate([worc_unc_clean,id_unc_clean])
-    #
-    #     roc = roc_auc_score(y_true, scores)
-    #     pr = average_precision_score(y_true, scores)
-    #
-    #     print('AUROC FOR WORC AND ID UMC DATA')
-    #     print(f"AUROC: {roc:.3f}, AUPR: {pr:.3f}")
-    #
-    #     y_true = np.concatenate([np.zeros(len(worc_unc_clean)), np.ones(len(ood_unc_clean))])
-    #     scores = np.concatenate([worc_unc_clean, ood_unc_clean])
-    #
-    #     roc = roc_auc_score(y_true, scores)
-    #     pr = average_precision_score(y_true, scores)
-    #
-    #     print('AUROC FOR WORC AND OOD UMC DATA')
-    #     print(f"AUROC: {roc:.3f}, AUPR: {pr:.3f}")
-    #
-    #     # --- Combine for plotting ---
-    #
-    #     # --- Combine for plotting ---
-    #     df_plot = pd.concat([
-    #         pd.DataFrame({'uncertainty': worc_id_df[unc_col], 'dist': 'WORC ID'}),
-    #         pd.DataFrame({'uncertainty': umc_id[unc_col_id], 'dist': 'UMC ID'}),
-    #         pd.DataFrame(
-    #             {'uncertainty': umc_ood[unc_col_ood], 'dist': 'UMC OOD'})
-    #     ])
-    #     plt.figure(figsize=(10, 6))
-    #     sns.violinplot(x='dice_bin', y='uncertainty', hue='dist', data=df_plot,
-    #                    inner='quartile', palette={'WORC ID': 'blue', 'UMC ID': 'green', 'UMC OOD': 'red'})
-    #     plt.title(f'Predicted Mean {metrics[idx]} by Dice Bin')
-    #     plt.xlabel('Dice Bin')
-    #     plt.ylabel('Predicted Mean Uncertainty')
-    #     plt.legend(title='Distribution')
-    #     plt.tight_layout()
-    #     plt.savefig(f"/home/bmep/plalfken/my-scratch/violin_{metrics[idx]}_all_three.png")
-    #     plt.close()
-    #
-    #     plt.figure(figsize=(12, 6))
-    #     for dist_name, color in zip(['WORC ID', 'UMC ID', 'UMC OOD'], ['blue', 'green', 'red']):
-    #         sns.kdeplot(df_plot[df_plot['dist'] == dist_name]['uncertainty'],
-    #                     fill=True, alpha=0.4, color=color, label=dist_name)
-    #     for dist_name, color in zip(['WORC ID', 'UMC ID', 'UMC OOD'], ['blue', 'green', 'red']):
-    #         plt.axvline(df_plot[df_plot['dist'] == dist_name]['uncertainty'].mean(), color=color, linestyle='--')
-    #     plt.title(f'Uncertainty Distribution: {metrics[idx]}')
-    #     plt.xlabel('Predicted Mean Uncertainty')
-    #     plt.ylabel('Density')
-    #     plt.legend()
-    #     plt.tight_layout()
-    #     plt.savefig(f"/home/bmep/plalfken/my-scratch/kde_{metrics[idx]}_all_three.png")
-    #     plt.close()
-    #
-    #
-    #
-    #     plt.figure(figsize=(12, 6))
-    #
-    #     for i, bin_label in enumerate(dice_bins):
-    #         plt.subplot(1, len(dice_bins), i + 1)
-    #
-    #         id_unc = df.loc[df['dice_bin'] == bin_label, unc_col]
-    #         ood_unc = df_ood.loc[df_ood['dice_bin'] == bin_label, unc_col_ood]
-    #
-    #         # Smooth KDE plots
-    #         sns.kdeplot(id_unc, fill=True, alpha=0.4, color=colors['In-Distribution'], label='ID')
-    #         sns.kdeplot(ood_unc, fill=True, alpha=0.4, color=colors['OOD'], label='OOD')
-    #
-    #         # Mean lines
-    #         plt.axvline(id_unc.mean(), color=colors['In-Distribution'], linestyle='--')
-    #         plt.axvline(ood_unc.mean(), color=colors['OOD'], linestyle='--')
-    #
-    #         plt.title(f'Dice Bin: {bin_label}')
-    #         plt.xlabel(f'Predicted Mean {metrics[idx]}')
-    #         plt.ylabel('Density')
-    #         if i == 0:
-    #             plt.legend()
-    #
-    #     plt.tight_layout()
-    #     plt.savefig(f"/gpfs/home6/palfken/hist_kde_{metric}.png")
-    #     plt.close()
-    #
-    # # for col in unc_cols_pred:
-    # #     means = df.groupby('dice_bin')[col].mean()
-    # #     stds = df.groupby('dice_bin')[col].std()
-    # #
-    # #     plt.errorbar(means.index, means.values, yerr=stds.values, label=col, capsize=5, marker='o')
-    # #
-    # # plt.xlabel('Dice bin')
-    # # plt.ylabel('Mean Uncertainty ± std')
-    # # plt.title('Uncertainty metrics by Dice bins')
-    # # plt.legend()
-    # # plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
-    # # plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
+    # plt.xlabel('Dice bin')
+    # plt.ylabel('Mean Uncertainty ± std')
+    # plt.title('Uncertainty metrics by Dice bins')
+    # plt.legend()
+    # plt.xticks(ticks=[0, 1, 2, 3], labels=['<=0.1', '0.1-0.5', '0.5-0.7', '>0.7'])
+    # plt.savefig("/gpfs/home6/palfken/mean_uncertainty.png")
     #
     # print("\nUncertainty stats per Dice bin:ID")
     # for bin_id, bin_group in df.groupby('dice_bin'):
@@ -512,7 +402,7 @@ def main():
     #             print(f"  {col}: {col_mean:.3f} ± {col_std:.3f}")
     #     else:
     #         print("  No samples in this bin.")
-    #
+
 
 if __name__ == '__main__':
     main()
