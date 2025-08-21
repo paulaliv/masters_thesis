@@ -273,22 +273,66 @@ def main():
         # Convert to DataFrame for easy analysis
         results_df = pd.DataFrame(results)
 
+        # Map raw metric column names to pretty names
+        metric_pretty_map = {
+            "epkl_pred_mean_unc": "EPKL",
+            "confidence_pred_mean_unc": "Confidence",
+            "entropy_pred_mean_unc": "Entropy",
+            "mutual-info_pred_mean_unc": "Mutual Info"
+        }
+
+        # Map dice bins to their ranges for captions
+        dice_bin_caption = {
+            0: "0.0–0.25",
+            1: "0.25–0.5",
+            2: "0.5–0.75",
+            3: "0.75–1.0"
+        }
+
+        # Apply the mapping
+        results_df['metric_pretty'] = results_df['metric'].map(metric_pretty_map)
+        results_df['dice_caption'] = results_df['dice_bin'].map(dice_bin_caption)
 
         import matplotlib.pyplot as plt
         import seaborn as sns
-
-        # Assuming you have results_df from before
+        # Lineplot with dice bins on x-axis and captions underneath
         plt.figure(figsize=(8, 6))
-        sns.lineplot(data=results_df, x="dice_bin", y="auroc", hue="metric", marker="o")
+        sns.lineplot(
+            data=results_df,
+            x="dice_bin",
+            y="auroc",
+            hue="metric_pretty",
+            marker="o"
+        )
+
+        # Set x-ticks to the dice bins, with captions underneath
+        plt.xticks(ticks=list(dice_bin_caption.keys()),
+                   labels=[f"{b}\n({dice_bin_caption[b]})" for b in dice_bin_caption])
+
         plt.title("AUROC per Dice Bin per Metric")
         plt.xlabel("Dice Bin")
         plt.ylabel("AUROC")
-        plt.legend(title="Metric")
         plt.ylim(0.0, 1.05)
         plt.grid(True)
+        plt.legend(title="Metric")
         plt.tight_layout()
-        plt.savefig("/gpfs/home6/palfken/ood_features/auroc_per_bin.png")
+        plt.savefig("/gpfs/home6/palfken/ood_features/auroc_per_bin_pretty.png")
         plt.show()
+
+
+        #
+        # # Assuming you have results_df from before
+        # plt.figure(figsize=(8, 6))
+        # sns.lineplot(data=results_df, x="dice_bin", y="auroc", hue="metric", marker="o")
+        # plt.title("AUROC per Dice Bin per Metric")
+        # plt.xlabel("Dice Bin")
+        # plt.ylabel("AUROC")
+        # plt.legend(title="Metric")
+        # plt.ylim(0.0, 1.05)
+        # plt.grid(True)
+        # plt.tight_layout()
+        # plt.savefig("/gpfs/home6/palfken/ood_features/auroc_per_bin.png")
+        # plt.show()
 
     #
     # for idx, metric in enumerate(unc_cols_pred):
